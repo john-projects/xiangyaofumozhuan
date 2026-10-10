@@ -1,0 +1,100 @@
+[gd_scene format=3 uid="uid://dysf7xbbwiv4u"]
+
+[ext_resource type="Texture2D" uid="uid://cy4xfx762bxgb" path="res://assets/sprites/BG.png" id="1_8trdl"]
+[ext_resource type="Script" uid="uid://fdum1yot0fdu" path="res://scenes/arena/arena.gd" id="1_asdgj"]
+[ext_resource type="Texture2D" uid="uid://ov4fmsbglo55" path="res://assets/sprites/Map.png" id="2_5tue2"]
+[ext_resource type="Script" uid="uid://ctwpag0nd6uv6" path="res://scenes/arena/camera_2d.gd" id="4_aj7ud"]
+[ext_resource type="Script" uid="uid://bewu54ju6y8r3" path="res://scenes/arena/spawner.gd" id="9_6w4xk"]
+[ext_resource type="PackedScene" uid="uid://bhe61dic02h6v" path="res://scenes/ui/coins_bag/coins_bag.tscn" id="9_xgbxb"]
+[ext_resource type="Resource" uid="uid://c11sw6tureea8" path="res://resources/waves/data/wave_1_to_5.tres" id="10_2ml6w"]
+[ext_resource type="PackedScene" uid="uid://bkhpp4ykvibjn" path="res://scenes/ui/shop_panel/shop_panel.tscn" id="10_vmsrg"]
+[ext_resource type="Script" uid="uid://8iljmk8wb1tp" path="res://resources/waves/wave_data.gd" id="10_xgbxb"]
+[ext_resource type="AudioStream" uid="uid://prc8bub0x4s1" path="res://assets/audio/Bg Music.mp3" id="12_fv88w"]
+[ext_resource type="PackedScene" uid="uid://d4kwe81h6ycqx" path="res://scenes/ui/selection_panel/selection_panel.tscn" id="12_s83md"]
+[ext_resource type="PackedScene" uid="uid://31jjogyrkn7b" path="res://scenes/ui/upgrade_panel/upgrade_panel.tscn" id="12_vmsrg"]
+
+[sub_resource type="LabelSettings" id="LabelSettings_xgbxb"]
+font_size = 64
+
+[sub_resource type="LabelSettings" id="LabelSettings_vmsrg"]
+font_size = 64
+
+[node name="Arena" type="Node2D" unique_id=1131578198]
+script = ExtResource("1_asdgj")
+normal_color = Color(0.97928876, 0.9788584, 0.9939522, 1)
+blocked_color = Color(1, 0.28235295, 0.45490196, 1)
+critical_color = Color(0.99607843, 0.78039217, 0.38039216, 1)
+hp_color = Color(0, 0.627451, 0.48235294, 1)
+
+[node name="BlackBG" type="Sprite2D" parent="." unique_id=821371906]
+scale = Vector2(2, 1)
+texture = ExtResource("1_8trdl")
+
+[node name="GrassBG" type="Sprite2D" parent="." unique_id=763250404]
+scale = Vector2(2, 2)
+texture = ExtResource("2_5tue2")
+
+[node name="Camera2D" type="Camera2D" parent="." unique_id=1444244465]
+script = ExtResource("4_aj7ud")
+
+[node name="Spawner" type="Node2D" parent="." unique_id=1087020206]
+script = ExtResource("9_6w4xk")
+waves_data = Array[ExtResource("10_xgbxb")]([ExtResource("10_2ml6w")])
+
+[node name="SpawnTimer" type="Timer" parent="Spawner" unique_id=1487682583]
+one_shot = true
+
+[node name="WaveTimer" type="Timer" parent="Spawner" unique_id=294030674]
+one_shot = true
+
+[node name="GameUI" type="CanvasLayer" parent="." unique_id=734272696]
+
+[node name="CoinsBag" parent="GameUI" unique_id=1830733341 instance=ExtResource("9_xgbxb")]
+unique_name_in_owner = true
+
+[node name="WaveIndexLabel" type="Label" parent="GameUI" unique_id=922273383]
+unique_name_in_owner = true
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -110.0
+offset_top = 20.0
+offset_right = 110.0
+offset_bottom = 97.333336
+grow_horizontal = 2
+text = "Wave 1"
+label_settings = SubResource("LabelSettings_xgbxb")
+
+[node name="WaveTimeLabel" type="Label" parent="GameUI" unique_id=1550244057]
+unique_name_in_owner = true
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -34.0
+offset_top = 100.0
+offset_right = 34.0
+offset_bottom = 177.33334
+grow_horizontal = 2
+text = "10"
+label_settings = SubResource("LabelSettings_vmsrg")
+
+[node name="UpgradePanel" parent="GameUI" unique_id=635233607 instance=ExtResource("12_vmsrg")]
+unique_name_in_owner = true
+visible = false
+
+[node name="ShopPanel" parent="GameUI" unique_id=476370395 instance=ExtResource("10_vmsrg")]
+unique_name_in_owner = true
+visible = false
+
+[node name="SelectionPanel" parent="GameUI" unique_id=1830301830 instance=ExtResource("12_s83md")]
+
+[node name="MusicPlayer" type="AudioStreamPlayer" parent="." unique_id=721234857]
+stream = ExtResource("12_fv88w")
+volume_db = -20.0
+autoplay = true
+
+[connection signal="on_wave_completed" from="Spawner" to="." method="_on_spawner_on_wave_completed"]
+[connection signal="timeout" from="Spawner/SpawnTimer" to="Spawner" method="_on_spawn_timer_timeout"]
+[connection signal="timeout" from="Spawner/WaveTimer" to="Spawner" method="_on_wave_timer_timeout"]
+[connection signal="on_shop_next_wave" from="GameUI/ShopPanel" to="." method="_on_shop_panel_on_shop_next_wave"]
+[connection signal="on_selection_completed" from="GameUI/SelectionPanel" to="." method="_on_selection_panel_on_selection_completed"]

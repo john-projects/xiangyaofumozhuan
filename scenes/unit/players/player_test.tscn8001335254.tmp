@@ -1,0 +1,28 @@
+[gd_scene format=3 uid="uid://xrgsu4ju3us0"]
+
+[ext_resource type="PackedScene" uid="uid://bfb25cpd7tenq" path="res://scenes/unit/unit.tscn" id="1_iulj4"]
+[ext_resource type="Script" uid="uid://duimkajjrl7b0" path="res://scenes/unit/players/player.gd" id="2_eppds"]
+[ext_resource type="Script" uid="uid://j6ibt5vlkg3t" path="res://resources/units/unit_stats.gd" id="3_m5j8w"]
+[ext_resource type="Script" uid="uid://dq8ye508tkcbv" path="res://scenes/unit/players/trail.gd" id="4_m5j8w"]
+
+[sub_resource type="Resource" id="Resource_iulj4"]
+script = ExtResource("3_m5j8w")
+metadata/_custom_type_script = "uid://j6ibt5vlkg3t"
+
+[node name="PlayerTest" unique_id=1745697924 instance=ExtResource("1_iulj4")]
+script = ExtResource("2_eppds")
+stats = SubResource("Resource_iulj4")
+
+[node name="Trail" type="Line2D" parent="Visuals" parent_id_path=PackedInt32Array(827760262) index="0" unique_id=377426161]
+unique_name_in_owner = true
+position = Vector2(0, -50)
+points = PackedVector2Array(2, -2)
+width = 50.0
+script = ExtResource("4_m5j8w")
+
+[node name="DashTimer" type="Timer" parent="." index="3" unique_id=555995924]
+
+[node name="DashCooldownTimer" type="Timer" parent="." index="4" unique_id=1085152706]
+
+[node name="TrailTimer" type="Timer" parent="." index="5" unique_id=1216898838]
+unique_name_in_owner = true

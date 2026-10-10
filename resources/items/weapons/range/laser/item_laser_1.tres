@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="ItemWeapon" format=3 uid="uid://dh4ejm50kgsgv"]
+
+[ext_resource type="Texture2D" uid="uid://crs6paux78un0" path="res://assets/sprites/Weapons/Icons/weapon_laser_icon.png" id="1_sjcuc"]
+[ext_resource type="PackedScene" uid="uid://cltqfwbhhwfbv" path="res://scenes/weapons/range/weapon_laser.tscn" id="2_mi703"]
+[ext_resource type="Script" uid="uid://cuccl3awnxe15" path="res://resources/items/weapons/item_weapon.gd" id="3_v7f56"]
+[ext_resource type="Resource" uid="uid://catvq6e7720uy" path="res://resources/items/weapons/range/laser/stats_laser_1.tres" id="4_uidfd"]
+[ext_resource type="Resource" uid="uid://cpm0eoaxuuauu" path="res://resources/items/weapons/range/laser/item_laser_2.tres" id="5_qjm04"]
+
+[resource]
+script = ExtResource("3_v7f56")
+scene = ExtResource("2_mi703")
+stats = ExtResource("4_uidfd")
+upgrade_to = ExtResource("5_qjm04")
+item_name = "Laser Ⅰ"
+item_icon = ExtResource("1_sjcuc")
+item_cost = 14
+metadata/_custom_type_script = "uid://cuccl3awnxe15"

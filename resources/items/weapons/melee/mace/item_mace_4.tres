@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="ItemWeapon" format=3 uid="uid://bagimg10vi03l"]
+
+[ext_resource type="Texture2D" uid="uid://cmlrktiwatuhw" path="res://assets/sprites/Weapons/Icons/weapon_mace_icon.png" id="1_oy2qe"]
+[ext_resource type="PackedScene" uid="uid://b7mw1rqq4mmy3" path="res://scenes/weapons/melee/weapon_mace.tscn" id="2_owkuy"]
+[ext_resource type="Script" uid="uid://cuccl3awnxe15" path="res://resources/items/weapons/item_weapon.gd" id="3_kro1w"]
+[ext_resource type="Resource" uid="uid://dtfv7tncd6kk4" path="res://resources/items/weapons/melee/mace/stats_mace_4.tres" id="4_dv8il"]
+
+[resource]
+script = ExtResource("3_kro1w")
+scene = ExtResource("2_owkuy")
+stats = ExtResource("4_dv8il")
+item_name = "Mace Ⅳ"
+item_icon = ExtResource("1_oy2qe")
+item_tier = 3
+item_cost = 140
+metadata/_custom_type_script = "uid://cuccl3awnxe15"

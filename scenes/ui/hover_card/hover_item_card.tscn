@@ -1,0 +1,73 @@
+[gd_scene format=3 uid="uid://sojan35we4eq"]
+
+[ext_resource type="StyleBox" uid="uid://c383vl8xrt17p" path="res://styles/common_style.tres" id="1_t8nmi"]
+[ext_resource type="Script" uid="uid://b72b4luw5i8ib" path="res://scenes/ui/hover_card/hover_item_card.gd" id="2_lqlaq"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_pi0uk"]
+bg_color = Color(0.29411766, 0.29411766, 0.29411766, 0.78431374)
+
+[node name="HoverItemCard" type="Panel" unique_id=1756811679]
+custom_minimum_size = Vector2(320, 400)
+offset_right = 40.0
+offset_bottom = 40.0
+theme_override_styles/panel = ExtResource("1_t8nmi")
+script = ExtResource("2_lqlaq")
+
+[node name="MarginContainer" type="MarginContainer" parent="." unique_id=431591441]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_top = 16
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_bottom = 16
+
+[node name="Control" type="Control" parent="MarginContainer" unique_id=2009563611]
+layout_mode = 2
+
+[node name="IconBG" type="Panel" parent="MarginContainer/Control" unique_id=2075341514]
+custom_minimum_size = Vector2(100, 100)
+layout_mode = 1
+anchors_preset = -1
+anchor_right = 0.3472222
+anchor_bottom = 0.27173913
+theme_override_styles/panel = SubResource("StyleBoxFlat_pi0uk")
+
+[node name="ItemIcon" type="TextureRect" parent="MarginContainer/Control" unique_id=1712908623]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(100, 100)
+layout_mode = 0
+offset_right = 40.0
+offset_bottom = 40.0
+expand_mode = 1
+stretch_mode = 5
+
+[node name="ItemName" type="Label" parent="MarginContainer/Control" unique_id=557080037]
+unique_name_in_owner = true
+layout_mode = 0
+offset_left = 120.0
+offset_right = 210.0
+offset_bottom = 20.0
+text = "item name"
+
+[node name="ItemType" type="Label" parent="MarginContainer/Control" unique_id=301180157]
+unique_name_in_owner = true
+layout_mode = 0
+offset_left = 120.0
+offset_top = 30.0
+offset_right = 210.0
+offset_bottom = 50.0
+text = "item type"
+
+[node name="ItemDesc" type="RichTextLabel" parent="MarginContainer/Control" unique_id=1506487696]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(290, 190)
+layout_mode = 0
+offset_top = 120.0
+offset_right = 290.0
+offset_bottom = 370.0
+bbcode_enabled = true
+text = "desc"

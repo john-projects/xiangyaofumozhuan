@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="ItemWeapon" format=3 uid="uid://b8u6edrfurebp"]
+
+[ext_resource type="Texture2D" uid="uid://dmo5qwx6l6wdu" path="res://assets/sprites/Weapons/Icons/weapon_revolver_icon.png" id="1_c2x3g"]
+[ext_resource type="PackedScene" uid="uid://dem176xtbeety" path="res://scenes/weapons/range/weapon_revolver.tscn" id="2_pg2m5"]
+[ext_resource type="Script" uid="uid://cuccl3awnxe15" path="res://resources/items/weapons/item_weapon.gd" id="3_de5fj"]
+[ext_resource type="Resource" uid="uid://bk4epkgxqr5m1" path="res://resources/items/weapons/range/revolver/stats_revolver_2.tres" id="4_20htl"]
+[ext_resource type="Resource" uid="uid://chxma4ue6l1bl" path="res://resources/items/weapons/range/revolver/item_revolver_3.tres" id="5_2trr2"]
+
+[resource]
+script = ExtResource("3_de5fj")
+scene = ExtResource("2_pg2m5")
+stats = ExtResource("4_20htl")
+upgrade_to = ExtResource("5_2trr2")
+item_name = "Revolver Ⅱ"
+item_icon = ExtResource("1_c2x3g")
+item_tier = 1
+item_cost = 30
+metadata/_custom_type_script = "uid://cuccl3awnxe15"

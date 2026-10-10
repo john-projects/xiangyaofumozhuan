@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="ItemPassive" format=3 uid="uid://c0sgohcls471k"]
+
+[ext_resource type="Texture2D" uid="uid://d3p6i6cxnf1sy" path="res://assets/sprites/Upgrades/4.png" id="1_t2prv"]
+[ext_resource type="Script" uid="uid://c6lu1o3bnrnop" path="res://resources/items/passives/item_passive.gd" id="2_hl0oy"]
+
+[resource]
+script = ExtResource("2_hl0oy")
+add_value = 5.0
+add_stats = "life_steal"
+remove_value = 2.0
+remove_stats = "health"
+item_name = "Cape"
+item_icon = ExtResource("1_t2prv")
+item_type = 2
+item_cost = 22
+metadata/_custom_type_script = "uid://c6lu1o3bnrnop"

@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="WeaponStats" format=3 uid="uid://duaed2yayth74"]
+
+[ext_resource type="Script" uid="uid://bsujlfer01s03" path="res://resources/items/weapons/weapon_stats.gd" id="1_7c6s8"]
+
+[resource]
+script = ExtResource("1_7c6s8")
+accuracy = 1.0
+cooldown = 1.5
+max_range = 180.0
+knockback = 1.5
+metadata/_custom_type_script = "uid://bsujlfer01s03"

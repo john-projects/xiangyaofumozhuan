@@ -1,0 +1,26 @@
+[gd_scene format=3 uid="uid://cywh7kffjjslc"]
+
+[ext_resource type="StyleBox" uid="uid://c383vl8xrt17p" path="res://styles/common_style.tres" id="1_ygfnm"]
+[ext_resource type="Script" uid="uid://ynq17gwl6oar" path="res://scenes/ui/item_card/item_card.gd" id="2_8p6uk"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_3qows"]
+bg_color = Color(0.767865, 0.4868315, 0.22657299, 1)
+
+[node name="ItemCard" type="Button" unique_id=266874162]
+custom_minimum_size = Vector2(80, 80)
+theme_override_styles/normal = ExtResource("1_ygfnm")
+theme_override_styles/focus = SubResource("StyleBoxFlat_3qows")
+script = ExtResource("2_8p6uk")
+
+[node name="ItemIcon" type="TextureRect" parent="." unique_id=173483057]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+expand_mode = 1
+stretch_mode = 5
+
+[connection signal="mouse_entered" from="." to="." method="_on_mouse_entered"]
+[connection signal="pressed" from="." to="." method="_on_pressed"]

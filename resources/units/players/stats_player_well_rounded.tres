@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="UnitStats" format=3 uid="uid://ckl8xxcrmuxtq"]
+
+[ext_resource type="Texture2D" uid="uid://cproxhccob85g" path="res://assets/sprites/Players/Player_1.png" id="1_6skj5"]
+[ext_resource type="Script" uid="uid://j6ibt5vlkg3t" path="res://resources/units/unit_stats.gd" id="1_g5q6j"]
+
+[resource]
+script = ExtResource("1_g5q6j")
+name = "Well Rounded"
+icon = ExtResource("1_6skj5")
+health = 15.0
+health_increase_per_wave = 0.0
+damage_increase_per_wave = 0.0
+luck = 5.0
+block_chance = 50.0
+gold_drop = 0
+hp_regen = 3.0
+harvesting = 5.0
+metadata/_custom_type_script = "uid://j6ibt5vlkg3t"

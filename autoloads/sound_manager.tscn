@@ -1,0 +1,27 @@
+[gd_scene format=3 uid="uid://pnwjxb7rtm7r"]
+
+[ext_resource type="Script" uid="uid://dl2a8yrc5h2om" path="res://autoloads/sound_manager.gd" id="1_4udv5"]
+
+[node name="SoundManager" type="Node" unique_id=743744468 node_paths=PackedStringArray("stream_players")]
+script = ExtResource("1_4udv5")
+stream_players = [NodePath("AudioStreamPlayer"), NodePath("AudioStreamPlayer2"), NodePath("AudioStreamPlayer3"), NodePath("AudioStreamPlayer4"), NodePath("AudioStreamPlayer5"), NodePath("AudioStreamPlayer6"), NodePath("AudioStreamPlayer7"), NodePath("AudioStreamPlayer8"), NodePath("AudioStreamPlayer9"), NodePath("AudioStreamPlayer10")]
+
+[node name="AudioStreamPlayer" type="AudioStreamPlayer" parent="." unique_id=452401180]
+
+[node name="AudioStreamPlayer2" type="AudioStreamPlayer" parent="." unique_id=1465801546]
+
+[node name="AudioStreamPlayer3" type="AudioStreamPlayer" parent="." unique_id=1016712921]
+
+[node name="AudioStreamPlayer4" type="AudioStreamPlayer" parent="." unique_id=54950598]
+
+[node name="AudioStreamPlayer5" type="AudioStreamPlayer" parent="." unique_id=1225231700]
+
+[node name="AudioStreamPlayer6" type="AudioStreamPlayer" parent="." unique_id=1701072492]
+
+[node name="AudioStreamPlayer7" type="AudioStreamPlayer" parent="." unique_id=279611848]
+
+[node name="AudioStreamPlayer8" type="AudioStreamPlayer" parent="." unique_id=733116642]
+
+[node name="AudioStreamPlayer9" type="AudioStreamPlayer" parent="." unique_id=237606767]
+
+[node name="AudioStreamPlayer10" type="AudioStreamPlayer" parent="." unique_id=2038616264]

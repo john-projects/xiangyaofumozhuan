@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="UnitStats" format=3 uid="uid://dksggkah24dx4"]
+
+[ext_resource type="Texture2D" uid="uid://d1ou504pylric" path="res://assets/sprites/Enemies/Enemy_1.png" id="1_cneyk"]
+[ext_resource type="Script" uid="uid://j6ibt5vlkg3t" path="res://resources/units/unit_stats.gd" id="1_m42qi"]
+
+[resource]
+script = ExtResource("1_m42qi")
+name = "Chaser Mid"
+type = 1
+icon = ExtResource("1_cneyk")
+health = 8
+health_increase_per_wave = 2.0
+damage = 2.0
+luck = 0.0
+block_chance = 7.0
+gold_drop = 2
+metadata/_custom_type_script = "uid://j6ibt5vlkg3t"

@@ -1,0 +1,26 @@
+[gd_scene format=3 uid="uid://cyi0lxep46xsn"]
+
+[ext_resource type="PackedScene" uid="uid://bn6f6mhmwa4cn" path="res://scenes/unit/enemy/enemy_chaser_slow.tscn" id="1_tty1r"]
+[ext_resource type="Resource" uid="uid://cyechaphh6uux" path="res://resources/units/enemies/stats_enemy_shooter.tres" id="2_6k67w"]
+[ext_resource type="Texture2D" uid="uid://4mllmwdfhmce" path="res://assets/sprites/Enemies/Enemy_4.png" id="2_tev67"]
+[ext_resource type="Script" uid="uid://dwjids25kr6yc" path="res://scenes/unit/enemy/shooting_behavior.gd" id="4_6k67w"]
+[ext_resource type="PackedScene" uid="uid://bgqkhaabeargm" path="res://scenes/projectiles/projectile_enemy.tscn" id="5_kpiq8"]
+
+[node name="EnemyShooter" unique_id=2064501302 instance=ExtResource("1_tty1r")]
+stats = ExtResource("2_6k67w")
+
+[node name="Sprite" parent="Visuals" parent_id_path=PackedInt32Array(827760262) index="1" unique_id=472262675]
+texture = ExtResource("2_tev67")
+
+[node name="FirePos" type="Marker2D" parent="Visuals" parent_id_path=PackedInt32Array(827760262) index="2" unique_id=930076342]
+position = Vector2(-96, -50)
+
+[node name="ShootingBehavior" type="Node2D" parent="." index="10" unique_id=8196955 node_paths=PackedStringArray("enemy", "fire_pos")]
+script = ExtResource("4_6k67w")
+enemy = NodePath("..")
+fire_pos = NodePath("../Visuals/FirePos")
+cooldown = null
+projectile_count = null
+arc_angle = null
+projectile_scene = ExtResource("5_kpiq8")
+projectile_speed = null

@@ -1,0 +1,58 @@
+[gd_scene format=3 uid="uid://ndkmd7k4n1o3"]
+
+[ext_resource type="PackedScene" uid="uid://bn6f6mhmwa4cn" path="res://scenes/unit/enemy/enemy_chaser_slow.tscn" id="1_ksdef"]
+[ext_resource type="Texture2D" uid="uid://emsi6ifyt0vf" path="res://assets/sprites/Enemies/Enemy_5.png" id="2_knpng"]
+[ext_resource type="Resource" uid="uid://bth6q7r6ny6l0" path="res://resources/units/enemies/stats_enemy_charger.tres" id="4_1som8"]
+[ext_resource type="Script" uid="uid://c6yj35korpcii" path="res://scenes/unit/enemy/charger_behavior.gd" id="4_4i178"]
+
+[sub_resource type="Animation" id="Animation_1som8"]
+length = 0.001
+tracks/0/type = "value"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath("Visuals/Sprite:modulate")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(0),
+"transitions": PackedFloat32Array(1),
+"update": 0,
+"values": [Color(1, 1, 1, 1)]
+}
+
+[sub_resource type="Animation" id="Animation_eecfj"]
+resource_name = "charge"
+length = 0.7
+step = 0.05
+tracks/0/type = "value"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath("Visuals/Sprite:modulate")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6),
+"transitions": PackedFloat32Array(1, 1, 1, 1, 1, 1, 1),
+"update": 0,
+"values": [Color(1, 1, 1, 1), Color(0.7921569, 0.11764706, 0.3647059, 1), Color(1, 1, 1, 1), Color(0.7921569, 0.11764706, 0.3647059, 1), Color(1, 1, 1, 1), Color(0.7921569, 0.11764706, 0.3647059, 1), Color(1, 1, 1, 1)]
+}
+
+[sub_resource type="AnimationLibrary" id="AnimationLibrary_j2mds"]
+_data = {
+&"RESET": SubResource("Animation_1som8"),
+&"charge": SubResource("Animation_eecfj")
+}
+
+[node name="EnemyCharger" unique_id=2064501302 instance=ExtResource("1_ksdef")]
+stats = ExtResource("4_1som8")
+
+[node name="Sprite" parent="Visuals" parent_id_path=PackedInt32Array(827760262) index="1" unique_id=472262675]
+texture = ExtResource("2_knpng")
+
+[node name="ChargerBehavior" type="Node2D" parent="." index="10" unique_id=2126520971 node_paths=PackedStringArray("enemy", "anim_effects")]
+script = ExtResource("4_4i178")
+enemy = NodePath("..")
+anim_effects = NodePath("../AnimationEffects")
+
+[node name="AnimationEffects" type="AnimationPlayer" parent="." index="11" unique_id=1301863533]
+libraries/ = SubResource("AnimationLibrary_j2mds")
