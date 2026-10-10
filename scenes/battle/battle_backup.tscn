@@ -1,0 +1,23 @@
+[gd_scene format=3 uid="uid://oqdavuhj6enr"]
+
+[ext_resource type="Texture2D" uid="uid://ov4fmsbglo55" path="res://assets/sprites/Map.png" id="2_xd4uy"]
+
+[node name="Battle" type="Node2D" unique_id=736529500]
+
+[node name="Background" type="Sprite2D" parent="." unique_id=327048530]
+scale = Vector2(2.2, 2.368)
+texture = ExtResource("2_xd4uy")
+
+[node name="Camera2D" type="Camera2D" parent="." unique_id=345133559]
+
+[node name="Stage" type="Node2D" parent="." unique_id=2096629883]
+
+[node name="PlayerSlots" type="Node2D" parent="Stage" unique_id=156483923]
+
+[node name="EnemySlots" type="Node2D" parent="Stage" unique_id=1943048434]
+
+[node name="Units" type="Node2D" parent="Stage" unique_id=241908466]
+
+[node name="FloatingText" type="CanvasLayer" parent="." unique_id=1237877258]
+
+[node name="UI" type="CanvasLayer" parent="." unique_id=1313291045]

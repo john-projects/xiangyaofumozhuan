@@ -1,0 +1,76 @@
+[gd_scene format=3 uid="uid://b0c77h2fhm2d2"]
+
+[ext_resource type="Script" uid="uid://dq4bnejd7br0l" path="res://scenes/battle/battle.gd" id="1_battle"]
+[ext_resource type="Texture2D" uid="uid://ov4fmsbglo55" path="res://assets/sprites/Map.png" id="2_bg"]
+[ext_resource type="PackedScene" path="res://scenes/battle/turn_order.tscn" id="3_turnorder"]
+[ext_resource type="PackedScene" path="res://scenes/battle/command_menu.tscn" id="4_command"]
+[ext_resource type="Script" path="res://resources/skills/skill_data.gd" id="5_skilldata"]
+[ext_resource type="Resource" path="res://resources/skills/skill_fireball.tres" id="6_fireball"]
+
+[node name="Battle" type="Node2D" unique_id=1765388522]
+script = ExtResource("1_battle")
+default_skills = Array[ExtResource("5_skilldata")]([ExtResource("6_fireball")])
+
+[node name="Background" type="Sprite2D" parent="." unique_id=204072474]
+scale = Vector2(2.2, 2.368)
+texture = ExtResource("2_bg")
+
+[node name="Camera2D" type="Camera2D" parent="." unique_id=2035766053]
+
+[node name="Stage" type="Node2D" parent="." unique_id=2132559169]
+
+[node name="PlayerSlots" type="Node2D" parent="Stage" unique_id=942225505]
+unique_name_in_owner = true
+
+[node name="Slot1" type="Marker2D" parent="Stage/PlayerSlots" unique_id=2134681543]
+position = Vector2(600, 0)
+
+[node name="Slot2" type="Marker2D" parent="Stage/PlayerSlots" unique_id=1117295865]
+position = Vector2(500, 120)
+
+[node name="Slot3" type="Marker2D" parent="Stage/PlayerSlots" unique_id=810898511]
+position = Vector2(400, 240)
+
+[node name="Slot4" type="Marker2D" parent="Stage/PlayerSlots" unique_id=246308637]
+position = Vector2(300, 360)
+
+[node name="EnemySlots" type="Node2D" parent="Stage" unique_id=1958728354]
+unique_name_in_owner = true
+
+[node name="Slot1" type="Marker2D" parent="Stage/EnemySlots" unique_id=1210383374]
+position = Vector2(-300, -360)
+
+[node name="Slot2" type="Marker2D" parent="Stage/EnemySlots" unique_id=704680627]
+position = Vector2(-400, -240)
+
+[node name="Slot3" type="Marker2D" parent="Stage/EnemySlots" unique_id=1891586887]
+position = Vector2(-500, -120)
+
+[node name="Slot4" type="Marker2D" parent="Stage/EnemySlots" unique_id=1586260688]
+position = Vector2(-600, 0)
+
+[node name="Units" type="Node2D" parent="Stage" unique_id=422389222]
+unique_name_in_owner = true
+
+[node name="Fx" type="Node2D" parent="Stage" unique_id=995878092]
+unique_name_in_owner = true
+
+[node name="UI" type="CanvasLayer" parent="." unique_id=2049044345]
+
+[node name="TurnOrder" parent="UI" unique_id=1782321179 instance=ExtResource("3_turnorder")]
+
+[node name="InfoLabel" type="Label" parent="UI" unique_id=1142666683]
+unique_name_in_owner = true
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -400.0
+offset_top = 118.0
+offset_right = 400.0
+offset_bottom = 154.0
+grow_horizontal = 2
+theme_override_font_sizes/font_size = 24
+text = "战斗开始"
+horizontal_alignment = 1
+
+[node name="CommandMenu" parent="UI" unique_id=986006701 instance=ExtResource("4_command")]

@@ -1,0 +1,39 @@
+[gd_scene load_steps=13 format=3 uid="uid://fq8flsft7wst"]
+
+[ext_resource type="Script" uid="uid://8t1qqfpf4anf" path="res://scenes/main/main.gd" id="1_main"]
+[ext_resource type="Script" uid="uid://j6ibt5vlkg3t" path="res://resources/units/unit_stats.gd" id="2_unitstats"]
+[ext_resource type="Resource" uid="uid://dksggkah24dx4" path="res://resources/units/enemies/stats_enemy_chaser_slow.tres" id="3_enemy1"]
+[ext_resource type="Resource" uid="uid://dfca8i44ax4fj" path="res://resources/units/enemies/stats_enemy_chaser_mid.tres" id="4_enemy2"]
+[ext_resource type="Resource" uid="uid://622t0mky2hth" path="res://resources/units/enemies/stats_enemy_chaser_fast.tres" id="5_enemy3"]
+[ext_resource type="Resource" uid="uid://bth6q7r6ny6l0" path="res://resources/units/enemies/stats_enemy_charger.tres" id="6_enemy4"]
+[ext_resource type="Resource" uid="uid://cyechaphh6uux" path="res://resources/units/enemies/stats_enemy_shooter.tres" id="7_enemy5"]
+[ext_resource type="Script" path="res://resources/maps/map_data.gd" id="8_mapdata"]
+[ext_resource type="Resource" path="res://resources/maps/map_jianyecheng.tres" id="9_map1"]
+[ext_resource type="Resource" path="res://resources/maps/map_donghaiwan.tres" id="10_map2"]
+[ext_resource type="Resource" path="res://resources/maps/map_aolaiguo.tres" id="11_map3"]
+[ext_resource type="Resource" path="res://resources/maps/map_huaguoshan.tres" id="12_map4"]
+
+[node name="Main" type="Node" unique_id=1825466943]
+script = ExtResource("1_main")
+maps = Array[ExtResource("8_mapdata")]([ExtResource("9_map1"), ExtResource("10_map2"), ExtResource("11_map3"), ExtResource("12_map4")])
+enemy_pool = Array[ExtResource("2_unitstats")]([ExtResource("3_enemy1"), ExtResource("4_enemy2"), ExtResource("5_enemy3"), ExtResource("6_enemy4"), ExtResource("7_enemy5")])
+
+[node name="WorldRoot" type="Node2D" parent="." unique_id=220584061]
+unique_name_in_owner = true
+
+[node name="UIRoot" type="CanvasLayer" parent="." unique_id=1586561960]
+unique_name_in_owner = true
+
+[node name="TransitionLayer" type="CanvasLayer" parent="." unique_id=898270137]
+unique_name_in_owner = true
+layer = 200
+
+[node name="Fade" type="ColorRect" parent="TransitionLayer" unique_id=1044931352]
+unique_name_in_owner = true
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0, 0, 0, 1)

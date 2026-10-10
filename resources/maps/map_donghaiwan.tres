@@ -1,0 +1,37 @@
+[gd_resource type="Resource" script_class="MapData" format=3 uid="uid://coix8xh1bfjx6"]
+
+[ext_resource type="Script" uid="uid://v6570clid4e6" path="res://resources/maps/map_data.gd" id="1_mapdata"]
+[ext_resource type="Script" uid="uid://j6ibt5vlkg3t" path="res://resources/units/unit_stats.gd" id="1_nkte6"]
+[ext_resource type="Texture2D" uid="uid://d3g0a10bux5uf" path="res://assets/map/map_donghaiwan.png" id="2_texture"]
+[ext_resource type="Script" uid="uid://ctu1nt07fqrnc" path="res://resources/maps/map_npc.gd" id="3_npc"]
+[ext_resource type="PackedScene" path="res://scenes/world/maps/world_donghaiwan.tscn" id="4_world"]
+
+[sub_resource type="Resource" id="Resource_chuanfu"]
+script = ExtResource("3_npc")
+id = "chuanfu"
+display_name = "船夫"
+position = Vector2(0.3, 0.55)
+dialogue = "要回建邺城吗？上船吧。"
+destinations = Array[String](["jianyecheng"])
+teleport_label = "乘船回"
+
+[sub_resource type="Resource" id="Resource_xiangdao"]
+script = ExtResource("3_npc")
+id = "xiangdao"
+display_name = "向导"
+position = Vector2(0.72, 0.42)
+dialogue = "前边就是傲来国了，我认得路。"
+destinations = Array[String](["aolaiguo"])
+teleport_label = "带我去"
+
+[resource]
+script = ExtResource("1_mapdata")
+id = "donghaiwan"
+display_name = "东海湾"
+texture = ExtResource("2_texture")
+scene = ExtResource("4_world")
+spawn_point = Vector2(0.42, 0.62)
+npcs = Array[ExtResource("3_npc")]([SubResource("Resource_chuanfu"), SubResource("Resource_xiangdao")])
+next_id = "aolaiguo"
+exit_center = Vector2(0.72, 0.42)
+metadata/_custom_type_script = "res://resources/maps/map_data.gd"

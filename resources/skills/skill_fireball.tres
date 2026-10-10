@@ -1,0 +1,28 @@
+[gd_resource type="Resource" script_class="SkillData" load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://resources/skills/skill_data.gd" id="1_skill"]
+[ext_resource type="Texture2D" path="res://assets/sprites/Projectiles/Projectile_1.png" id="2_projectile"]
+[ext_resource type="Texture2D" path="res://assets/sprites/Upgrades/3.png" id="3_icon"]
+[ext_resource type="AudioStream" path="res://assets/audio/ShotgunFire.wav" id="4_cast"]
+[ext_resource type="AudioStream" path="res://assets/audio/EnemyHit.wav" id="5_hit"]
+
+[resource]
+script = ExtResource("1_skill")
+id = "fireball"
+display_name = "火球术"
+icon = ExtResource("3_icon")
+description = "凝聚一枚火球轰向单个敌人，造成 2.2 倍伤害，命中有额外 10% 暴击率。"
+mana_cost = 6.0
+cooldown = 2
+power = 2.2
+crit_bonus = 0.1
+target_mode = 0
+projectile_texture = ExtResource("2_projectile")
+projectile_scale = 0.9
+projectile_speed = 900.0
+tint = Color(1, 0.52156866, 0.18039216, 1)
+hit_particles = 26
+screen_shake = 7.0
+cast_sfx = ExtResource("4_cast")
+hit_sfx = ExtResource("5_hit")
+metadata/_custom_type_script = "res://resources/skills/skill_data.gd"

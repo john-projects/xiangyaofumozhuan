@@ -1,0 +1,28 @@
+[gd_resource type="Resource" script_class="MapData" format=3 uid="uid://doyd3a0utytw5"]
+
+[ext_resource type="Script" uid="uid://v6570clid4e6" path="res://resources/maps/map_data.gd" id="1_mapdata"]
+[ext_resource type="Script" uid="uid://j6ibt5vlkg3t" path="res://resources/units/unit_stats.gd" id="1_vasaw"]
+[ext_resource type="Texture2D" uid="uid://dqqjl5rrbsvbj" path="res://assets/map/map_huaguoshan.png" id="2_texture"]
+[ext_resource type="Script" uid="uid://ctu1nt07fqrnc" path="res://resources/maps/map_npc.gd" id="3_npc"]
+[ext_resource type="PackedScene" path="res://scenes/world/maps/world_huaguoshan.tscn" id="4_world"]
+
+[sub_resource type="Resource" id="Resource_houzi"]
+script = ExtResource("3_npc")
+id = "houzi"
+display_name = "看山猴"
+position = Vector2(0.45, 0.38)
+dialogue = "吱吱！下山的路我熟，傲来国是我带你去的。"
+destinations = Array[String](["aolaiguo"])
+teleport_label = "带我去"
+
+[resource]
+script = ExtResource("1_mapdata")
+id = "huaguoshan"
+display_name = "花果山"
+texture = ExtResource("2_texture")
+scene = ExtResource("4_world")
+spawn_point = Vector2(0.55, 0.68)
+npcs = Array[ExtResource("3_npc")]([SubResource("Resource_houzi")])
+next_id = "aolaiguo"
+exit_center = Vector2(0.45, 0.38)
+metadata/_custom_type_script = "res://resources/maps/map_data.gd"

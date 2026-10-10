@@ -1,0 +1,191 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scenes/world/world_map.gd" id="1_worldmap"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_panel"]
+bg_color = Color(0.07058824, 0.07058824, 0.09019608, 0.94)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.45490196, 0.38039216, 0.23921569, 1)
+corner_radius_top_left = 16
+corner_radius_top_right = 16
+corner_radius_bottom_right = 16
+corner_radius_bottom_left = 16
+
+[node name="WorldMap" type="Node2D"]
+y_sort_enabled = true
+script = ExtResource("1_worldmap")
+
+[node name="MapSprite" type="Sprite2D" parent="."]
+unique_name_in_owner = true
+centered = false
+
+[node name="Player" type="Node2D" parent="."]
+unique_name_in_owner = true
+
+[node name="Shadow" type="Polygon2D" parent="Player"]
+color = Color(0, 0, 0, 0.3)
+polygon = PackedVector2Array(44, 0, 38, 8, 22, 13.9, 0, 16, -22, 13.9, -38, 8, -44, 0, -38, -8, -22, -13.9, 0, -16, 22, -13.9, 38, -8)
+
+[node name="PlayerFallback" type="Polygon2D" parent="Player"]
+unique_name_in_owner = true
+color = Color(0.3529412, 0.6784314, 0.92156863, 1)
+polygon = PackedVector2Array(-22, -30, 22, -30, 22, 14, -22, 14)
+
+[node name="PlayerSprite" type="Sprite2D" parent="Player"]
+unique_name_in_owner = true
+scale = Vector2(1.3, 1.3)
+
+[node name="Camera" type="Camera2D" parent="Player"]
+unique_name_in_owner = true
+position_smoothing_enabled = true
+position_smoothing_speed = 8.0
+
+[node name="UI" type="CanvasLayer" parent="."]
+
+[node name="MapNameLabel" type="Label" parent="UI"]
+unique_name_in_owner = true
+offset_left = 36.0
+offset_top = 24.0
+offset_right = 636.0
+offset_bottom = 76.0
+theme_override_font_sizes/font_size = 40
+text = "地图"
+
+[node name="CoinsLabel" type="Label" parent="UI"]
+unique_name_in_owner = true
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -436.0
+offset_top = 24.0
+offset_right = -36.0
+offset_bottom = 66.0
+grow_horizontal = 0
+theme_override_font_sizes/font_size = 32
+text = "金币：0"
+horizontal_alignment = 2
+
+[node name="ResultLabel" type="Label" parent="UI"]
+unique_name_in_owner = true
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -450.0
+offset_top = 92.0
+offset_right = 450.0
+offset_bottom = 132.0
+grow_horizontal = 2
+theme_override_font_sizes/font_size = 30
+text = ""
+horizontal_alignment = 1
+
+[node name="HintLabel" type="Label" parent="UI"]
+unique_name_in_owner = true
+anchors_preset = 7
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -450.0
+offset_top = -124.0
+offset_right = 450.0
+offset_bottom = -86.0
+grow_horizontal = 2
+grow_vertical = 0
+theme_override_font_sizes/font_size = 26
+text = "按 E 交谈"
+horizontal_alignment = 1
+
+[node name="BattleButton" type="Button" parent="UI"]
+unique_name_in_owner = true
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -292.0
+offset_top = -104.0
+offset_right = -32.0
+offset_bottom = -36.0
+grow_horizontal = 0
+grow_vertical = 0
+theme_override_font_sizes/font_size = 26
+text = "进入战斗"
+
+[node name="BackButton" type="Button" parent="UI"]
+unique_name_in_owner = true
+anchors_preset = 2
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 32.0
+offset_top = -104.0
+offset_right = 252.0
+offset_bottom = -44.0
+grow_vertical = 0
+theme_override_font_sizes/font_size = 24
+text = "返回主菜单"
+
+[node name="TravelPanel" type="Panel" parent="UI"]
+unique_name_in_owner = true
+visible = false
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -300.0
+offset_top = -230.0
+offset_right = 300.0
+offset_bottom = 230.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
+
+[node name="Margin" type="MarginContainer" parent="UI/TravelPanel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 28
+theme_override_constants/margin_top = 24
+theme_override_constants/margin_right = 28
+theme_override_constants/margin_bottom = 24
+
+[node name="VBox" type="VBoxContainer" parent="UI/TravelPanel/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="PanelName" type="Label" parent="UI/TravelPanel/Margin/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 30
+text = "NPC"
+horizontal_alignment = 1
+
+[node name="PanelDialogue" type="Label" parent="UI/TravelPanel/Margin/VBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 90)
+layout_mode = 2
+theme_override_font_sizes/font_size = 22
+text = "……"
+horizontal_alignment = 1
+autowrap_mode = 3
+
+[node name="PanelButtons" type="VBoxContainer" parent="UI/TravelPanel/Margin/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 12
+alignment = 1
+
+[node name="CloseButton" type="Button" parent="UI/TravelPanel/Margin/VBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 52)
+layout_mode = 2
+theme_override_font_sizes/font_size = 24
+text = "再想想"
