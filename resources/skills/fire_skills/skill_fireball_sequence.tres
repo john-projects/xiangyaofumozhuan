@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="SkillData" format=3 uid="uid://djxk7x5qrnap1"]
+
+[ext_resource type="PackedScene" uid="uid://b83xh47ut2fvc" path="res://scenes/effects/fireball/fireball_appearance.tscn" id="1_cx2rk"]
+[ext_resource type="AudioStream" uid="uid://g72hyxdnaath" path="res://assets/audio/ShotgunFire.wav" id="2_0eoi5"]
+[ext_resource type="AudioStream" uid="uid://blonjlaa37md0" path="res://assets/audio/EnemyHit.wav" id="3_rf3rr"]
+[ext_resource type="Texture2D" uid="uid://k3qfoarie5u0" path="res://assets/sprites/Upgrades/7.png" id="4_vbgg8"]
+[ext_resource type="Script" uid="uid://sbgbq3puamij" path="res://resources/skills/skill_data.gd" id="5_yham8"]
+
+[resource]
+script = ExtResource("5_yham8")
+id = "fireball_sequence"
+display_name = "火球术·像素"
+icon = ExtResource("4_vbgg8")
+description = "以像素火焰凝聚的火球轰向单个敌人，造成 2.2 倍伤害，命中有额外 10% 暴击率。"
+appearance_scene = ExtResource("1_cx2rk")
+projectile_scale = 4.0
+projectile_speed = 2000.0
+tint = Color(1, 0.52156866, 0.18039216, 1)
+hit_particles = 26
+frames_only = true
+cast_sfx = ExtResource("2_0eoi5")
+hit_sfx = ExtResource("3_rf3rr")

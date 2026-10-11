@@ -9,7 +9,8 @@
 #                        在编辑器里单独运行本场景时则由 auto_start_demo 用 DEMO_* 自造一场。
 #     · 下游（它生成/驱动什么）：
 #         BattleUnit        （scenes/battle/battle_unit.tscn）—— 单位状态与演出，由 _spawn_team() 生成；
-#         SkillProjectile   （scenes/effects/fireball/skill_projectile.tscn）—— 技能飞行体，由 _perform_skill() 生成；
+#         SkillProjectile   （scenes/effects/projectile/skill_projectile.tscn）—— 公共技能弹道，由 _perform_skill()/_cast_aoe() 生成；
+#                            元素外观（火球等）由 SkillData.appearance_scene 挂在弹道的 %Appearance 插槽里，弹道本身不含元素语义；
 #         FloatingText      （Global.FLOATING_TEXT_SCENE）—— 伤害/防御飘字，由 create_floating_text() 生成；
 #         TurnOrder         （scenes/battle/turn_order.gd）—— 左侧出手顺序条，update_order/set_current 驱动；
 #         CommandMenu       （scenes/battle/command_menu.gd）—— 指令菜单，open_for/close 驱动。
@@ -98,7 +99,14 @@ signal battle_ended(player_won: bool)
 const BATTLE_UNIT_SCENE := preload("res://scenes/battle/battle_unit.tscn")
 ## 技能飞行体场景（根节点挂 skill_projectile.gd）。每次施法每个目标实例化一个，命中爆炸后自毁。
 ## 已迁到 scenes/effects/fireball/ 下，和它要用的火焰序列帧素材放在一起。
-const SKILL_PROJECTILE_SCENE := preload("res://scenes/effects/fireball/skill_projectile.tscn")
+const SKILL_PROJECTILE_SCENE := preload("res://scenes/effects/projectile/skill_projectile.tscn")
+## 默认命中爆炸（程序化的闪光/冲击波/火星/浓烟四层）。
+## 群体技能要主动给"每个敌人身上补一朵小爆炸"，所以这里也 preload 一份
+## （SkillProjectile.burst() 内部用的是同一个场景，那边有它自己的常量）。
+const DEFAULT_BURST_EFFECT_SCENE := preload("res://scenes/effects/burst_effect.tscn")
+## 群体技能里"每个敌人身上补的小爆炸"相对 skill.burst_scale 的比例。
+## 0.55 = 中心那朵的一半多：亮到能看出"他也被炸了"，又不会喧宾夺主。
+const AOE_TARGET_BURST_RATIO := 0.55
 
 # ── 演示队伍（只用于「直接 F6 运行本场景」时调表现）────────────────────────────
 # 从地图正式进战斗时不会用到这两个数组：那时由外部把 stats 传进 start_battle()。
@@ -162,6 +170,11 @@ enum State { IDLE, INTRO, TURN_START, COMMAND, TARGET_SELECT, EXECUTE, TURN_END,
 ## 取值范围经验上 0.1~0.8：太小（<0.1）演出糊成一团，太大（>0.8）一场战斗会非常拖沓。
 ## 只影响表现节奏，不影响任何数值结算（伤害在停顿之前就已经算完了）。
 @export var action_delay := 0.35         # 每个动作之间的停顿（秒）
+## 群体技能里"逐个目标结算"之间的间隔（秒），只在 _cast_aoe() 里用。
+## 为什么比 action_delay 小得多：群体技能要的是"同时被炸到"的观感，
+## 用 0.35 会变成"一个一个挨打"；0.06 左右飘字和闪红会连成一片，读起来才像 AOE。
+## 单体技能和普攻完全不看这个值。
+@export var aoe_step_delay := 0.06       # 群体技能里每个目标结算的间隔（秒）
 
 # ── 视觉：飘字配色 ────────────────────────────────────────────────────────────
 # 这里的颜色只用于 Battle.create_floating_text() 生成的 FloatingText 的 modulate，
@@ -405,13 +418,16 @@ func _next_round() -> void:
 		return
 	# 只把"这一刻还活着"的单位放进出手队列（阵亡的从本回合起就不再行动）。
 	turn_queue = _alive(_all_units())
+	# 每回合开始时：刷冷却 + roll 本回合的出手速度（**必须先 roll 再排序**）。
 	for unit in turn_queue:
 		unit.tick_cooldowns()                        # 每回合开始时刷新技能冷却
+		unit.roll_turn_speed()                       # 乱敏：±4 随机扰动，每单位每回合只 roll 一次
 	# sort_custom 的比较函数是"a 是否应排在 b 前面"：速度大的排前面（降序 = 先手）。
-	# 调一次 turn_speed() 会各带一次 ±4 随机抖动，且 Lambda 每次比较都会重新取值 ——
-	# 只要比较函数不是严格全序，排序结果就只是一种"大致按速度"的排列，这正是想要的"乱敏"效果。
+	# ⚠ 比较函数里**不能**再调 turn_speed()：那样每次比较都取新随机数，比较结果自相矛盾，
+	#   引擎会报 "bad comparison function; sorting will be broken" 且排序结果未定义。
+	#   现在的写法读的是上面缓存的 round_speed，所以是严格全序，"乱敏"的手感保持不变。
 	turn_queue.sort_custom(func(a: BattleUnit, b: BattleUnit) -> bool:
-		return a.turn_speed() > b.turn_speed())
+		return a.round_speed > b.round_speed)
 	turn_index = 0
 	turn_order.update_order(turn_queue)
 	info_label.text = "第 %d 回合" % round_count
@@ -736,8 +752,9 @@ func _skills_for(unit: BattleUnit, is_player: bool) -> Array[SkillData]:
 ##   · 末尾交棒给 _finish_turn()，或由 _check_battle_end() 结束战斗。
 ## 顺序讲究：
 ##   1) 先扣蓝进冷却再播演出：演出中途如果玩家读 UI（技能菜单的蓝量/冷却显示），数据必须已经是新的；
-##   2) 逐个目标串行处理（for + await），所以群体技能是"一个一个飞过去炸"，
-##      不是同时命中 —— 想要同时命中需要改成先并发生成飞体再统一结算；
+##   2) 单体技能（ENEMY_SINGLE）逐个目标串行处理（for + await）；
+##      群体技能（ENEMY_ALL）不在这里循环 —— 它走 _cast_aoe()：只生成一颗飞行体飞到敌阵中心炸开，
+##      再按 aoe_step_delay 逐个结算（观感是"同时被炸到"）；
 ##   3) fly_to() 返回的那一刻才结算伤害（飞体自己负责飞行动画）；
 ##   4) projectile.burst() 放在伤害结算之后，画面上是"先飘字再爆炸"，看起来才不脱节。
 ## 坑：
@@ -762,6 +779,14 @@ func _perform_skill(caster: BattleUnit, skill: SkillData, targets: Array[BattleU
 	caster.start_cooldown(skill)
 	_play_sfx(skill.cast_sfx)
 	await caster.play_cast()
+
+	# 群体技能走另一条演出路径：一颗火球 → 敌阵中心 → 中心大爆炸 + 全体结算。
+	# victims 是上面算好的存活快照，这里不再重新取一次 _alive(_enemies)。
+	if skill.target_mode == SkillData.TargetMode.ENEMY_ALL:
+		await _cast_aoe(caster, skill, victims)
+		if not _check_battle_end():
+			_finish_turn()
+		return
 
 	for target in victims:
 		# 逐目标重判：串行演出期间目标可能已经死了/节点被释放，跳过即可（不要 break，
@@ -803,6 +828,98 @@ func _perform_skill(caster: BattleUnit, skill: SkillData, targets: Array[BattleU
 	# 与 _perform_attack 同理：先判胜负，没结束才收尾回合。
 	if not _check_battle_end():
 		_finish_turn()
+
+
+## 群体技能（target_mode = ENEMY_ALL）的演出与结算。
+## 参数 caster：施法者；skill：技能资源；victims：**已过滤存活**的敌人列表（由 _perform_skill 传入）。
+## 返回值：无（协程：飞行 → 中心爆炸 → 逐个结算 → 收尾停顿）。
+## 副作用：和单体技能一样会飘字、播受击表现 —— 但有三处刻意不同：
+##   · 蓝与冷却不在这里扣（_perform_skill 的起手阶段已经扣完了）；
+##   · hit_sfx 与 _shake_camera 只做一次：四个目标各来一次的话会叠四层音效、抖四下；
+##   · 会额外在 fx_root 下为每个敌人生成一朵小爆炸（各自播完自毁）。
+## 与单体技能的三点关键差别（这个函数存在的理由）：
+##   1) 只生成**一颗**飞行体，目标是"敌阵中心"（_group_center）而不是某个具体敌人 —— 视觉上才是炸一片；
+##   2) 伤害仍然是逐个独立算的（各自判暴击/格挡），只是间隔极短（aoe_step_delay）；
+##   3) 中心爆炸**先于**伤害结算，"先看到火炸开、再看到每个人掉血"，读起来更清楚。
+## 坑：
+##   · victims 里的单位可能在 await 期间死掉/被释放，所以循环里每个目标都重判
+##     is_instance_valid / alive（不要 break，后面的目标仍该被打到）；
+##   · target.play_hit() **故意不 await** —— await 会变成排队闪红，同时感就没了。
+func _cast_aoe(caster: BattleUnit, skill: SkillData, victims: Array[BattleUnit]) -> void:
+	var center := _group_center(victims)
+
+	# ① 一颗火球飞向敌阵中心（沿途的序列帧/粒子全部来自 SkillData）
+	var projectile: SkillProjectile = SKILL_PROJECTILE_SCENE.instantiate() as SkillProjectile
+	fx_root.add_child(projectile)
+	projectile.setup(skill, caster.global_position)
+	await projectile.fly_to(center)
+
+	# ② 中心大爆炸：burst() 内部会读 skill.hit_effect_scene / skill.burst_scale，并自毁
+	projectile.burst()
+	_play_sfx(skill.hit_sfx)
+	if skill.screen_shake > 0.0:
+		_shake_camera(skill.screen_shake)
+
+	# ③ 逐个结算（间隔很短，观感是"同时被炸到"）
+	for target in victims:
+		if not is_instance_valid(target) or not target.alive:
+			continue
+
+		if target.try_block():
+			create_floating_text(target, "Blocked!", block_color)
+		else:
+			var damage := caster.skill_damage(skill)
+			var is_crit := caster.skill_crit(skill)
+			if is_crit:
+				damage = ceilf(damage * 1.5)
+			target.take_damage(damage)
+			create_floating_text(target, str(int(damage)), critical_color if is_crit else skill.tint)
+			# 中心那朵爆炸盖不到斜排的角落，所以每个敌人身上再补一朵小的
+			_spawn_hit_burst(skill, target.global_position, AOE_TARGET_BURST_RATIO)
+			target.play_hit()          # 故意不 await：要的是"同时闪红"
+		await get_tree().create_timer(aoe_step_delay).timeout
+
+	await get_tree().create_timer(action_delay).timeout
+
+
+## 计算一组单位的几何中心（世界坐标）。群体技能把火球飞到这儿再炸。
+## 参数 units：单位列表（调用方应传存活目标）。
+## 返回值：中心点；列表为空时返回 Vector2.ZERO（调用方已保证非空，这里只是兜底不炸）。
+## 副作用：无（纯计算）。用 global_position 而不是 position：敌我可能挂在不同父节点下。
+func _group_center(units: Array[BattleUnit]) -> Vector2:
+	var sum := Vector2.ZERO
+	var count := 0
+	for unit in units:
+		if is_instance_valid(unit):
+			sum += unit.global_position
+			count += 1
+	if count == 0:
+		return Vector2.ZERO
+	return sum / float(count)
+
+
+## 在指定位置播一朵（缩小版）命中爆炸，用来补"这个敌人也被炸到了"的画面。
+## 参数 skill：技能资源（提供 hit_effect_scene / tint / hit_particles / burst_scale）；
+##        pos：世界坐标；scale_ratio：相对 skill.burst_scale 的额外缩放
+##        （中心那朵是 1.0，敌人身上用 Battle.AOE_TARGET_BURST_RATIO = 0.55）。
+## 返回值：无（同步生成，特效自己播完自毁）。
+## 副作用：在 fx_root 下 new 一个特效节点，挂世界坐标（不随单位移动）。
+## 用哪个场景：优先 skill.hit_effect_scene，留空则用 DEFAULT_BURST_EFFECT_SCENE。
+## 坑：纯序列帧素材（effect_fireball_hit.tscn）**没有 play()**，要走
+##     SkillProjectile.play_sequence_once()；这里用 has_method 判断而不是类型判断，
+##     就是为了让"程序化爆炸"和"纯序列帧"两种命中层都能用同一个函数。
+func _spawn_hit_burst(skill: SkillData, pos: Vector2, scale_ratio: float) -> void:
+	var scene: PackedScene = skill.hit_effect_scene if skill.hit_effect_scene != null else DEFAULT_BURST_EFFECT_SCENE
+	if scene == null:
+		return
+	var boom = scene.instantiate()
+	fx_root.add_child(boom)
+	boom.global_position = pos
+	boom.scale = Vector2.ONE * maxf(0.05, skill.burst_scale * scale_ratio)
+	if boom.has_method("play"):
+		boom.play(skill.tint, maxi(8, skill.hit_particles / 2))
+	else:
+		SkillProjectile.play_sequence_once(boom)
 
 
 ## 播一个一次性音效（不需要动 SoundManager）

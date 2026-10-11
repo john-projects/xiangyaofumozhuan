@@ -27,7 +27,11 @@ class_name SkillData
 
 ## 技能的目标选择模式，决定"这个技能需要对谁、怎么选"。
 ## 枚举的整数值会存进 .tres，所以**调整成员顺序等于改动所有已有资源的数据**（和 SoundManager.Sound 同理）。
-## ⚠ 目前只有 ENEMY_SINGLE 是完全跑通的：Battle._perform_skill() 里其它分支的效果是暂未实现的占位。
+## 现状（2026-10）：
+##   · ENEMY_SINGLE → 已跑通：进入选目标 → 一颗火球飞过去炸一次（Battle._perform_skill()）；
+##   · ENEMY_ALL    → 已跑通：不用选目标，一颗火球飞到敌阵中心炸开，
+##                    再逐个结算全体敌人的伤害（Battle._cast_aoe()）；
+##   · SELF / ALLY_SINGLE → 仍是占位：等 BattleUnit 有 status（增益/持续状态）系统后再做治疗与增益。
 enum TargetMode {
 	ENEMY_SINGLE,   # 选一个敌人（火球现在用这个）
 	ENEMY_ALL,      # 全体敌人
@@ -52,7 +56,7 @@ enum TargetMode {
 @export var mana_cost := 6.0            # 蓝耗
 ## 冷却（单位：**回合数**，int）。默认 2 = 放完要等 2 个回合才能再放。
 ## 它由 BattleUnit 按回合扣减；填 0 表示每回合都能放。
-@export var cooldown := 2               # 冷却（回合数）
+@export var cooldown := 0               # 冷却（回合数）
 ## 伤害倍率（无量纲）：最终伤害 = power × 施法者.damage。
 ## 默认 2.2 —— 一个明显"比平砍强"的数值，所以火球值得花蓝。
 @export var power := 2.2                # 伤害倍率：最终伤害 = power × 施法者.damage
@@ -64,11 +68,23 @@ enum TargetMode {
 
 # ────────────────────────────── 视觉（Battle 播演出用） ──────────────────────────────
 @export_group("视觉")
-## 飞行体贴图（由 scenes/effects/fireball/skill_projectile.gd 贴到 Sprite2D 上）。
-## 留空 = 代码兜底画一个橙色圆点，所以没素材时技能也能看出来在飞。
-@export var projectile_texture: Texture2D   # 飞行体贴图（留空 = 一个橙色圆点）
-## 飞行体缩放（乘在贴图原始尺寸上）。默认 1.0 = 原始大小；
-## 注意 SkillProjectile 的飞行 tween 会在这个值基础上乘 1.25 做"鼓一下"的效果，改这里会同步影响那个峰值。
+## 飞行体贴图（由公共弹道 scenes/effects/projectile/skill_projectile.gd 贴到 Sprite2D 上）。
+## 留空 = 弹体本身没有静态贴图，画面完全交给外观包（appearance_scene）；两个都留空也能飞，只是看不见弹体。
+@export var projectile_texture: Texture2D   # 飞行体贴图（留空 = 只靠外观包）
+
+## 元素外观包：一个装着"这个元素长什么样"的 Node2D 场景（序列帧、粒子层、配色……）。
+## 公共弹道只做"飞行 + 拖尾 + 命中爆炸 + 生命周期"，元素专属的东西全在这里：
+##   火球 → scenes/effects/fireball/fireball_appearance.tscn
+##   以后的寒冰箭 → 再写一个 ice_appearance，公共弹道一行都不用改。
+## 留空 = 这条弹道只有上面那张静态贴图。
+## 契约（可选，鸭子类型，两个都可以不实现）：
+##   setup_effect(projectile, skill) → 弹道 setup() 时调用，外观包照 SkillData 配置自己；
+##   stop_flight()                   → 命中时调用，外观包停发射（保留已生成粒子自然消亡）。
+@export var appearance_scene: PackedScene
+
+## 飞行体缩放（乘在贴图原始尺寸上）。默认 1.0 = 原始大小。
+## 注意公共弹道的飞行 tween 会把整个 %Visual（静态贴图 + 外观包）乘 FLY_STRETCH(1.25) 做"鼓一下"，
+## 所以这里填的是**基准尺寸**，峰值由弹道决定，改这里会同步影响起飞瞬间的大小。
 @export var projectile_scale := 1.0
 ## 飞行速度，单位：**像素/秒**。飞行时长 = 距离 / 速度，但在 skill_projectile.gd 里
 ## 被 clampf(..., 0.18, 1.2) 钳过 —— 太近不会"瞬移"、太远也不会飞两秒以上，保证战斗节奏。
@@ -85,14 +101,25 @@ enum TargetMode {
 ## 填 0.0 表示不抖，适合做成"轻击"类技能。
 @export var screen_shake := 7.0             # 命中时的镜头抖动强度（0 = 不抖）
 
+## 命中爆发的特效场景。留空 = 用默认的 scenes/effects/burst_effect.tscn
+## （程序化的"闪光 / 冲击波 / 火星 / 浓烟"四层爆炸）。
+## 填了就用它，例如像素火焰序列 scenes/effects/fireball/effect_fireball_hit.tscn
+## （纯 AnimatedSprite2D、没有 play()，由 SkillProjectile.play_sequence_once() 播一次并自毁）。
+@export var hit_effect_scene: PackedScene
+
+## 命中爆发的整体缩放（1.0 = 原始大小）。群体技能调大，让爆炸能盖住整个敌阵：
+## 爆裂火球用 1.8 在敌阵中心炸开，再在每敌人身上各补一朵 0.55 倍的小爆炸（见 Battle._cast_aoe()）。
+@export var burst_scale := 1.0
+
 # ────────────────── 视觉 · 序列帧外观（像素火焰素材用） ──────────────────
-# 背景：skill_projectile.tscn 里有两套飞行体外观，由本组字段决定用哪套：
-#   A) projectile_texture 非空 → 静态贴图（可染色、可自转）——上面"视觉"组的老路子
-#   B) projectile_texture 为空 → 序列帧（AnimatedSprite2D 播 effect_fireball_*.tscn 的 61 帧）
-# 默认值刻意都取"不改变原行为"，所以已有的 skill_fireball.tres 不受影响。
+# 本组字段由"序列帧类外观包"读取，当前实现是 scenes/effects/fireball/fireball_appearance.gd：
+#   A) projectile_texture 非空 → 弹道用静态贴图（可染色、可自转）
+#   B) projectile_texture 为空 → 外观包用序列帧（AnimatedSprite2D 播 effect_fireball_*.tscn 的 61 帧）
+# ⚠ 换了别的元素外观包（比如冰系）之后，这组字段是否生效取决于那个外观包读不读它们 ——
+#    契约是"外观包自己决定"，公共弹道不介入。
 @export_group("视觉 · 序列帧外观")
 
-## 飞行体的序列帧场景。留空 = 用 skill_projectile.tscn 里默认那套 effect_fireball_1。
+## 飞行体的序列帧场景。留空 = 用外观包里的默认那套 effect_fireball_1。
 ## 你手上有三种火焰配色，对应：
 ##   scenes/effects/fireball/effect_fireball_1.tscn（黄橙）
 ##   scenes/effects/fireball/effect_fireball_2.tscn

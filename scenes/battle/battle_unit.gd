@@ -290,18 +290,34 @@ func try_block() -> bool:
 	return Global.get_chance_success(stats.block_chance / 100.0)
 
 
+## 本回合缓存的出手速度（由 Battle._next_round() 在排序前调 roll_turn_speed() 写入）。
+## ⚠ 为什么必须缓存，不能直接在 sort_custom 的比较函数里调 turn_speed()：
+##   Godot 的排序会反复调用比较函数，而 turn_speed() 每次都重新 randf_range，
+##   于是"a > b"和"b > a"可能同时为真 —— 引擎会直接报
+##     ERROR: bad comparison function; sorting will be broken
+##   并且此时的排序结果是**未定义**的（不只是"乱敏"，可能真的乱），控制台还会一直红。
+##   缓存之后：每个单位每回合只 roll 一次（乱敏的手感不变），比较函数变成严格全序。
+var round_speed := 0.0
+
+
 ## 本次出手的速度值（用于 Battle._next_round 的出手排序）。
 ## 参数/返回值：float。
 ## 副作用：**推进全局随机数序列**（randf_range）。
 ## 公式：stats.speed + randf_range(-4.0, 4.0)，即"乱敏"：±4 的随机扰动。
-## 为什么这么设计 + 为什么有坑：
+## 为什么这么设计：
 ##   · 不做扰动的话，速度相同的单位每回合顺序完全固定，观感很机械；
-##   · 但因为比较函数（sort_custom 的 lambda）每次比较都会重新调用本函数取新随机数，
-##     排序结果**不是严格全序**，所以"速度高的不一定排前面"——这是刻意保留的混沌感；
-##   · 副作用是"排序会消耗随机数"，进而影响同帧后续的暴击/掉落随机序列。
+##   · 所以每回合开始 roll 一次，结果写进 round_speed 供排序使用（见上面那段注释）。
 ##   · speed 在 UnitStats 里默认 300（单位与像素/秒复用同一个字段），这里只当作大小比较用。
 func turn_speed() -> float:
 	return float(stats.speed) + randf_range(-4.0, 4.0)
+
+
+## 每回合开始调一次：roll 出本回合的出手速度并缓存。由 Battle._next_round() 在排序前调用。
+## 参数/返回值：返回 roll 出来的值（顺便方便调试打印）。
+## 副作用：写 round_speed，并推进随机数序列。
+func roll_turn_speed() -> float:
+	round_speed = turn_speed()
+	return round_speed
 
 
 ## 扣血（战斗里唯一的伤害入口，普攻和技能最后都会走到这里）。

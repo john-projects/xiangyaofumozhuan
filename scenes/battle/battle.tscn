@@ -5,12 +5,13 @@
 [ext_resource type="PackedScene" path="res://scenes/battle/turn_order.tscn" id="3_turnorder"]
 [ext_resource type="PackedScene" path="res://scenes/battle/command_menu.tscn" id="4_command"]
 [ext_resource type="Script" uid="uid://sbgbq3puamij" path="res://resources/skills/skill_data.gd" id="5_skilldata"]
-[ext_resource type="Resource" uid="uid://dpdji3y4b7dbv" path="res://resources/skills/skill_fireball.tres" id="6_fireball"]
-[ext_resource type="Resource" path="res://resources/skills/skill_fireball_sequence.tres" id="7_fireball_seq"]
+[ext_resource type="Resource" uid="uid://dpdji3y4b7dbv" path="res://resources/skills/fire_skills/skill_fireball.tres" id="6_fireball"]
+[ext_resource type="Resource" uid="uid://djxk7x5qrnap1" path="res://resources/skills/fire_skills/skill_fireball_sequence.tres" id="7_fireball_seq"]
+[ext_resource type="Resource" uid="uid://c3i325i1tuyur" path="res://resources/skills/fire_skills/skill_fireball_aoe.tres" id="8_fireball_aoe"]
 
 [node name="Battle" type="Node2D" unique_id=1765388522]
 script = ExtResource("1_battle")
-default_skills = Array[ExtResource("5_skilldata")]([ExtResource("6_fireball"), ExtResource("7_fireball_seq")])
+default_skills = Array[ExtResource("5_skilldata")]([ExtResource("6_fireball"), ExtResource("7_fireball_seq"), ExtResource("8_fireball_aoe")])
 
 [node name="Background" type="Sprite2D" parent="." unique_id=204072474]
 scale = Vector2(2.2, 2.368)
