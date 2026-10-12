@@ -18,6 +18,48 @@
 
 > 同目录的 `battle_backup.tscn` 是更早的手搭版本，没有被覆盖，可以随时对照或删掉。
 
+## 操作方式（鼠标 / 键盘双通道，随时混用）
+
+| 操作 | 鼠标 | 键盘 |
+|---|---|---|
+| 选指令 | 点右侧菜单 | 菜单一打开就**自动聚焦第一个可用指令**（禁用的"道具"会被跳过）；`↑↓←→` 循环选择 · `Enter`/`空格` 确认 |
+| 法术二级菜单 | 点"法术" | `Enter` 打开；`ESC`（或点"返回指令"）回主菜单 |
+| 选目标 | 点敌人 | `↑↓←→` 切换（首尾循环）· `Enter`/`空格` 确认 · `ESC`/右键 取消 |
+| 看轮到谁 | 出手顺序条 | **行动者轮廓**：我方青色 / 敌方橙红（`BattleUnit.OUTLINE_ALLY_COLOR` / `OUTLINE_ENEMY_COLOR`） |
+| 看当前目标 | 鼠标悬停会让光标跟过去 | **金色轮廓 + 头顶浮动箭头**（`OUTLINE_TARGET_COLOR`） |
+
+实现要点（想改手感看这三处）：
+
+- **指令菜单**用引擎内建焦点系统：`Button` 的 `focus_mode` 默认 `FOCUS_ALL`，方向键自动移动、
+  `ui_accept`（Enter/空格）直接按下当前聚焦的按钮 —— 顺带白送手柄支持。
+  `CommandMenu._wire_dpad()` 只补两件事：把"上下左右"都串成环（竖排列表默认按左右没反应），
+  以及把 disabled / 不可见的按钮**剔除出导航链**（否则方向键会卡在一个按不下去的项上）。
+- **选目标**用 `Battle._target_index` 这个光标 + `Battle._refresh_target_focus()`；
+  `BattleUnit.set_focused()` 负责外观：`%Outline`（内嵌描边 shader，`show_behind_parent`）+
+  `%TargetArrow`（Polygon2D，`_process` 里做正弦浮动，且只有光标所在的单位开 `_process`）。
+- **轮廓只有一个"真相出口"**：`BattleUnit._refresh_outline()` 按优先级挑颜色 ——
+  键盘光标（金色）> 行动者（`set_selected()`，我方青 / 敌方橙红）> 不显示。
+  行动者由 `Battle._begin_turn()` 点亮、`_finish_turn()` / `_finish_battle()` 熄灭。
+  描边 shader 内嵌在 `battle_unit.tscn` 里，材质设了 `resource_local_to_scene = true`（每个单位一份），
+  所以"给某个单位改描边颜色"不会串到别人身上。
+- **两套操作共享同一个"当前目标"**：鼠标悬停会同步键盘光标（`Battle._on_unit_hovered`），
+  所以不会出现"鼠标指着一个、箭头指着另一个"的割裂感。
+
+## 站位（双方上限 5 人 · 前三后二）
+
+| 槽位 | 我方 | 敌方 | 含义 |
+|---|---|---|---|
+| `Front1` / `Front2` / `Front3` | (420, -220) / (420, 0) / (420, 220) | (-420, -220) / (-420, 0) / (-420, 220) | **前排 3 人**：靠中线、离对面近 |
+| `Back1` / `Back2` | (560, -110) / (560, 110) | (-560, -110) / (-560, 110) | **后排 2 人**：错开半格插在前排的空隙上 |
+
+- **双方上限都是 5 人**：`Battle._spawn_team()` 按 `min(队伍人数, Marker2D 个数)` 上场，超出会 `push_warning`（不会崩）；
+- **上场顺序 = 队伍数组顺序 = 槽位顺序**（Front1 → Front2 → Front3 → Back1 → Back2），
+  所以"队伍里前 3 个人自动站前排"；
+- 想改站位/站法：直接在编辑器里挪 `battle.tscn` 的 `Stage/PlayerSlots`、`Stage/EnemySlots` 下的 Marker2D，
+  **不用改代码**（`_spawn_team()` 只按子节点顺序取位置）；
+- 节点命名用的是 `Front*` / `Back*` 而不是 `Slot1..5`，就是为了在检查器里一眼看出前后排；
+- 地图关卡那边的敌人数量上限在 `scenes/main/main.gd::_make_enemy_team()` 的 `clampi(..., 1, 5)`，和站位数量对齐。
+
 ## 技能资源
 
 ```

@@ -1,6 +1,6 @@
 [gd_resource type="Resource" script_class="SkillData" format=3 uid="uid://djxk7x5qrnap1"]
 
-[ext_resource type="PackedScene" uid="uid://b83xh47ut2fvc" path="res://scenes/effects/fireball/fireball_appearance.tscn" id="1_cx2rk"]
+[ext_resource type="PackedScene" uid="uid://bm4vnfpi8s8jq" path="res://scenes/effects/fireball/effect_fireball_1.tscn" id="1_cx2rk"]
 [ext_resource type="AudioStream" uid="uid://g72hyxdnaath" path="res://assets/audio/ShotgunFire.wav" id="2_0eoi5"]
 [ext_resource type="AudioStream" uid="uid://blonjlaa37md0" path="res://assets/audio/EnemyHit.wav" id="3_rf3rr"]
 [ext_resource type="Texture2D" uid="uid://k3qfoarie5u0" path="res://assets/sprites/Upgrades/7.png" id="4_vbgg8"]

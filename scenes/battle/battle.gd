@@ -121,6 +121,7 @@ const DEMO_PLAYERS := [
 	"res://resources/units/players/stats_player_bunny.tres",
 	"res://resources/units/players/stats_player_crazy.tres",
 	"res://resources/units/players/stats_player_well_rounded.tres",
+	"res://resources/units/players/stats_player_brawler.tres"
 
 ]
 # 敌方演示队伍：与 DEMO_PLAYERS 一一对应，依次站到 Stage/EnemySlots 的 4 个 Marker2D 上。
@@ -130,6 +131,7 @@ const DEMO_ENEMIES := [
 	"res://resources/units/enemies/stats_enemy_chaser_mid.tres",
 	"res://resources/units/enemies/stats_enemy_chaser_fast.tres",
 	"res://resources/units/enemies/stats_enemy_charger.tres",
+	"res://resources/units/enemies/stats_enemy_shooter.tres",
 ]
 
 # ── 战斗状态机 ────────────────────────────────────────────────────────────────
@@ -153,9 +155,10 @@ enum State { IDLE, INTRO, TURN_START, COMMAND, TARGET_SELECT, EXECUTE, TURN_END,
 ## 我方队伍（在检查器里把 .tres 拖进来即可，不用改代码）。
 ## 默认空数组：表示"不预置队伍"，开战时交给 start_battle() 传入，或用 DEMO_PLAYERS 兜底。
 ## 只有当 auto_start_demo 为 true 且这一项非空时，才会用这里配置的队伍开打（优先级高于 DEMO_*）。
-## 数量上限受 Stage/PlayerSlots 下的 Marker2D 个数限制（当前场景是 4 个），超出部分会被丢掉并 push_warning。
+## 数量上限受 Stage/PlayerSlots 下的 Marker2D 个数限制（当前场景是 **5 个：前排 Front1~3 + 后排 Back1~2**），
+## 超出部分会被丢掉并 push_warning。
 @export var player_team: Array[UnitStats] = []
-## 敌方队伍。语义与 player_team 完全对称，站位上限看 Stage/EnemySlots 的 Marker2D 个数（当前也是 4 个）。
+## 敌方队伍。语义与 player_team 完全对称，站位上限看 Stage/EnemySlots 的 Marker2D 个数（当前也是 5 个：前三后二）。
 @export var enemy_team: Array[UnitStats] = []
 ## 我方单位没在自己的 UnitStats 里配 skills 时，默认给这些技能（火球术）
 ## 留这个兜底的原因：队伍数值和技能表往往是分两步配的，先有它能立刻跑通整条战斗链路。
@@ -250,6 +253,8 @@ var _enemies: Array[BattleUnit] = []
 ## 由 _begin_target_select() 填充（只会填敌人），由 _highlight_targets() 清空。
 ## _on_unit_clicked() 用 `_targets.has(unit)` 来判断"玩家点的这个是不是合法目标"。
 var _targets: Array[BattleUnit] = []
+## 键盘目标光标的当前位置（_targets 的下标）。鼠标点击/悬停也会同步它，两套操作共用同一个"当前目标"。
+var _target_index := 0
 var _pending_skill: SkillData = null      # 已经选了技能、正在等玩家点目标
 
 
@@ -376,6 +381,8 @@ func _spawn_team(stats_list: Array[UnitStats], slots_root: Node2D, is_player: bo
 		# 而单位挂在 Stage/Units 下，两边父节点不同，只有世界坐标才对得上。
 		unit.global_position = (slots[i] as Node2D).global_position
 		unit.clicked.connect(_on_unit_clicked)
+		# 悬停用来同步键盘光标（选目标时鼠标指谁，箭头就跟着到谁）
+		unit.hovered.connect(_on_unit_hovered)
 		unit.died.connect(_on_unit_died)
 		result.append(unit)
 	return result
@@ -463,6 +470,9 @@ func _begin_turn() -> void:
 		_begin_turn()
 		return
 
+	# 点亮"行动者轮廓"：我方青色 / 敌方橙红（颜色见 BattleUnit.OUTLINE_* 常量）。
+	# 放在这里而不是 start_battle 里，是因为每个单位轮到时都要点亮一次。
+	actor.set_selected(true)
 	state = State.TURN_START
 	turn_order.set_current(actor)
 	turn_started.emit(actor)
@@ -491,6 +501,9 @@ func _begin_turn() -> void:
 ##   · 间接触发 _begin_turn()，进而可能开菜单 / 跑 AI / 开新回合。
 func _finish_turn() -> void:
 	state = State.TURN_END
+	# 熄灭刚行动完那个人的轮廓（要在 actor 置 null 之前做，不然就找不到它了）
+	if actor != null and is_instance_valid(actor):
+		actor.set_selected(false)
 	actor = null
 	_pending_skill = null
 	turn_index += 1
@@ -618,12 +631,15 @@ func _begin_target_select(skill: SkillData = null) -> void:
 		_check_battle_end()
 		return
 	state = State.TARGET_SELECT
+	# 键盘光标默认停在第一个敌人上；鼠标点/悬停会同步它（见 _on_unit_clicked / _on_unit_hovered）
+	_target_index = 0
 	if skill != null:
-		info_label.text = "选择「%s」的目标（点敌人，右键/ESC 取消）" % skill.display_name
+		info_label.text = "选择「%s」的目标（↑↓←→ 切换 · Enter/空格 确认 · 右键/ESC 取消）" % skill.display_name
 	else:
-		info_label.text = "选择攻击目标（点敌人，右键/ESC 取消）"
+		info_label.text = "选择攻击目标（↑↓←→ 切换 · Enter/空格 确认 · 右键/ESC 取消）"
 	for target in _targets:
 		target.set_targetable(true)
+	_refresh_target_focus()
 
 
 ## 统一关掉目标高亮并清空候选列表。
@@ -637,7 +653,60 @@ func _highlight_targets(value: bool) -> void:
 	for target in _targets:
 		if is_instance_valid(target):
 			target.set_targetable(value)
+			# 顺手收掉键盘光标的外观（轮廓 + 箭头）：否则取消选目标后还会有一个单位顶着箭头
+			target.set_focused(false)
 	_targets.clear()
+	_target_index = 0
+
+
+# ══════════════════════════════════════════════════════════
+#  键盘选目标（与鼠标并存，共用同一个"当前目标"）
+# ══════════════════════════════════════════════════════════
+
+## 只把"轮廓 + 头顶箭头"给键盘光标停的那一个，其余候选保持普通的红色高亮框。
+## 参数/返回值：无。副作用：对 _targets 里每个单位调 set_focused(i == _target_index)。
+## 为什么要区分两种高亮：候选可能有 4 个，全加轮廓+箭头就分不清"这一下到底打谁"。
+func _refresh_target_focus() -> void:
+	for i in _targets.size():
+		if is_instance_valid(_targets[i]):
+			_targets[i].set_focused(i == _target_index)
+
+
+## 移动键盘光标（首尾循环）并刷新高亮。
+## 参数 step：-1 = 上一个 / +1 = 下一个。
+## 返回值：无。副作用：改 _target_index、刷新高亮、播一次 UI 音效。
+## 只有一个目标时直接返回（避免原地"空转"的提示音）。
+func _move_target_cursor(step: int) -> void:
+	if _targets.size() <= 1:
+		return
+	_target_index = wrapi(_target_index + step, 0, _targets.size())
+	_refresh_target_focus()
+	SoundManager.play_sound(SoundManager.Sound.UI)
+
+
+## 用键盘确认当前光标选中的目标（完全等价于鼠标点它）。
+## 参数/返回值：无（内部复用 _on_unit_clicked 那条已有路径：清高亮 → 取 _pending_skill → 执行）。
+## 副作用：与鼠标点击完全一致。
+func _confirm_focused_target() -> void:
+	if _target_index < 0 or _target_index >= _targets.size():
+		return
+	var target := _targets[_target_index]
+	if target != null and is_instance_valid(target):
+		_on_unit_clicked(target)
+
+
+## 鼠标悬停到某个候选敌人时，把键盘光标也挪过去。
+## 参数 unit：被悬停的单位；entered：true = 进入（false = 离开，不处理）。
+## 返回值：无。副作用：改 _target_index 并刷新高亮。
+## 为什么要有它：两套操作共享同一个"当前目标"，视觉上才不会出现"鼠标指着一个、箭头指着另一个"的割裂感。
+func _on_unit_hovered(unit: BattleUnit, entered: bool) -> void:
+	if not entered or state != State.TARGET_SELECT:
+		return
+	var index := _targets.find(unit)
+	if index < 0 or index == _target_index:
+		return
+	_target_index = index
+	_refresh_target_focus()
 
 
 ## 玩家点了某个战斗单位（信号 BattleUnit.clicked —— 注意敌我双方的单位都连到这里）。
@@ -1028,6 +1097,10 @@ func _finish_battle(player_won: bool, reason: String) -> void:
 	_pending_skill = null
 	command_menu.close()
 	_highlight_targets(false)
+	# 收掉所有行动者轮廓：战斗都结束了不该还有人亮着
+	for unit in _all_units():
+		if is_instance_valid(unit):
+			unit.set_selected(false)
 	turn_order.clear_current()
 	info_label.text = reason
 	battle_ended.emit(player_won)
@@ -1101,10 +1174,27 @@ func _alive(list: Array[BattleUnit]) -> Array[BattleUnit]:
 ##     state 还是 TARGET_SELECT，而进入该状态必然有 actor，所以当前是安全的；
 ##     但如果将来有别的代码在 TARGET_SELECT 期间清空 actor，这里会打开一个空菜单。
 func _unhandled_input(event: InputEvent) -> void:
-	# 选目标时按 ESC / 右键退回指令菜单
-	if state == State.TARGET_SELECT and event.is_action_pressed("ui_cancel"):
+	if state != State.TARGET_SELECT:
+		return
+
+	# 选目标阶段的键盘操作：方向键（四个方向都行）切换目标 / Enter·空格 确认 / 右键·ESC 退回。
+	# 鼠标那条路完全不受影响 —— 单位被点击照样走 _on_unit_clicked（信号在 _spawn_team 里连的）。
+	# 注意 ui_accept（Enter / 空格）在指令菜单有焦点时会被 Button 先吃掉，所以不会跑到这里来。
+	if event.is_action_pressed("ui_cancel"):
 		_highlight_targets(false)
 		_pending_skill = null
 		state = State.COMMAND
 		command_menu.open_for(actor)
+		get_viewport().set_input_as_handled()
+		return
+	if event.is_action_pressed("ui_left") or event.is_action_pressed("ui_up"):
+		_move_target_cursor(-1)
+		get_viewport().set_input_as_handled()
+		return
+	if event.is_action_pressed("ui_right") or event.is_action_pressed("ui_down"):
+		_move_target_cursor(1)
+		get_viewport().set_input_as_handled()
+		return
+	if event.is_action_pressed("ui_accept"):
+		_confirm_focused_target()
 		get_viewport().set_input_as_handled()

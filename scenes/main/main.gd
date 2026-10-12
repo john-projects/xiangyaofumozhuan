@@ -603,12 +603,12 @@ func _make_player_team() -> Array[UnitStats]:
 ##   MapData.enemy_pool 非空就用它，否则回落到 GameRoot.enemy_pool（本文件的全局池）。
 ##   条件里先判 map != null，所以 map 为 null 时不会去访问 map.enemy_pool（短路保护）。
 ##
-## 数量公式：count = clampi(1 + (difficulty - 1) / 2, 1, 4)
+## 数量公式：count = clampi(1 + (difficulty - 1) / 2, 1, 5)
 ##   ⚠ `(difficulty - 1) / 2` 是**整数除法**（两边都是 int，小数部分直接截断）：
 ##     难度档 1→0、2→0、3→1、4→1、5→2 …，所以括号里那部分是"每两张图 +1"。
-##   于是实际是 1图1只、2图1只、3图2只、4图2只、5图3只…
-##   clampi 上界 4 是硬约束：Battle 只有 4 个敌方站位（对齐 Stage/EnemySlots 的 Marker2D 数量），
-##   再多就没有位置可站了。
+##   于是实际是 1图1只、2图1只、3图2只、4图2只、5图3只…9图5只。
+##   clampi 上界 5 是硬约束：Battle 只有 5 个敌方站位（对齐 Stage/EnemySlots 的 Marker2D 数量，
+##   站法是**前三后二**：Front1~3 在前排、Back1~2 在后排），再多就没有位置可站了。
 ## 血量/伤害缩放：scale = 1.0 + (difficulty - 1) × enemy_scale_per_map，
 ##   并且都是用**原始 base 的值**乘 scale（而不是在副本上累乘）——
 ##   所以同一只敌人被抽到多次也不会出现"越乘越大"的复利。
@@ -624,7 +624,7 @@ func _make_enemy_team() -> Array[UnitStats]:
 		return out
 
 	var difficulty := map_difficulty()
-	var count: int = clampi(1 + (difficulty - 1) / 2, 1, 4)   # 和 battle 的 4 个站位对齐
+	var count: int = clampi(1 + (difficulty - 1) / 2, 1, 5)   # 双方上限都是 5 人（站位：前排 3 + 后排 2）
 	var scale: float = 1.0 + (difficulty - 1) * enemy_scale_per_map
 	for i in count:
 		var base: UnitStats = pool[i % pool.size()]

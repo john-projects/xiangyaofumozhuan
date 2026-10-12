@@ -95,6 +95,18 @@ const DEFEND_TINT := Color(0.75, 0.85, 1.0)
 ## modulate 允许超过 1，配合场景里 Sprite2D 的混合模式能做出短暂的自发光感。
 const CAST_TINT := Color(1.45, 1.2, 0.9)
 
+# ── 轮廓（描边）配色：同一套 shader，靠颜色区分"谁在行动 / 这一下打谁" ────────────
+# 和上面 %Selection 的半透明色块是两套东西：色块铺在脚下，轮廓是贴着剪影描一圈实色边（%Outline）。
+# 都不带 alpha（描边就是实色），也不做 @export：这是全局统一的战斗语言，逐单位配反而会乱。
+
+## 我方行动者轮廓：青色。看到这个颜色就知道"现在轮到我这边的谁"。
+const OUTLINE_ALLY_COLOR := Color(0.35, 0.85, 1.0)
+## 敌方行动者轮廓：橙红。和上面的青色成对，敌我一眼分得开。
+const OUTLINE_ENEMY_COLOR := Color(1.0, 0.38, 0.30)
+## 键盘光标/鼠标悬停选中的目标轮廓：金色（配合头顶箭头）。
+## 三个颜色刻意互不相同：金色 = "这一下要打它"，青/橙红 = "现在轮到谁行动"。
+const OUTLINE_TARGET_COLOR := Color(1.0, 0.85, 0.35)
+
 # ── 数据源与运行时数值 ────────────────────────────────────────────────────────
 
 ## 单位数据源（UnitStats 资源：图标 / 血量 / 伤害 / 速度 / 格挡率 / 技能表等）。
@@ -140,6 +152,12 @@ var available_skills: Array[SkillData] = []
 var _selected := false
 var _targetable := false
 var _hovered := false
+## 是不是"键盘光标当前停留的目标"。
+## 和 _targetable 的区别：_targetable = "所有候选目标"（红框，鼠标键盘都能点）；
+##                       _focused  = "光标停在的那一个"（额外加轮廓 + 头顶箭头）。
+var _focused := false
+## 箭头静止时的高度。_process 里的上下浮动以它为基准（不浮动时也要精确回到这里）。
+var _arrow_base_y := 0.0
 ## 记录 sprite 的初始缩放（场景里可能不是 1.0）。
 ## play_cast() 的"涨大再复原"必须回到这个基准值，否则多放几次技能精灵会越来越小/越来越大。
 var _base_scale := Vector2.ONE
@@ -153,6 +171,13 @@ var _base_scale := Vector2.ONE
 @onready var name_label: Label = %NameLabel
 @onready var selection: Polygon2D = %Selection
 @onready var click_area: Area2D = %ClickArea
+## 选中轮廓层：Sprite 的子节点（show_behind_parent = true，画在本体后面），
+## 用同一张贴图 + 内嵌描边 shader 把剪影往外扩一圈实心色。可见性由 set_focused() 控制。
+## 为什么挂成 Sprite 的子节点：这样它自动继承本体的缩放/位置（play_cast() 会 tween sprite.scale，
+## 若轮廓是兄弟节点，施法涨大时轮廓就会错位）。
+@onready var outline: Sprite2D = %Outline
+## 头顶小箭头（Polygon2D，纯几何图形，不需要素材）。只在 set_focused(true) 时显示，并上下浮动。
+@onready var target_arrow: Polygon2D = %TargetArrow
 
 
 # ── 生命周期与初始化 ──────────────────────────────────────────────────────────
@@ -171,6 +196,9 @@ var _base_scale := Vector2.ONE
 ##   否则上面三条副作用全部丢失 —— 表现为"单位点不动、血条挡住点击"。
 func _ready() -> void:
 	_base_scale = sprite.scale
+	_arrow_base_y = target_arrow.position.y
+	# 箭头浮动是"每帧"的事，只对键盘光标所在的目标有意义；默认关掉，set_focused() 里再开。
+	set_process(false)
 	click_area.input_event.connect(_on_click_area_input_event)
 	click_area.mouse_entered.connect(_on_mouse_entered)
 	click_area.mouse_exited.connect(_on_mouse_exited)
@@ -398,6 +426,7 @@ func _die() -> void:
 	defending = false
 	set_selected(false)
 	set_targetable(false)
+	set_focused(false)
 	click_area.input_pickable = false
 	name_label.modulate = Color(1, 1, 1, 0.35)
 	var tween := create_tween()
@@ -543,11 +572,15 @@ func skill_crit(skill: SkillData) -> bool:
 ## 设置"当前行动者"高亮。
 ## 参数 value：true 开 / false 关。
 ## 返回值：无。
-## 副作用：写 _selected 并调 _update_selection()（只改 %Selection 的 visible/color，不改任何战斗数据）。
-## 谁用：目前 Battle 没有调用它（行动者高亮暂时只靠顺序条表达）；留给"轮到谁了就点亮谁"的用法。
+## 副作用：
+##   · 写 _selected 并调 _update_selection()（改 %Selection 的 visible / color）；
+##   · 再调 _refresh_outline()：顺带点亮/熄灭"行动者轮廓"（我方青色、敌方橙红）。
+##   · 不改任何战斗数据。
+## 谁用：Battle._begin_turn() 给当前行动者点亮、_finish_turn() / _finish_battle() 熄灭。
 func set_selected(value: bool) -> void:
 	_selected = value
 	_update_selection()
+	_refresh_outline()
 
 
 ## 设置"可被选为目标"高亮（红圈）。
@@ -560,6 +593,65 @@ func set_selected(value: bool) -> void:
 func set_targetable(value: bool) -> void:
 	_targetable = value
 	_update_selection()
+
+
+## 把"键盘目标光标"放到这个单位身上：显示选中轮廓 + 头顶箭头，并让箭头上下浮动。
+## 参数 value：true = 光标停在这里；false = 光标离开。
+## 返回值：无。
+## 副作用：
+##   · 写 _focused；开关 %Outline / %TargetArrow 的 visible；
+##   · 开关 _process（只有光标所在的单位每帧跑浮动动画，其余单位零开销）；
+##   · 显示时把本体贴图与翻转同步给轮廓层（轮廓是 Sprite 的子节点，这两项不会自动继承）。
+## 谁用：Battle._refresh_target_focus()（键盘选目标时）/ 鼠标悬停同步（Battle._on_unit_hovered）。
+## 死人一律不显示：value 为 true 但 alive 为 false 时也会隐藏，避免尸体顶着箭头。
+func set_focused(value: bool) -> void:
+	_focused = value
+	var show_it := value and alive
+	target_arrow.visible = show_it
+	set_process(show_it)
+	if not show_it:
+		target_arrow.position.y = _arrow_base_y
+	_refresh_outline()
+
+
+## 底层接口：直接开/关轮廓并指定颜色（不参与优先级判断，一般不用直接调）。
+## 参数 active：true 显示；color：描边颜色。
+## 返回值：无。
+## 副作用：
+##   · 改 %Outline 的 visible；显示时同步本体贴图与翻转（轮廓是 Sprite 的子节点，这两项不会自动继承）；
+##   · 写**自己那份** ShaderMaterial 的 outline_color —— battle_unit.tscn 里该材质设了
+##     resource_local_to_scene = true，所以每个单位一份副本，改颜色不会串到别的单位身上。
+func set_outline(active: bool, color: Color) -> void:
+	var show_it := active and alive
+	if show_it:
+		outline.texture = sprite.texture
+		outline.flip_h = sprite.flip_h
+		var mat := outline.material as ShaderMaterial
+		if mat != null:
+			mat.set_shader_parameter("outline_color", color)
+	outline.visible = show_it
+
+
+## 轮廓的唯一"真相出口"：按优先级决定显示哪个颜色（分工和 _update_selection() 一致）。
+## 参数/返回值：无。
+## 优先级：键盘光标（金色 + 箭头）> 行动者（我方青 / 敌方橙红）> 不显示。
+## 为什么不叠加：轮廓只有一圈，两种状态同时成立时"这一下要打谁"比"谁在行动"更重要；
+##   而且玩家的单位在当前的选目标逻辑里不会成为目标，所以实际几乎不会撞在一起。
+## 谁调：set_focused() / set_selected()。
+func _refresh_outline() -> void:
+	if _focused and alive:
+		set_outline(true, OUTLINE_TARGET_COLOR)
+	elif _selected and alive:
+		set_outline(true, OUTLINE_ALLY_COLOR if is_player else OUTLINE_ENEMY_COLOR)
+	else:
+		set_outline(false, Color.WHITE)
+
+
+## 每帧：让头顶箭头上下浮动（只在 set_focused(true) 期间运行，见 _ready 里的 set_process(false)）。
+## 为什么用 _process 而不是 Tween：Tween 需要管生命周期（换目标时得 kill 掉、还要防重复），
+##   而这里只是一个连续的正弦位移，用开关 _process 来省开销最简单也最不容易出错。
+func _process(_delta: float) -> void:
+	target_arrow.position.y = _arrow_base_y + sin(float(Time.get_ticks_msec()) / 260.0) * 7.0
 
 
 ## 根据三个高亮标记重算 %Selection 的显示与颜色（唯一的"高亮真相"出口）。

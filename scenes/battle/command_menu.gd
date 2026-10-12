@@ -109,7 +109,14 @@ func _ready() -> void:
 	item_button.pressed.connect(_on_main_pressed.bind(&"item"))
 	defend_button.pressed.connect(_on_main_pressed.bind(&"defend"))
 	flee_button.pressed.connect(_on_main_pressed.bind(&"flee"))
-	back_button.pressed.connect(_show_main)
+	# 注意：这里连的是 _on_back_pressed 而不是 _show_main —— 见那个函数的说明
+	# （点"返回指令"必须顺手把键盘焦点补回来，否则之后方向键会失灵）。
+	back_button.pressed.connect(_on_back_pressed)
+
+	# 兜底：鼠标点在面板空白处时，如果焦点是空的就补回第一个可用指令。
+	# 不这么做的话"点一下空白 → 方向键失灵"，玩家会以为键盘操作坏了。
+	# 点在按钮上的事件会被按钮自己吃掉，不会走到这里。
+	gui_input.connect(_on_panel_gui_input)
 
 	# 道具系统还没做，先禁用
 	# 注意这只在 _ready() 里设一次，open_for() 不会重新启用它 —— 等道具做完要记得改这里。
@@ -142,6 +149,9 @@ func open_for(unit: BattleUnit) -> void:
 	skill_button.disabled = unit == null or not unit.has_skills()
 	_show_main()
 	show()
+	# 键盘：打开菜单时默认把光标放在第一个**可用**指令上（"道具"是禁用的，会被自动跳过）。
+	# 必须在 show() 之后调用 —— 隐藏中的 Control 拿不到焦点。
+	_focus_first(main_buttons.get_children())
 
 
 ## 关闭菜单。
@@ -171,6 +181,89 @@ func _show_main() -> void:
 	main_buttons.visible = true
 	skill_buttons.visible = false
 	back_button.visible = false
+	# 键盘导航：把当前可用的主菜单按钮串成一条链（方向键的顺序 = 这里被跳过的按钮不算数）。
+	# 只接线、不抢焦点 —— 抢焦点由 open_for() / _open_skills() / ESC 返回时负责。
+	_wire_dpad(main_buttons.get_children())
+
+
+# ══════════════════════════════════════════════════════════
+#  键盘导航（鼠标操作完全不受影响，两套并存）
+# ══════════════════════════════════════════════════════════
+# 用引擎内建的焦点系统而不是自己记索引：
+#   · Button.focus_mode 默认就是 FOCUS_ALL，方向键会自动在 Control 之间移动，ui_accept
+#     （Enter / 空格）会直接按下当前聚焦的按钮 —— 顺带白送手柄支持；
+#   · 禁用（disabled）的按钮本来就不能获得焦点，所以"道具"天然被跳过；
+#   · 缺的只是"竖排列表按左右没反应"，以及"焦点默认落在哪"，下面两个函数就是补这两点。
+
+## 把一组按钮按顺序串成方向键环（首尾相接），并把 disabled / 不可见的剔除出链。
+## 参数 buttons：按钮列表（顺序即导航顺序）。
+## 返回值：无。副作用：写每个按钮的 focus_neighbor_*（NodePath）。
+## 为什么必须手动接线：引擎默认按几何位置找邻居，竖排列表里按左右会"没反应"；
+##   而且一旦某个 disabled 按钮被算进邻居链，方向键走到它就会卡住（它拿不到焦点）。
+## 注意：每次容器内容或禁用状态变化后都要重新调一次（所以 _show_main / _open_skills 里都会调）。
+func _wire_dpad(buttons: Array) -> void:
+	var items: Array[Button] = []
+	for child in buttons:
+		if child is Button and not child.disabled:
+			items.append(child)
+	var count := items.size()
+	if count == 0:
+		return
+	for i in count:
+		var prev := items[(i - 1 + count) % count]
+		var next := items[(i + 1) % count]
+		items[i].focus_neighbor_left = prev.get_path()
+		items[i].focus_neighbor_top = prev.get_path()
+		items[i].focus_neighbor_right = next.get_path()
+		items[i].focus_neighbor_bottom = next.get_path()
+
+
+## 把键盘焦点落到列表里第一个可用的按钮上。
+## 参数 buttons：按钮列表（通常是容器的 get_children()）。
+## 返回值：无。副作用：grab_focus() 到一个按钮（找不到就什么都不做）。
+func _focus_first(buttons: Array) -> void:
+	for child in buttons:
+		if child is Button and not child.disabled and child.is_visible_in_tree():
+			child.grab_focus()
+			return
+
+
+## ESC：在技能页按一下退回主菜单（主菜单里按 ESC 不处理，交给 Battle）。
+## 参数 event：输入事件。返回值：无。
+## 副作用：技能页可见时切回主菜单、把焦点落回第一个可用指令，并吃掉这次事件。
+func _unhandled_input(event: InputEvent) -> void:
+	if not visible or not skill_buttons.visible:
+		return
+	if event.is_action_pressed("ui_cancel"):
+		_on_back_pressed()
+		get_viewport().set_input_as_handled()
+
+
+## "返回指令"（鼠标点按钮 / 键盘按 ESC / 焦点停在返回上按 Enter）统一走这里。
+## 参数/返回值：无。
+## 副作用：_show_main() 切回主菜单视图，然后把键盘焦点补到第一个可用指令上。
+## ⚠ 为什么不能直接连 _show_main：
+##   鼠标点按钮会把焦点给 back_button，而 _show_main() 紧接着把它 visible = false 藏起来 ——
+##   Control 一隐藏，引擎就释放焦点，之后方向键 / Enter 全部失效（"点完返回键盘就没反应"的根因）。
+##   所以这里必须在切换视图后立刻重新 grab_focus()。
+## 注意 _show_main() 自己**不抢焦点**是刻意的：open_for() 会先调它、再 show()，
+##   而隐藏中的 Control 拿不到焦点，抢也白抢（open_for 在 show() 之后单独补了焦点）。
+func _on_back_pressed() -> void:
+	_show_main()
+	_focus_first(main_buttons.get_children())
+
+
+## 面板空白处的鼠标点击：等按钮/pressed 的处理跑完，如果焦点空了就补回第一个可用指令。
+## 参数 event：GUI 输入事件。返回值：无。
+## 为什么要 await 一帧：点击可能触发页面切换（比如点"法术"进技能页），
+##   焦点要等这次切换结束后才能确定；早一帧判断会误判成"没焦点"。
+func _on_panel_gui_input(event: InputEvent) -> void:
+	if not (event is InputEventMouseButton and event.pressed):
+		return
+	await get_tree().process_frame
+	if get_viewport().gui_get_focus_owner() == null:
+		var buttons: Array = skill_buttons.get_children() if skill_buttons.visible else main_buttons.get_children()
+		_focus_first(buttons)
 
 
 ## 打开技能二级菜单：清空旧按钮 → 按当前单位的技能表重建 → 切视图。
@@ -218,6 +311,13 @@ func _open_skills() -> void:
 	main_buttons.visible = false
 	skill_buttons.visible = true
 	back_button.visible = true
+	# 键盘导航：技能按钮 + "返回指令" 串成一条链，焦点落在第一个可用技能上。
+	# disabled 的技能按钮（蓝不够 / 冷却中）会被 _wire_dpad / _focus_first 自动剔除，
+	# 所以方向键不会卡在一个按不下去的项上；一个技能都用不了时焦点会落到"返回指令"。
+	var chain: Array = skill_buttons.get_children()
+	chain.append(back_button)
+	_wire_dpad(chain)
+	_focus_first(chain)
 
 
 ## 为一条技能动态创建一个按钮（含蓝耗、冷却/蓝不够提示、可用性禁用）。
