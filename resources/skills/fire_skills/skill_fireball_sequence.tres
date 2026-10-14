@@ -2,8 +2,9 @@
 
 [ext_resource type="PackedScene" uid="uid://bm4vnfpi8s8jq" path="res://scenes/effects/fireball/effect_fireball_1.tscn" id="1_cx2rk"]
 [ext_resource type="AudioStream" uid="uid://g72hyxdnaath" path="res://assets/audio/ShotgunFire.wav" id="2_0eoi5"]
+[ext_resource type="PackedScene" uid="uid://c43j1rplu8lk" path="res://scenes/effects/fireball/effect_fireball_hit.tscn" id="3_0eoi5"]
 [ext_resource type="AudioStream" uid="uid://blonjlaa37md0" path="res://assets/audio/EnemyHit.wav" id="3_rf3rr"]
-[ext_resource type="Texture2D" uid="uid://k3qfoarie5u0" path="res://assets/sprites/Upgrades/7.png" id="4_vbgg8"]
+[ext_resource type="Texture2D" uid="uid://k3qfoarie5u0" path="res://assets/sprites/tomato/Upgrades/7.png" id="4_vbgg8"]
 [ext_resource type="Script" uid="uid://sbgbq3puamij" path="res://resources/skills/skill_data.gd" id="5_yham8"]
 
 [resource]
@@ -17,6 +18,7 @@ projectile_scale = 4.0
 projectile_speed = 2000.0
 tint = Color(1, 0.52156866, 0.18039216, 1)
 hit_particles = 26
+hit_effect_scene = ExtResource("3_0eoi5")
 frames_only = true
 cast_sfx = ExtResource("2_0eoi5")
 hit_sfx = ExtResource("3_rf3rr")

@@ -24,7 +24,6 @@ class_name SkillProjectile
 ##   · stop_flight() → burst() 里调用，外观包停发射（但让已生成的粒子自然消亡，不要瞬间消失）。
 ##   两个都没实现也能用：那它就只是一个挂在插槽里的静态装饰。
 
-const EffectTex := preload("res://scenes/effects/effect_tex.gd")
 const BURST_EFFECT_SCENE := preload("res://scenes/effects/burst_effect.tscn")
 ## 飞行途中整体"鼓一下"的峰值倍率（作用在 %Visual 上，同时影响静态贴图和外观包）
 const FLY_STRETCH := 1.25

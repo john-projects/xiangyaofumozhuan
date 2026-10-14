@@ -986,6 +986,7 @@ func _spawn_hit_burst(skill: SkillData, pos: Vector2, scale_ratio: float) -> voi
 	boom.global_position = pos
 	boom.scale = Vector2.ONE * maxf(0.05, skill.burst_scale * scale_ratio)
 	if boom.has_method("play"):
+		@warning_ignore("integer_division")
 		boom.play(skill.tint, maxi(8, skill.hit_particles / 2))
 	else:
 		SkillProjectile.play_sequence_once(boom)

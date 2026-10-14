@@ -1,0 +1,60 @@
+[gd_scene format=3 uid="uid://bwq8kxbsn1r1h"]
+
+[ext_resource type="Texture2D" uid="uid://dwsqa1kqt5l7p" path="res://assets/sprites/skills/skills/fireball/Poisonball_65x9/00.png" id="1_ojrk0"]
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_lrete"]
+atlas = ExtResource("1_ojrk0")
+region = Rect2(0, 0, 65, 9)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_a6h42"]
+atlas = ExtResource("1_ojrk0")
+region = Rect2(0, 9, 65, 9)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_e6lyw"]
+atlas = ExtResource("1_ojrk0")
+region = Rect2(0, 18, 65, 9)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_gdhw8"]
+atlas = ExtResource("1_ojrk0")
+region = Rect2(0, 27, 65, 9)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_lnl4b"]
+atlas = ExtResource("1_ojrk0")
+region = Rect2(0, 36, 65, 9)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_a1tqk"]
+atlas = ExtResource("1_ojrk0")
+region = Rect2(0, 45, 65, 9)
+
+[sub_resource type="SpriteFrames" id="SpriteFrames_1"]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_lrete")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_a6h42")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_e6lyw")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_gdhw8")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_lnl4b")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_a1tqk")
+}],
+"loop": 1,
+"name": &"default",
+"speed": 60.0
+}]
+
+[node name="EffectPoisonball65x9" type="Node2D" unique_id=728468428]
+
+[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="." unique_id=177846343]
+sprite_frames = SubResource("SpriteFrames_1")
+autoplay = "default"
+flip_h = true

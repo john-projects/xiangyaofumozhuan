@@ -1,0 +1,316 @@
+[gd_scene format=3]
+
+[ext_resource type="Texture2D" uid="uid://dwl2wa4v40t4v" path="res://assets/sprites/skills/skills/thunders/_frames/demon_slash_9x5_128px/00.png" id="1_00"]
+[ext_resource type="Texture2D" uid="uid://0f6se82edsq0" path="res://assets/sprites/skills/skills/thunders/_frames/demon_slash_9x5_128px/01.png" id="1_01"]
+[ext_resource type="Texture2D" uid="uid://d26d0g571n5ht" path="res://assets/sprites/skills/skills/thunders/_frames/demon_slash_9x5_128px/02.png" id="1_02"]
+[ext_resource type="Texture2D" uid="uid://b405bykehs5co" path="res://assets/sprites/skills/skills/thunders/_frames/demon_slash_9x5_128px/03.png" id="1_03"]
+[ext_resource type="Texture2D" uid="uid://cg1rp2fpotmuj" path="res://assets/sprites/skills/skills/thunders/_frames/demon_slash_9x5_128px/04.png" id="1_04"]
+[ext_resource type="Texture2D" uid="uid://cs2mqv4vam8pn" path="res://assets/sprites/skills/skills/thunders/_frames/demon_slash_9x5_128px/05.png" id="1_05"]
+[ext_resource type="Texture2D" uid="uid://fht3vgyma37" path="res://assets/sprites/skills/skills/thunders/_frames/demon_slash_9x5_128px/06.png" id="1_06"]
+[ext_resource type="Texture2D" uid="uid://chm6hx6lxem7t" path="res://assets/sprites/skills/skills/thunders/_frames/demon_slash_9x5_128px/07.png" id="1_07"]
+[ext_resource type="Texture2D" uid="uid://ipgpvs57xkc4" path="res://assets/sprites/skills/skills/thunders/_frames/demon_slash_9x5_128px/08.png" id="1_08"]
+[ext_resource type="Texture2D" uid="uid://cueb177jegc5g" path="res://assets/sprites/skills/skills/thunders/_frames/demon_slash_9x5_128px/09.png" id="1_09"]
+[ext_resource type="Texture2D" uid="uid://c7xdjojnosu08" path="res://assets/sprites/skills/skills/thunders/_frames/demon_slash_9x5_128px/10.png" id="1_10"]
+[ext_resource type="Texture2D" uid="uid://0p0lxietq03q" path="res://assets/sprites/skills/skills/thunders/_frames/demon_slash_9x5_128px/11.png" id="1_11"]
+[ext_resource type="Texture2D" uid="uid://cih7c1mbdxg7c" path="res://assets/sprites/skills/skills/thunders/_frames/demon_slash_9x5_128px/12.png" id="1_12"]
+[ext_resource type="Texture2D" uid="uid://bkl8iydvjl3f4" path="res://assets/sprites/skills/skills/thunders/_frames/demon_slash_9x5_128px/13.png" id="1_13"]
+[ext_resource type="Texture2D" uid="uid://dowptgwdujc4n" path="res://assets/sprites/skills/skills/thunders/_frames/demon_slash_9x5_128px/14.png" id="1_14"]
+[ext_resource type="Texture2D" uid="uid://bhmunmijrcr0r" path="res://assets/sprites/skills/skills/thunders/_frames/demon_slash_9x5_128px/15.png" id="1_15"]
+[ext_resource type="Texture2D" uid="uid://bf2xpi86twsa7" path="res://assets/sprites/skills/skills/thunders/_frames/demon_slash_9x5_128px/16.png" id="1_16"]
+[ext_resource type="Texture2D" uid="uid://dx0nvh7fsg23d" path="res://assets/sprites/skills/skills/thunders/_frames/demon_slash_9x5_128px/17.png" id="1_17"]
+[ext_resource type="Texture2D" uid="uid://d1yrkqrkp4hxl" path="res://assets/sprites/skills/skills/thunders/_frames/demon_slash_9x5_128px/18.png" id="1_18"]
+[ext_resource type="Texture2D" uid="uid://c62436p5gcg5h" path="res://assets/sprites/skills/skills/thunders/_frames/demon_slash_9x5_128px/19.png" id="1_19"]
+[ext_resource type="Texture2D" uid="uid://xxyivpk87jtk" path="res://assets/sprites/skills/skills/thunders/_frames/demon_slash_9x5_128px/20.png" id="1_20"]
+[ext_resource type="Texture2D" uid="uid://dd5oeeaoe5laa" path="res://assets/sprites/skills/skills/thunders/_frames/demon_slash_9x5_128px/21.png" id="1_21"]
+[ext_resource type="Texture2D" uid="uid://l6f3n6shwpee" path="res://assets/sprites/skills/skills/thunders/_frames/demon_slash_9x5_128px/22.png" id="1_22"]
+[ext_resource type="Texture2D" uid="uid://b8xppyl1mrejn" path="res://assets/sprites/skills/skills/thunders/_frames/demon_slash_9x5_128px/23.png" id="1_23"]
+[ext_resource type="Texture2D" uid="uid://bi38d18iichfb" path="res://assets/sprites/skills/skills/thunders/_frames/demon_slash_9x5_128px/24.png" id="1_24"]
+[ext_resource type="Texture2D" uid="uid://benv2u26sih1j" path="res://assets/sprites/skills/skills/thunders/_frames/demon_slash_9x5_128px/25.png" id="1_25"]
+[ext_resource type="Texture2D" uid="uid://u4t8sxyjcqvh" path="res://assets/sprites/skills/skills/thunders/_frames/demon_slash_9x5_128px/26.png" id="1_26"]
+[ext_resource type="Texture2D" uid="uid://cgnmm7jhga6ud" path="res://assets/sprites/skills/skills/thunders/_frames/demon_slash_9x5_128px/27.png" id="1_27"]
+[ext_resource type="Texture2D" uid="uid://j7e5wcwsd5cm" path="res://assets/sprites/skills/skills/thunders/_frames/demon_slash_9x5_128px/28.png" id="1_28"]
+[ext_resource type="Texture2D" uid="uid://dxmgcwioe2vg" path="res://assets/sprites/skills/skills/thunders/_frames/demon_slash_9x5_128px/29.png" id="1_29"]
+[ext_resource type="Texture2D" uid="uid://bfn8lj71p64fl" path="res://assets/sprites/skills/skills/thunders/_frames/demon_slash_9x5_128px/30.png" id="1_30"]
+[ext_resource type="Texture2D" uid="uid://derca4ebpyml4" path="res://assets/sprites/skills/skills/thunders/_frames/demon_slash_9x5_128px/31.png" id="1_31"]
+[ext_resource type="Texture2D" uid="uid://blq23jaf248lt" path="res://assets/sprites/skills/skills/thunders/_frames/demon_slash_9x5_128px/32.png" id="1_32"]
+[ext_resource type="Texture2D" uid="uid://7wdow6ibh2cn" path="res://assets/sprites/skills/skills/thunders/_frames/demon_slash_9x5_128px/33.png" id="1_33"]
+[ext_resource type="Texture2D" uid="uid://duii56h5ohfby" path="res://assets/sprites/skills/skills/thunders/_frames/demon_slash_9x5_128px/34.png" id="1_34"]
+[ext_resource type="Texture2D" uid="uid://dt4m8lmuirmek" path="res://assets/sprites/skills/skills/thunders/_frames/demon_slash_9x5_128px/35.png" id="1_35"]
+[ext_resource type="Texture2D" uid="uid://d2o4l2q155qrp" path="res://assets/sprites/skills/skills/thunders/_frames/demon_slash_9x5_128px/36.png" id="1_36"]
+[ext_resource type="Texture2D" uid="uid://bwha5np2mhi40" path="res://assets/sprites/skills/skills/thunders/_frames/demon_slash_9x5_128px/37.png" id="1_37"]
+[ext_resource type="Texture2D" uid="uid://d1u4tyow44qv8" path="res://assets/sprites/skills/skills/thunders/_frames/demon_slash_9x5_128px/38.png" id="1_38"]
+[ext_resource type="Texture2D" uid="uid://bfocq7a227nr0" path="res://assets/sprites/skills/skills/thunders/_frames/demon_slash_9x5_128px/39.png" id="1_39"]
+[ext_resource type="Texture2D" uid="uid://ypwbkrn0gtyh" path="res://assets/sprites/skills/skills/thunders/_frames/demon_slash_9x5_128px/40.png" id="1_40"]
+[ext_resource type="Texture2D" uid="uid://77unu7jbdh8r" path="res://assets/sprites/skills/skills/thunders/_frames/demon_slash_9x5_128px/41.png" id="1_41"]
+[ext_resource type="Texture2D" uid="uid://c74crokkpppc7" path="res://assets/sprites/skills/skills/thunders/_frames/demon_slash_9x5_128px/42.png" id="1_42"]
+[ext_resource type="Texture2D" uid="uid://bfausw2h3oouw" path="res://assets/sprites/skills/skills/thunders/_frames/demon_slash_9x5_128px/43.png" id="1_43"]
+[ext_resource type="Texture2D" uid="uid://bq54bxvbcdpju" path="res://assets/sprites/skills/skills/thunders/_frames/demon_slash_9x5_128px/44.png" id="1_44"]
+[ext_resource type="Texture2D" uid="uid://c1yp6gjdaytwv" path="res://assets/sprites/skills/skills/thunders/_frames/demon_slash_9x5_128px/45.png" id="1_45"]
+[ext_resource type="Texture2D" uid="uid://13qim0sjg64k" path="res://assets/sprites/skills/skills/thunders/_frames/demon_slash_9x5_128px/46.png" id="1_46"]
+[ext_resource type="Texture2D" uid="uid://65uwcbfmavfq" path="res://assets/sprites/skills/skills/thunders/_frames/demon_slash_9x5_128px/47.png" id="1_47"]
+[ext_resource type="Texture2D" uid="uid://d13raxr20p1wm" path="res://assets/sprites/skills/skills/thunders/_frames/demon_slash_9x5_128px/48.png" id="1_48"]
+[ext_resource type="Texture2D" uid="uid://bqlksdajekgip" path="res://assets/sprites/skills/skills/thunders/_frames/demon_slash_9x5_128px/49.png" id="1_49"]
+[ext_resource type="Texture2D" uid="uid://perp57d70khr" path="res://assets/sprites/skills/skills/thunders/_frames/demon_slash_9x5_128px/50.png" id="1_50"]
+[ext_resource type="Texture2D" uid="uid://cr17lxcb6kwhg" path="res://assets/sprites/skills/skills/thunders/_frames/demon_slash_9x5_128px/51.png" id="1_51"]
+[ext_resource type="Texture2D" uid="uid://bqjjwvfwurtt6" path="res://assets/sprites/skills/skills/thunders/_frames/demon_slash_9x5_128px/52.png" id="1_52"]
+[ext_resource type="Texture2D" uid="uid://cl55jk68kq2e2" path="res://assets/sprites/skills/skills/thunders/_frames/demon_slash_9x5_128px/53.png" id="1_53"]
+[ext_resource type="Texture2D" uid="uid://b68ufnud634vw" path="res://assets/sprites/skills/skills/thunders/_frames/demon_slash_9x5_128px/54.png" id="1_54"]
+[ext_resource type="Texture2D" uid="uid://dpltf3vy6pmit" path="res://assets/sprites/skills/skills/thunders/_frames/demon_slash_9x5_128px/55.png" id="1_55"]
+[ext_resource type="Texture2D" uid="uid://bpeqrev4ppw0k" path="res://assets/sprites/skills/skills/thunders/_frames/demon_slash_9x5_128px/56.png" id="1_56"]
+[ext_resource type="Texture2D" uid="uid://4dkgmvqyl1ha" path="res://assets/sprites/skills/skills/thunders/_frames/demon_slash_9x5_128px/57.png" id="1_57"]
+[ext_resource type="Texture2D" uid="uid://bxa0uuqancjcv" path="res://assets/sprites/skills/skills/thunders/_frames/demon_slash_9x5_128px/58.png" id="1_58"]
+[ext_resource type="Texture2D" uid="uid://cwvoompifwd4o" path="res://assets/sprites/skills/skills/thunders/_frames/demon_slash_9x5_128px/59.png" id="1_59"]
+[ext_resource type="Texture2D" uid="uid://bsllpvgx82epn" path="res://assets/sprites/skills/skills/thunders/_frames/demon_slash_9x5_128px/60.png" id="1_60"]
+[ext_resource type="Texture2D" uid="uid://gayk4p3mia0r" path="res://assets/sprites/skills/skills/thunders/_frames/demon_slash_9x5_128px/61.png" id="1_61"]
+[ext_resource type="Texture2D" uid="uid://blkgrfcfyk8jw" path="res://assets/sprites/skills/skills/thunders/_frames/demon_slash_9x5_128px/62.png" id="1_62"]
+[ext_resource type="Texture2D" uid="uid://ctdgs41rudfrs" path="res://assets/sprites/skills/skills/thunders/_frames/demon_slash_9x5_128px/63.png" id="1_63"]
+[ext_resource type="Texture2D" uid="uid://cnfnwx7qlxj8b" path="res://assets/sprites/skills/skills/thunders/_frames/demon_slash_9x5_128px/64.png" id="1_64"]
+[ext_resource type="Texture2D" uid="uid://clm40wn0egmil" path="res://assets/sprites/skills/skills/thunders/_frames/demon_slash_9x5_128px/65.png" id="1_65"]
+[ext_resource type="Texture2D" uid="uid://be5jb2n2sqp3t" path="res://assets/sprites/skills/skills/thunders/_frames/demon_slash_9x5_128px/66.png" id="1_66"]
+[ext_resource type="Texture2D" uid="uid://b25b0itudwxgx" path="res://assets/sprites/skills/skills/thunders/_frames/demon_slash_9x5_128px/67.png" id="1_67"]
+[ext_resource type="Texture2D" uid="uid://upnpv1wiaa36" path="res://assets/sprites/skills/skills/thunders/_frames/demon_slash_9x5_128px/68.png" id="1_68"]
+[ext_resource type="Texture2D" uid="uid://dpu3cfesk1vyu" path="res://assets/sprites/skills/skills/thunders/_frames/demon_slash_9x5_128px/69.png" id="1_69"]
+[ext_resource type="Texture2D" uid="uid://c4x5f5tw8vbuf" path="res://assets/sprites/skills/skills/thunders/_frames/demon_slash_9x5_128px/70.png" id="1_70"]
+[ext_resource type="Texture2D" uid="uid://cr3nd0gngrbgh" path="res://assets/sprites/skills/skills/thunders/_frames/demon_slash_9x5_128px/71.png" id="1_71"]
+[ext_resource type="Texture2D" uid="uid://ceomphbgxt3da" path="res://assets/sprites/skills/skills/thunders/_frames/demon_slash_9x5_128px/72.png" id="1_72"]
+[ext_resource type="Texture2D" uid="uid://drt1au1cro4yr" path="res://assets/sprites/skills/skills/thunders/_frames/demon_slash_9x5_128px/73.png" id="1_73"]
+[ext_resource type="Texture2D" uid="uid://dvoitufjvkylm" path="res://assets/sprites/skills/skills/thunders/_frames/demon_slash_9x5_128px/74.png" id="1_74"]
+
+[sub_resource type="SpriteFrames" id="SpriteFrames_1"]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("1_00")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_01")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_02")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_03")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_04")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_05")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_06")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_07")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_08")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_09")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_10")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_11")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_12")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_13")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_14")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_15")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_16")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_17")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_18")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_19")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_20")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_21")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_22")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_23")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_24")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_25")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_26")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_27")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_28")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_29")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_30")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_31")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_32")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_33")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_34")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_35")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_36")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_37")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_38")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_39")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_40")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_41")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_42")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_43")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_44")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_45")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_46")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_47")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_48")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_49")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_50")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_51")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_52")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_53")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_54")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_55")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_56")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_57")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_58")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_59")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_60")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_61")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_62")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_63")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_64")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_65")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_66")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_67")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_68")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_69")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_70")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_71")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_72")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_73")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_74")
+}],
+"loop": 1,
+"name": &"default",
+"speed": 33.33
+}]
+
+[node name="EffectDemonSlash" type="Node2D"]
+
+[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
+sprite_frames = SubResource("SpriteFrames_1")
+autoplay = "default"

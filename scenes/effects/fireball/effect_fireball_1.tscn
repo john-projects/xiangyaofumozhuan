@@ -1,7 +1,6 @@
 [gd_scene format=3 uid="uid://bm4vnfpi8s8jq"]
 
 [ext_resource type="Texture2D" uid="uid://ce107bl10oegx" path="res://assets/sprites/fireball/1/1_0.png" id="1_03w8l"]
-[ext_resource type="Script" uid="uid://dsicq8ae85i0m" path="res://scenes/effects/fireball/effect_fireball_1.gd" id="1_kx0a1"]
 [ext_resource type="Texture2D" uid="uid://blpcym3bimjfx" path="res://assets/sprites/fireball/1/1_1.png" id="2_6p422"]
 [ext_resource type="Texture2D" uid="uid://dqmkjvjod7uwq" path="res://assets/sprites/fireball/1/1_2.png" id="3_fetvt"]
 [ext_resource type="Texture2D" uid="uid://bk4gr0sxpw2w6" path="res://assets/sprites/fireball/1/1_3.png" id="4_lqpo8"]
@@ -255,7 +254,6 @@ animations = [{
 }]
 
 [node name="EffectFireball1" type="Node2D" unique_id=1778379109]
-script = ExtResource("1_kx0a1")
 
 [node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="." unique_id=1373071695]
 sprite_frames = SubResource("SpriteFrames_3rpdi")

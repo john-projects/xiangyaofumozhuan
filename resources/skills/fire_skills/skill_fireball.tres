@@ -3,7 +3,7 @@
 [ext_resource type="PackedScene" uid="uid://b83xh47ut2fvc" path="res://scenes/effects/fireball/fireball_appearance.tscn" id="1_e4sui"]
 [ext_resource type="AudioStream" uid="uid://g72hyxdnaath" path="res://assets/audio/ShotgunFire.wav" id="2_ngslo"]
 [ext_resource type="AudioStream" uid="uid://blonjlaa37md0" path="res://assets/audio/EnemyHit.wav" id="3_xmwfk"]
-[ext_resource type="Texture2D" uid="uid://dxl550mv1d5l6" path="res://assets/sprites/Upgrades/3.png" id="4_7320o"]
+[ext_resource type="Texture2D" uid="uid://dxl550mv1d5l6" path="res://assets/sprites/tomato/Upgrades/3.png" id="4_7320o"]
 [ext_resource type="Script" uid="uid://sbgbq3puamij" path="res://resources/skills/skill_data.gd" id="5_81r1s"]
 
 [resource]

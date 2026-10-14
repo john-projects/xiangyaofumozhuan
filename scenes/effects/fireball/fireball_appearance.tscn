@@ -147,6 +147,7 @@ script = ExtResource("1_appearance")
 [node name="EffectFireball" parent="." unique_id=2121070101 instance=ExtResource("2_frames")]
 unique_name_in_owner = true
 z_index = 5
+script = null
 
 [node name="Smoke" type="GPUParticles2D" parent="." unique_id=1219142377]
 unique_name_in_owner = true

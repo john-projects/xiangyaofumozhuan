@@ -1,0 +1,16 @@
+[gd_scene format=3 uid="uid://bedxnypqiopc1"]
+
+[sub_resource type="SpriteFrames" id="SpriteFrames_1"]
+animations = [{
+"frames": [],
+"loop": 1,
+"name": &"default",
+"speed": 60.0
+}]
+
+[node name="EffectJumpingSmallPoisonball13x40" type="Node2D" unique_id=1355859209]
+
+[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="." unique_id=177005803]
+sprite_frames = SubResource("SpriteFrames_1")
+autoplay = "default"
+flip_h = true

@@ -1,0 +1,61 @@
+[gd_scene format=3 uid="uid://4mmbmvtcggo5"]
+
+[ext_resource type="Texture2D" uid="uid://nqya5pmpwdjc" path="res://assets/sprites/skills/skills/fireball/Iceball_84x9/00.png" id="1_vw3sg"]
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_twpih"]
+atlas = ExtResource("1_vw3sg")
+region = Rect2(0, 0, 84, 9)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_mcrap"]
+atlas = ExtResource("1_vw3sg")
+region = Rect2(0, 9, 84, 9)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_vgcf5"]
+atlas = ExtResource("1_vw3sg")
+region = Rect2(0, 18, 84, 9)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_31w5b"]
+atlas = ExtResource("1_vw3sg")
+region = Rect2(0, 27, 84, 9)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_4kdh5"]
+atlas = ExtResource("1_vw3sg")
+region = Rect2(0, 36, 84, 9)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_f85es"]
+atlas = ExtResource("1_vw3sg")
+region = Rect2(0, 45, 84, 9)
+
+[sub_resource type="SpriteFrames" id="SpriteFrames_1"]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_twpih")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_mcrap")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_vgcf5")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_31w5b")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_4kdh5")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_f85es")
+}],
+"loop": 1,
+"name": &"default",
+"speed": 60.0
+}]
+
+[node name="EffectIceball84x9" type="Node2D" unique_id=167439996]
+
+[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="." unique_id=409256508]
+sprite_frames = SubResource("SpriteFrames_1")
+autoplay = "default"
+frame_progress = 0.31744584
+flip_h = true

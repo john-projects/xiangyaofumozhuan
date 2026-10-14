@@ -1,0 +1,56 @@
+[gd_scene format=3]
+
+[ext_resource type="PackedScene" path="res://scenes/effects/thunder/effect_arcane_slash_down.tscn" id="1_00"]
+[ext_resource type="PackedScene" path="res://scenes/effects/thunder/effect_arcane_slash_up.tscn" id="1_01"]
+[ext_resource type="PackedScene" path="res://scenes/effects/thunder/effect_demon_slash.tscn" id="1_02"]
+[ext_resource type="PackedScene" path="res://scenes/effects/thunder/effect_fire_slash_down.tscn" id="1_03"]
+[ext_resource type="PackedScene" path="res://scenes/effects/thunder/effect_fire_slash_up.tscn" id="1_04"]
+[ext_resource type="PackedScene" path="res://scenes/effects/thunder/effect_holy_slash_down.tscn" id="1_05"]
+[ext_resource type="PackedScene" path="res://scenes/effects/thunder/effect_holy_slash_up.tscn" id="1_06"]
+[ext_resource type="PackedScene" path="res://scenes/effects/thunder/effect_poison_slash_down.tscn" id="1_07"]
+[ext_resource type="PackedScene" path="res://scenes/effects/thunder/effect_poison_slash_up.tscn" id="1_08"]
+[ext_resource type="PackedScene" path="res://scenes/effects/thunder/effect_thunder_slash_down.tscn" id="1_09"]
+[ext_resource type="PackedScene" path="res://scenes/effects/thunder/effect_thunder_slash_up.tscn" id="1_10"]
+[ext_resource type="PackedScene" path="res://scenes/effects/thunder/effect_water_slash_down.tscn" id="1_11"]
+[ext_resource type="PackedScene" path="res://scenes/effects/thunder/effect_water_slash_up.tscn" id="1_12"]
+
+[node name="EffectThunderPreview" type="Node2D"]
+
+[node name="EffectArcaneSlashDown" parent="." instance=ExtResource("1_00")]
+position = Vector2(0, 0)
+
+[node name="EffectArcaneSlashUp" parent="." instance=ExtResource("1_01")]
+position = Vector2(260, 0)
+
+[node name="EffectDemonSlash" parent="." instance=ExtResource("1_02")]
+position = Vector2(520, 0)
+
+[node name="EffectFireSlashDown" parent="." instance=ExtResource("1_03")]
+position = Vector2(780, 0)
+
+[node name="EffectFireSlashUp" parent="." instance=ExtResource("1_04")]
+position = Vector2(0, 260)
+
+[node name="EffectHolySlashDown" parent="." instance=ExtResource("1_05")]
+position = Vector2(260, 260)
+
+[node name="EffectHolySlashUp" parent="." instance=ExtResource("1_06")]
+position = Vector2(520, 260)
+
+[node name="EffectPoisonSlashDown" parent="." instance=ExtResource("1_07")]
+position = Vector2(780, 260)
+
+[node name="EffectPoisonSlashUp" parent="." instance=ExtResource("1_08")]
+position = Vector2(0, 520)
+
+[node name="EffectThunderSlashDown" parent="." instance=ExtResource("1_09")]
+position = Vector2(260, 520)
+
+[node name="EffectThunderSlashUp" parent="." instance=ExtResource("1_10")]
+position = Vector2(520, 520)
+
+[node name="EffectWaterSlashDown" parent="." instance=ExtResource("1_11")]
+position = Vector2(780, 520)
+
+[node name="EffectWaterSlashUp" parent="." instance=ExtResource("1_12")]
+position = Vector2(0, 780)

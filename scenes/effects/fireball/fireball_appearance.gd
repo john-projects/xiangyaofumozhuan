@@ -19,7 +19,6 @@ class_name FireballAppearance
 ##   序列帧必须最高，否则像素帧动画会被粒子整片盖住 —— 这正是本场景当初的坑。
 ##   想让"火星飘在火焰前面"：把 Sparks 改成 6，并让序列帧降到 5 以下。
 
-const EffectTex := preload("res://scenes/effects/effect_tex.gd")
 ## 默认序列帧素材（帧动画场景）。三套配色见同目录 effect_fireball_1/2/3.tscn
 const DEFAULT_FIREBALL_SCENE := preload("res://scenes/effects/fireball/effect_fireball_1.tscn")
 
@@ -132,6 +131,7 @@ func _prepare_particles(skill: SkillData) -> void:
 	#   尾巴越远越粗 —— 那就变成了火箭尾焰，跟火球正好相反。
 	#   改成 true 后，头部粒子跟着弹体走，稳定地烧成"实心一颗"。
 	# 火核：头部的亮点，小扩散、短寿命
+	@warning_ignore("integer_division")
 	_prepare(fire_core, maxi(12, skill.hit_particles / 3), FIRE_HOT, FIRE_MID, FIRE_OUT, 45.0)
 	fire_core.amount = maxi(10, int(fire_core.amount * _head_ratio))
 	fire_core.lifetime = 0.35
@@ -164,6 +164,7 @@ func _prepare_particles(skill: SkillData) -> void:
 	smoke.material = EffectTex.mix()
 	if _use_smoke_trail:
 		smoke.visible = true
+		@warning_ignore("integer_division")
 		smoke.amount = maxi(4, skill.hit_particles / 6)
 		# 再压一点不透明度，避免烟盖住火焰主体
 		smoke.modulate = Color(SMOKE_TINT.r, SMOKE_TINT.g, SMOKE_TINT.b, 0.55)

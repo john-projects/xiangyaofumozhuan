@@ -624,6 +624,7 @@ func _make_enemy_team() -> Array[UnitStats]:
 		return out
 
 	var difficulty := map_difficulty()
+	@warning_ignore("integer_division")
 	var count: int = clampi(1 + (difficulty - 1) / 2, 1, 5)   # 双方上限都是 5 人（站位：前排 3 + 后排 2）
 	var scale: float = 1.0 + (difficulty - 1) * enemy_scale_per_map
 	for i in count:

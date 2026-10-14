@@ -1,0 +1,148 @@
+[gd_scene format=3]
+
+[ext_resource type="Texture2D" uid="uid://b2hkrhy3y83e1" path="res://assets/sprites/skills/skills/thunders/_frames/arcane_slash_down_9x5_128px/00.png" id="1_00"]
+[ext_resource type="Texture2D" uid="uid://cwv26twdiq2wy" path="res://assets/sprites/skills/skills/thunders/_frames/arcane_slash_down_9x5_128px/01.png" id="1_01"]
+[ext_resource type="Texture2D" uid="uid://c2llpcjakt327" path="res://assets/sprites/skills/skills/thunders/_frames/arcane_slash_down_9x5_128px/02.png" id="1_02"]
+[ext_resource type="Texture2D" uid="uid://b8njy1j5yad8f" path="res://assets/sprites/skills/skills/thunders/_frames/arcane_slash_down_9x5_128px/03.png" id="1_03"]
+[ext_resource type="Texture2D" uid="uid://cnpdl2kt2pfdt" path="res://assets/sprites/skills/skills/thunders/_frames/arcane_slash_down_9x5_128px/04.png" id="1_04"]
+[ext_resource type="Texture2D" uid="uid://dinegg0bdlmyh" path="res://assets/sprites/skills/skills/thunders/_frames/arcane_slash_down_9x5_128px/05.png" id="1_05"]
+[ext_resource type="Texture2D" uid="uid://ck6b1qb67ersp" path="res://assets/sprites/skills/skills/thunders/_frames/arcane_slash_down_9x5_128px/06.png" id="1_06"]
+[ext_resource type="Texture2D" uid="uid://bbbtu5wl431iw" path="res://assets/sprites/skills/skills/thunders/_frames/arcane_slash_down_9x5_128px/07.png" id="1_07"]
+[ext_resource type="Texture2D" uid="uid://cxvfsxmudcab4" path="res://assets/sprites/skills/skills/thunders/_frames/arcane_slash_down_9x5_128px/08.png" id="1_08"]
+[ext_resource type="Texture2D" uid="uid://c8gs0ue6yq8bw" path="res://assets/sprites/skills/skills/thunders/_frames/arcane_slash_down_9x5_128px/09.png" id="1_09"]
+[ext_resource type="Texture2D" uid="uid://dkc266tt3mita" path="res://assets/sprites/skills/skills/thunders/_frames/arcane_slash_down_9x5_128px/10.png" id="1_10"]
+[ext_resource type="Texture2D" uid="uid://rx3m7ql6pj1o" path="res://assets/sprites/skills/skills/thunders/_frames/arcane_slash_down_9x5_128px/11.png" id="1_11"]
+[ext_resource type="Texture2D" uid="uid://ct526oegx1ksx" path="res://assets/sprites/skills/skills/thunders/_frames/arcane_slash_down_9x5_128px/12.png" id="1_12"]
+[ext_resource type="Texture2D" uid="uid://ckov1kig4mtqv" path="res://assets/sprites/skills/skills/thunders/_frames/arcane_slash_down_9x5_128px/13.png" id="1_13"]
+[ext_resource type="Texture2D" uid="uid://du18g614r5wlf" path="res://assets/sprites/skills/skills/thunders/_frames/arcane_slash_down_9x5_128px/14.png" id="1_14"]
+[ext_resource type="Texture2D" uid="uid://b8hbfim7q0cs2" path="res://assets/sprites/skills/skills/thunders/_frames/arcane_slash_down_9x5_128px/15.png" id="1_15"]
+[ext_resource type="Texture2D" uid="uid://ddln387ihiu2w" path="res://assets/sprites/skills/skills/thunders/_frames/arcane_slash_down_9x5_128px/16.png" id="1_16"]
+[ext_resource type="Texture2D" uid="uid://bqrplvqdjgk3u" path="res://assets/sprites/skills/skills/thunders/_frames/arcane_slash_down_9x5_128px/17.png" id="1_17"]
+[ext_resource type="Texture2D" uid="uid://cpvyqpbesyfkf" path="res://assets/sprites/skills/skills/thunders/_frames/arcane_slash_down_9x5_128px/18.png" id="1_18"]
+[ext_resource type="Texture2D" uid="uid://c0shgfa3vmap0" path="res://assets/sprites/skills/skills/thunders/_frames/arcane_slash_down_9x5_128px/19.png" id="1_19"]
+[ext_resource type="Texture2D" uid="uid://ol4egmls51vi" path="res://assets/sprites/skills/skills/thunders/_frames/arcane_slash_down_9x5_128px/20.png" id="1_20"]
+[ext_resource type="Texture2D" uid="uid://daytc6sb6d4bc" path="res://assets/sprites/skills/skills/thunders/_frames/arcane_slash_down_9x5_128px/21.png" id="1_21"]
+[ext_resource type="Texture2D" uid="uid://b80cksmiw0mfo" path="res://assets/sprites/skills/skills/thunders/_frames/arcane_slash_down_9x5_128px/22.png" id="1_22"]
+[ext_resource type="Texture2D" uid="uid://bip3s6jbpomlx" path="res://assets/sprites/skills/skills/thunders/_frames/arcane_slash_down_9x5_128px/23.png" id="1_23"]
+[ext_resource type="Texture2D" uid="uid://6k44ov0avop5" path="res://assets/sprites/skills/skills/thunders/_frames/arcane_slash_down_9x5_128px/24.png" id="1_24"]
+[ext_resource type="Texture2D" uid="uid://dm8bjm5fwm8vo" path="res://assets/sprites/skills/skills/thunders/_frames/arcane_slash_down_9x5_128px/25.png" id="1_25"]
+[ext_resource type="Texture2D" uid="uid://ce14lvhm0cv7p" path="res://assets/sprites/skills/skills/thunders/_frames/arcane_slash_down_9x5_128px/26.png" id="1_26"]
+[ext_resource type="Texture2D" uid="uid://yavmnky6g2wf" path="res://assets/sprites/skills/skills/thunders/_frames/arcane_slash_down_9x5_128px/27.png" id="1_27"]
+[ext_resource type="Texture2D" uid="uid://cdpfimdmuhmk6" path="res://assets/sprites/skills/skills/thunders/_frames/arcane_slash_down_9x5_128px/28.png" id="1_28"]
+[ext_resource type="Texture2D" uid="uid://dwpejqttokbxo" path="res://assets/sprites/skills/skills/thunders/_frames/arcane_slash_down_9x5_128px/29.png" id="1_29"]
+[ext_resource type="Texture2D" uid="uid://befmm56qacfap" path="res://assets/sprites/skills/skills/thunders/_frames/arcane_slash_down_9x5_128px/30.png" id="1_30"]
+[ext_resource type="Texture2D" uid="uid://eeccm2x8qoga" path="res://assets/sprites/skills/skills/thunders/_frames/arcane_slash_down_9x5_128px/31.png" id="1_31"]
+[ext_resource type="Texture2D" uid="uid://dgvvqii8j43c2" path="res://assets/sprites/skills/skills/thunders/_frames/arcane_slash_down_9x5_128px/32.png" id="1_32"]
+
+[sub_resource type="SpriteFrames" id="SpriteFrames_1"]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("1_00")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_01")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_02")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_03")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_04")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_05")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_06")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_07")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_08")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_09")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_10")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_11")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_12")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_13")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_14")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_15")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_16")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_17")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_18")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_19")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_20")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_21")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_22")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_23")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_24")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_25")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_26")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_27")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_28")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_29")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_30")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_31")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_32")
+}],
+"loop": 1,
+"name": &"default",
+"speed": 33.33
+}]
+
+[node name="EffectArcaneSlashDown" type="Node2D"]
+
+[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
+sprite_frames = SubResource("SpriteFrames_1")
+autoplay = "default"

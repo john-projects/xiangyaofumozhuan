@@ -1,0 +1,184 @@
+[gd_scene format=3]
+
+[ext_resource type="Texture2D" uid="uid://b2bxt64g27css" path="res://assets/sprites/skills/skills/thunders/_frames/water_slash_up_9x5_128px/00.png" id="1_00"]
+[ext_resource type="Texture2D" uid="uid://croorecrlew4s" path="res://assets/sprites/skills/skills/thunders/_frames/water_slash_up_9x5_128px/01.png" id="1_01"]
+[ext_resource type="Texture2D" uid="uid://cfwgvwtmhp5d8" path="res://assets/sprites/skills/skills/thunders/_frames/water_slash_up_9x5_128px/02.png" id="1_02"]
+[ext_resource type="Texture2D" uid="uid://d4g4cos61ipt0" path="res://assets/sprites/skills/skills/thunders/_frames/water_slash_up_9x5_128px/03.png" id="1_03"]
+[ext_resource type="Texture2D" uid="uid://pmk3rj12m6i5" path="res://assets/sprites/skills/skills/thunders/_frames/water_slash_up_9x5_128px/04.png" id="1_04"]
+[ext_resource type="Texture2D" uid="uid://ctiqxh6ehg2wf" path="res://assets/sprites/skills/skills/thunders/_frames/water_slash_up_9x5_128px/05.png" id="1_05"]
+[ext_resource type="Texture2D" uid="uid://cod0nse8106rv" path="res://assets/sprites/skills/skills/thunders/_frames/water_slash_up_9x5_128px/06.png" id="1_06"]
+[ext_resource type="Texture2D" uid="uid://b35r1v845lcod" path="res://assets/sprites/skills/skills/thunders/_frames/water_slash_up_9x5_128px/07.png" id="1_07"]
+[ext_resource type="Texture2D" uid="uid://btjb5xyefvg6s" path="res://assets/sprites/skills/skills/thunders/_frames/water_slash_up_9x5_128px/08.png" id="1_08"]
+[ext_resource type="Texture2D" uid="uid://ejgrvtqrik8" path="res://assets/sprites/skills/skills/thunders/_frames/water_slash_up_9x5_128px/09.png" id="1_09"]
+[ext_resource type="Texture2D" uid="uid://c0pxa5kfmx4jy" path="res://assets/sprites/skills/skills/thunders/_frames/water_slash_up_9x5_128px/10.png" id="1_10"]
+[ext_resource type="Texture2D" uid="uid://cs3rqhgcguuci" path="res://assets/sprites/skills/skills/thunders/_frames/water_slash_up_9x5_128px/11.png" id="1_11"]
+[ext_resource type="Texture2D" uid="uid://tfmg7bik7kwe" path="res://assets/sprites/skills/skills/thunders/_frames/water_slash_up_9x5_128px/12.png" id="1_12"]
+[ext_resource type="Texture2D" uid="uid://cbvmtgcoif605" path="res://assets/sprites/skills/skills/thunders/_frames/water_slash_up_9x5_128px/13.png" id="1_13"]
+[ext_resource type="Texture2D" uid="uid://ghohsbdph8ri" path="res://assets/sprites/skills/skills/thunders/_frames/water_slash_up_9x5_128px/14.png" id="1_14"]
+[ext_resource type="Texture2D" uid="uid://do612tn422mui" path="res://assets/sprites/skills/skills/thunders/_frames/water_slash_up_9x5_128px/15.png" id="1_15"]
+[ext_resource type="Texture2D" uid="uid://dst52bbuy71fy" path="res://assets/sprites/skills/skills/thunders/_frames/water_slash_up_9x5_128px/16.png" id="1_16"]
+[ext_resource type="Texture2D" uid="uid://c6oqfa3md47qo" path="res://assets/sprites/skills/skills/thunders/_frames/water_slash_up_9x5_128px/17.png" id="1_17"]
+[ext_resource type="Texture2D" uid="uid://bu4if66gpalnp" path="res://assets/sprites/skills/skills/thunders/_frames/water_slash_up_9x5_128px/18.png" id="1_18"]
+[ext_resource type="Texture2D" uid="uid://dmrgjmi4sc2w0" path="res://assets/sprites/skills/skills/thunders/_frames/water_slash_up_9x5_128px/19.png" id="1_19"]
+[ext_resource type="Texture2D" uid="uid://cha2gfda6gv5e" path="res://assets/sprites/skills/skills/thunders/_frames/water_slash_up_9x5_128px/20.png" id="1_20"]
+[ext_resource type="Texture2D" uid="uid://bqtoq5bgjuxis" path="res://assets/sprites/skills/skills/thunders/_frames/water_slash_up_9x5_128px/21.png" id="1_21"]
+[ext_resource type="Texture2D" uid="uid://t4630ijkh5rt" path="res://assets/sprites/skills/skills/thunders/_frames/water_slash_up_9x5_128px/22.png" id="1_22"]
+[ext_resource type="Texture2D" uid="uid://mvlwbs7h8nnh" path="res://assets/sprites/skills/skills/thunders/_frames/water_slash_up_9x5_128px/23.png" id="1_23"]
+[ext_resource type="Texture2D" uid="uid://pn3yole8j8nd" path="res://assets/sprites/skills/skills/thunders/_frames/water_slash_up_9x5_128px/24.png" id="1_24"]
+[ext_resource type="Texture2D" uid="uid://cmbu8v8rtysee" path="res://assets/sprites/skills/skills/thunders/_frames/water_slash_up_9x5_128px/25.png" id="1_25"]
+[ext_resource type="Texture2D" uid="uid://dpsgibhvyf6pf" path="res://assets/sprites/skills/skills/thunders/_frames/water_slash_up_9x5_128px/26.png" id="1_26"]
+[ext_resource type="Texture2D" uid="uid://cngjt7kufdhwg" path="res://assets/sprites/skills/skills/thunders/_frames/water_slash_up_9x5_128px/27.png" id="1_27"]
+[ext_resource type="Texture2D" uid="uid://fajtq6xed4fs" path="res://assets/sprites/skills/skills/thunders/_frames/water_slash_up_9x5_128px/28.png" id="1_28"]
+[ext_resource type="Texture2D" uid="uid://c4jqoqwds7b57" path="res://assets/sprites/skills/skills/thunders/_frames/water_slash_up_9x5_128px/29.png" id="1_29"]
+[ext_resource type="Texture2D" uid="uid://cn5fpqyj0ig6h" path="res://assets/sprites/skills/skills/thunders/_frames/water_slash_up_9x5_128px/30.png" id="1_30"]
+[ext_resource type="Texture2D" uid="uid://cvvdofxuecl36" path="res://assets/sprites/skills/skills/thunders/_frames/water_slash_up_9x5_128px/31.png" id="1_31"]
+[ext_resource type="Texture2D" uid="uid://ga3gbgm0mpev" path="res://assets/sprites/skills/skills/thunders/_frames/water_slash_up_9x5_128px/32.png" id="1_32"]
+[ext_resource type="Texture2D" uid="uid://bkrepjvycm8wx" path="res://assets/sprites/skills/skills/thunders/_frames/water_slash_up_9x5_128px/33.png" id="1_33"]
+[ext_resource type="Texture2D" uid="uid://richax4ttb0j" path="res://assets/sprites/skills/skills/thunders/_frames/water_slash_up_9x5_128px/34.png" id="1_34"]
+[ext_resource type="Texture2D" uid="uid://btp80anim6u2q" path="res://assets/sprites/skills/skills/thunders/_frames/water_slash_up_9x5_128px/35.png" id="1_35"]
+[ext_resource type="Texture2D" uid="uid://cmueumq7faxox" path="res://assets/sprites/skills/skills/thunders/_frames/water_slash_up_9x5_128px/36.png" id="1_36"]
+[ext_resource type="Texture2D" uid="uid://7eivx5vu4xnj" path="res://assets/sprites/skills/skills/thunders/_frames/water_slash_up_9x5_128px/37.png" id="1_37"]
+[ext_resource type="Texture2D" uid="uid://dpw57wj118xek" path="res://assets/sprites/skills/skills/thunders/_frames/water_slash_up_9x5_128px/38.png" id="1_38"]
+[ext_resource type="Texture2D" uid="uid://dw74dmbsi0hdj" path="res://assets/sprites/skills/skills/thunders/_frames/water_slash_up_9x5_128px/39.png" id="1_39"]
+[ext_resource type="Texture2D" uid="uid://cup45syr25ewu" path="res://assets/sprites/skills/skills/thunders/_frames/water_slash_up_9x5_128px/40.png" id="1_40"]
+[ext_resource type="Texture2D" uid="uid://c0il2a1he0ikb" path="res://assets/sprites/skills/skills/thunders/_frames/water_slash_up_9x5_128px/41.png" id="1_41"]
+
+[sub_resource type="SpriteFrames" id="SpriteFrames_1"]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("1_00")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_01")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_02")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_03")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_04")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_05")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_06")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_07")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_08")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_09")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_10")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_11")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_12")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_13")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_14")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_15")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_16")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_17")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_18")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_19")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_20")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_21")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_22")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_23")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_24")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_25")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_26")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_27")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_28")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_29")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_30")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_31")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_32")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_33")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_34")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_35")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_36")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_37")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_38")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_39")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_40")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_41")
+}],
+"loop": 1,
+"name": &"default",
+"speed": 33.33
+}]
+
+[node name="EffectWaterSlashUp" type="Node2D"]
+
+[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
+sprite_frames = SubResource("SpriteFrames_1")
+autoplay = "default"

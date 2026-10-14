@@ -11,7 +11,6 @@ class_name BurstEffect
 ## 本脚本只负责"按 SkillData 染色 + 播放一次 + 自毁"。
 
 const LIFETIME := 1.6   # 最长的那层（浓烟 1.5s）+ 余量
-const EffectTex := preload("res://scenes/effects/effect_tex.gd")
 
 @onready var _flash: GPUParticles2D = $Flash
 @onready var _ring: Sprite2D = $Shockwave
@@ -31,6 +30,7 @@ func play(tint: Color = Color(1, 0.55, 0.2), particle_count: int = 26) -> void:
 	# ---- 闪光：白热向外铺开 ----
 	if _flash != null:
 		_flash.modulate = tint
+		@warning_ignore("integer_division")
 		_flash.amount = maxi(8, particle_count / 2)
 		var fm := _flash.process_material as ParticleProcessMaterial
 		if fm != null:
