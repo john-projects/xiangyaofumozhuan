@@ -1,0 +1,257 @@
+[gd_scene format=3]
+
+[ext_resource type="Texture2D" uid="uid://gi77vidx8pws" path="res://assets/sprites/skills/skills/fireball/Small_Fireball_10x26/00.png" id="1_00"]
+[ext_resource type="Texture2D" uid="uid://b2wqqcoakme84" path="res://assets/sprites/skills/skills/fireball/Small_Fireball_10x26/01.png" id="1_01"]
+[ext_resource type="Texture2D" uid="uid://j0vycemwu52t" path="res://assets/sprites/skills/skills/fireball/Small_Fireball_10x26/02.png" id="1_02"]
+[ext_resource type="Texture2D" uid="uid://djl75hti1vdls" path="res://assets/sprites/skills/skills/fireball/Small_Fireball_10x26/03.png" id="1_03"]
+[ext_resource type="Texture2D" uid="uid://cuuv1qfleo5mi" path="res://assets/sprites/skills/skills/fireball/Small_Fireball_10x26/04.png" id="1_04"]
+[ext_resource type="Texture2D" uid="uid://d2m1ja3by4w7o" path="res://assets/sprites/skills/skills/fireball/Small_Fireball_10x26/05.png" id="1_05"]
+[ext_resource type="Texture2D" uid="uid://bluo4r25s3qr0" path="res://assets/sprites/skills/skills/fireball/Small_Fireball_10x26/06.png" id="1_06"]
+[ext_resource type="Texture2D" uid="uid://c5y6o0xbpxy70" path="res://assets/sprites/skills/skills/fireball/Small_Fireball_10x26/07.png" id="1_07"]
+[ext_resource type="Texture2D" uid="uid://6himyfy8ir1o" path="res://assets/sprites/skills/skills/fireball/Small_Fireball_10x26/08.png" id="1_08"]
+[ext_resource type="Texture2D" uid="uid://dtbysyr446txs" path="res://assets/sprites/skills/skills/fireball/Small_Fireball_10x26/09.png" id="1_09"]
+[ext_resource type="Texture2D" uid="uid://be0vnhop2262e" path="res://assets/sprites/skills/skills/fireball/Small_Fireball_10x26/10.png" id="1_10"]
+[ext_resource type="Texture2D" uid="uid://ch816do7tmuvu" path="res://assets/sprites/skills/skills/fireball/Small_Fireball_10x26/11.png" id="1_11"]
+[ext_resource type="Texture2D" uid="uid://d4gldv0p76h33" path="res://assets/sprites/skills/skills/fireball/Small_Fireball_10x26/12.png" id="1_12"]
+[ext_resource type="Texture2D" uid="uid://ccydr70oss2dy" path="res://assets/sprites/skills/skills/fireball/Small_Fireball_10x26/13.png" id="1_13"]
+[ext_resource type="Texture2D" uid="uid://dbnlh74amcvj7" path="res://assets/sprites/skills/skills/fireball/Small_Fireball_10x26/14.png" id="1_14"]
+[ext_resource type="Texture2D" uid="uid://b1gs206reoa0x" path="res://assets/sprites/skills/skills/fireball/Small_Fireball_10x26/15.png" id="1_15"]
+[ext_resource type="Texture2D" uid="uid://dtdn3lrkoxuel" path="res://assets/sprites/skills/skills/fireball/Small_Fireball_10x26/16.png" id="1_16"]
+[ext_resource type="Texture2D" uid="uid://cmvmee4tppamn" path="res://assets/sprites/skills/skills/fireball/Small_Fireball_10x26/17.png" id="1_17"]
+[ext_resource type="Texture2D" uid="uid://b4cpaf8j5nqsn" path="res://assets/sprites/skills/skills/fireball/Small_Fireball_10x26/18.png" id="1_18"]
+[ext_resource type="Texture2D" uid="uid://dmny2jxrrpaog" path="res://assets/sprites/skills/skills/fireball/Small_Fireball_10x26/19.png" id="1_19"]
+[ext_resource type="Texture2D" uid="uid://dsp5p0vypk82c" path="res://assets/sprites/skills/skills/fireball/Small_Fireball_10x26/20.png" id="1_20"]
+[ext_resource type="Texture2D" uid="uid://c8jw7batga6x6" path="res://assets/sprites/skills/skills/fireball/Small_Fireball_10x26/21.png" id="1_21"]
+[ext_resource type="Texture2D" uid="uid://ipc6ry2p6l2y" path="res://assets/sprites/skills/skills/fireball/Small_Fireball_10x26/22.png" id="1_22"]
+[ext_resource type="Texture2D" uid="uid://b4ns6j67mfb6k" path="res://assets/sprites/skills/skills/fireball/Small_Fireball_10x26/23.png" id="1_23"]
+[ext_resource type="Texture2D" uid="uid://47nbwik1hqgd" path="res://assets/sprites/skills/skills/fireball/Small_Fireball_10x26/24.png" id="1_24"]
+[ext_resource type="Texture2D" uid="uid://dwlq3qc44lfw4" path="res://assets/sprites/skills/skills/fireball/Small_Fireball_10x26/25.png" id="1_25"]
+[ext_resource type="Texture2D" uid="uid://cak5o62j2ygtu" path="res://assets/sprites/skills/skills/fireball/Small_Fireball_10x26/26.png" id="1_26"]
+[ext_resource type="Texture2D" uid="uid://crn1n8wr35lxk" path="res://assets/sprites/skills/skills/fireball/Small_Fireball_10x26/27.png" id="1_27"]
+[ext_resource type="Texture2D" uid="uid://4241mfmofilx" path="res://assets/sprites/skills/skills/fireball/Small_Fireball_10x26/28.png" id="1_28"]
+[ext_resource type="Texture2D" uid="uid://crpbywvg3iali" path="res://assets/sprites/skills/skills/fireball/Small_Fireball_10x26/29.png" id="1_29"]
+[ext_resource type="Texture2D" uid="uid://pp6ptlkftjb4" path="res://assets/sprites/skills/skills/fireball/Small_Fireball_10x26/30.png" id="1_30"]
+[ext_resource type="Texture2D" uid="uid://dqrf524pqld1" path="res://assets/sprites/skills/skills/fireball/Small_Fireball_10x26/31.png" id="1_31"]
+[ext_resource type="Texture2D" uid="uid://b5ttlr1dn1n8g" path="res://assets/sprites/skills/skills/fireball/Small_Fireball_10x26/32.png" id="1_32"]
+[ext_resource type="Texture2D" uid="uid://dh6dpnn0c1cd7" path="res://assets/sprites/skills/skills/fireball/Small_Fireball_10x26/33.png" id="1_33"]
+[ext_resource type="Texture2D" uid="uid://cme2n8rkkxvs8" path="res://assets/sprites/skills/skills/fireball/Small_Fireball_10x26/34.png" id="1_34"]
+[ext_resource type="Texture2D" uid="uid://c8w5iqag5u8uv" path="res://assets/sprites/skills/skills/fireball/Small_Fireball_10x26/35.png" id="1_35"]
+[ext_resource type="Texture2D" uid="uid://bee8b21pgsbxp" path="res://assets/sprites/skills/skills/fireball/Small_Fireball_10x26/36.png" id="1_36"]
+[ext_resource type="Texture2D" uid="uid://bjaaklt5x31yw" path="res://assets/sprites/skills/skills/fireball/Small_Fireball_10x26/37.png" id="1_37"]
+[ext_resource type="Texture2D" uid="uid://c5hxtttqehg6m" path="res://assets/sprites/skills/skills/fireball/Small_Fireball_10x26/38.png" id="1_38"]
+[ext_resource type="Texture2D" uid="uid://pd38kn6cso7w" path="res://assets/sprites/skills/skills/fireball/Small_Fireball_10x26/39.png" id="1_39"]
+[ext_resource type="Texture2D" uid="uid://pl62eudpdppy" path="res://assets/sprites/skills/skills/fireball/Small_Fireball_10x26/40.png" id="1_40"]
+[ext_resource type="Texture2D" uid="uid://b7df7rhry2aua" path="res://assets/sprites/skills/skills/fireball/Small_Fireball_10x26/41.png" id="1_41"]
+[ext_resource type="Texture2D" uid="uid://ktanvxdr4k2p" path="res://assets/sprites/skills/skills/fireball/Small_Fireball_10x26/42.png" id="1_42"]
+[ext_resource type="Texture2D" uid="uid://bpbfipmfaqbar" path="res://assets/sprites/skills/skills/fireball/Small_Fireball_10x26/43.png" id="1_43"]
+[ext_resource type="Texture2D" uid="uid://6ujfha0xuej2" path="res://assets/sprites/skills/skills/fireball/Small_Fireball_10x26/44.png" id="1_44"]
+[ext_resource type="Texture2D" uid="uid://caoosw7atjfl2" path="res://assets/sprites/skills/skills/fireball/Small_Fireball_10x26/45.png" id="1_45"]
+[ext_resource type="Texture2D" uid="uid://d1fhwxfqumpao" path="res://assets/sprites/skills/skills/fireball/Small_Fireball_10x26/46.png" id="1_46"]
+[ext_resource type="Texture2D" uid="uid://lcms02eu4rvl" path="res://assets/sprites/skills/skills/fireball/Small_Fireball_10x26/47.png" id="1_47"]
+[ext_resource type="Texture2D" uid="uid://b1d7wq0we0xri" path="res://assets/sprites/skills/skills/fireball/Small_Fireball_10x26/48.png" id="1_48"]
+[ext_resource type="Texture2D" uid="uid://dfcprv2rb3ck7" path="res://assets/sprites/skills/skills/fireball/Small_Fireball_10x26/49.png" id="1_49"]
+[ext_resource type="Texture2D" uid="uid://cjkdln46guvr1" path="res://assets/sprites/skills/skills/fireball/Small_Fireball_10x26/50.png" id="1_50"]
+[ext_resource type="Texture2D" uid="uid://nbar8mr81mcg" path="res://assets/sprites/skills/skills/fireball/Small_Fireball_10x26/51.png" id="1_51"]
+[ext_resource type="Texture2D" uid="uid://ct608xudd2gww" path="res://assets/sprites/skills/skills/fireball/Small_Fireball_10x26/52.png" id="1_52"]
+[ext_resource type="Texture2D" uid="uid://du314jn6bc4u5" path="res://assets/sprites/skills/skills/fireball/Small_Fireball_10x26/53.png" id="1_53"]
+[ext_resource type="Texture2D" uid="uid://dikxcrkimf5m4" path="res://assets/sprites/skills/skills/fireball/Small_Fireball_10x26/54.png" id="1_54"]
+[ext_resource type="Texture2D" uid="uid://caev688em6e1c" path="res://assets/sprites/skills/skills/fireball/Small_Fireball_10x26/55.png" id="1_55"]
+[ext_resource type="Texture2D" uid="uid://bcn4spejwkj35" path="res://assets/sprites/skills/skills/fireball/Small_Fireball_10x26/56.png" id="1_56"]
+[ext_resource type="Texture2D" uid="uid://clgk6w5j1pssr" path="res://assets/sprites/skills/skills/fireball/Small_Fireball_10x26/57.png" id="1_57"]
+[ext_resource type="Texture2D" uid="uid://c5bo5l7exquy7" path="res://assets/sprites/skills/skills/fireball/Small_Fireball_10x26/58.png" id="1_58"]
+[ext_resource type="Texture2D" uid="uid://c3u7ujphsmv4g" path="res://assets/sprites/skills/skills/fireball/Small_Fireball_10x26/59.png" id="1_59"]
+
+[sub_resource type="SpriteFrames" id="SpriteFrames_1"]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("1_00")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_01")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_02")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_03")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_04")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_05")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_06")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_07")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_08")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_09")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_10")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_11")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_12")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_13")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_14")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_15")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_16")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_17")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_18")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_19")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_20")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_21")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_22")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_23")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_24")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_25")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_26")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_27")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_28")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_29")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_30")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_31")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_32")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_33")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_34")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_35")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_36")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_37")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_38")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_39")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_40")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_41")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_42")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_43")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_44")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_45")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_46")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_47")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_48")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_49")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_50")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_51")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_52")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_53")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_54")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_55")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_56")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_57")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_58")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_59")
+}],
+"loop": 1,
+"name": &"default",
+"speed": 60.0
+}]
+
+[node name="EffectSmallFireball10x26" type="Node2D"]
+
+[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
+sprite_frames = SubResource("SpriteFrames_1")
+autoplay = "default"
+flip_h = true

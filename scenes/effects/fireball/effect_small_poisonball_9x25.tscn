@@ -1,0 +1,257 @@
+[gd_scene format=3]
+
+[ext_resource type="Texture2D" uid="uid://b1ip3qb7vwhue" path="res://assets/sprites/skills/skills/fireball/Small_Poisonball_9x25/00.png" id="1_00"]
+[ext_resource type="Texture2D" uid="uid://618ojoadfijg" path="res://assets/sprites/skills/skills/fireball/Small_Poisonball_9x25/01.png" id="1_01"]
+[ext_resource type="Texture2D" uid="uid://b5hjrprmbeunm" path="res://assets/sprites/skills/skills/fireball/Small_Poisonball_9x25/02.png" id="1_02"]
+[ext_resource type="Texture2D" uid="uid://c2lso7u6ec3mr" path="res://assets/sprites/skills/skills/fireball/Small_Poisonball_9x25/03.png" id="1_03"]
+[ext_resource type="Texture2D" uid="uid://dqdg3dus76d4e" path="res://assets/sprites/skills/skills/fireball/Small_Poisonball_9x25/04.png" id="1_04"]
+[ext_resource type="Texture2D" uid="uid://qruthhdn7urv" path="res://assets/sprites/skills/skills/fireball/Small_Poisonball_9x25/05.png" id="1_05"]
+[ext_resource type="Texture2D" uid="uid://cv4ja00pcgyhe" path="res://assets/sprites/skills/skills/fireball/Small_Poisonball_9x25/06.png" id="1_06"]
+[ext_resource type="Texture2D" uid="uid://csjoc7hflvhxv" path="res://assets/sprites/skills/skills/fireball/Small_Poisonball_9x25/07.png" id="1_07"]
+[ext_resource type="Texture2D" uid="uid://ccr7lnet67oi8" path="res://assets/sprites/skills/skills/fireball/Small_Poisonball_9x25/08.png" id="1_08"]
+[ext_resource type="Texture2D" uid="uid://chx5pim4qfukp" path="res://assets/sprites/skills/skills/fireball/Small_Poisonball_9x25/09.png" id="1_09"]
+[ext_resource type="Texture2D" uid="uid://b7gugey5lwo51" path="res://assets/sprites/skills/skills/fireball/Small_Poisonball_9x25/10.png" id="1_10"]
+[ext_resource type="Texture2D" uid="uid://cdmkox7bspc6c" path="res://assets/sprites/skills/skills/fireball/Small_Poisonball_9x25/11.png" id="1_11"]
+[ext_resource type="Texture2D" uid="uid://car2dq1k3tpmv" path="res://assets/sprites/skills/skills/fireball/Small_Poisonball_9x25/12.png" id="1_12"]
+[ext_resource type="Texture2D" uid="uid://c0fiunq4dpj8t" path="res://assets/sprites/skills/skills/fireball/Small_Poisonball_9x25/13.png" id="1_13"]
+[ext_resource type="Texture2D" uid="uid://bi0ppdq1g3rwj" path="res://assets/sprites/skills/skills/fireball/Small_Poisonball_9x25/14.png" id="1_14"]
+[ext_resource type="Texture2D" uid="uid://djf3cy3iadg20" path="res://assets/sprites/skills/skills/fireball/Small_Poisonball_9x25/15.png" id="1_15"]
+[ext_resource type="Texture2D" uid="uid://br5sjs1b6cexa" path="res://assets/sprites/skills/skills/fireball/Small_Poisonball_9x25/16.png" id="1_16"]
+[ext_resource type="Texture2D" uid="uid://b32sl7d8lobgd" path="res://assets/sprites/skills/skills/fireball/Small_Poisonball_9x25/17.png" id="1_17"]
+[ext_resource type="Texture2D" uid="uid://be8w6yx2emgg2" path="res://assets/sprites/skills/skills/fireball/Small_Poisonball_9x25/18.png" id="1_18"]
+[ext_resource type="Texture2D" uid="uid://d1sr3pftsyxlw" path="res://assets/sprites/skills/skills/fireball/Small_Poisonball_9x25/19.png" id="1_19"]
+[ext_resource type="Texture2D" uid="uid://dtegaybr630m0" path="res://assets/sprites/skills/skills/fireball/Small_Poisonball_9x25/20.png" id="1_20"]
+[ext_resource type="Texture2D" uid="uid://b45fovvi8ccoa" path="res://assets/sprites/skills/skills/fireball/Small_Poisonball_9x25/21.png" id="1_21"]
+[ext_resource type="Texture2D" uid="uid://ckva7h8bkuw4x" path="res://assets/sprites/skills/skills/fireball/Small_Poisonball_9x25/22.png" id="1_22"]
+[ext_resource type="Texture2D" uid="uid://c7deryybmlqg8" path="res://assets/sprites/skills/skills/fireball/Small_Poisonball_9x25/23.png" id="1_23"]
+[ext_resource type="Texture2D" uid="uid://cgvsfh54ckx5p" path="res://assets/sprites/skills/skills/fireball/Small_Poisonball_9x25/24.png" id="1_24"]
+[ext_resource type="Texture2D" uid="uid://dyyumlyjmnbg2" path="res://assets/sprites/skills/skills/fireball/Small_Poisonball_9x25/25.png" id="1_25"]
+[ext_resource type="Texture2D" uid="uid://7v0ne25d7grw" path="res://assets/sprites/skills/skills/fireball/Small_Poisonball_9x25/26.png" id="1_26"]
+[ext_resource type="Texture2D" uid="uid://baosgydc6geus" path="res://assets/sprites/skills/skills/fireball/Small_Poisonball_9x25/27.png" id="1_27"]
+[ext_resource type="Texture2D" uid="uid://3htwr2011ggd" path="res://assets/sprites/skills/skills/fireball/Small_Poisonball_9x25/28.png" id="1_28"]
+[ext_resource type="Texture2D" uid="uid://dsvoggn0p52lb" path="res://assets/sprites/skills/skills/fireball/Small_Poisonball_9x25/29.png" id="1_29"]
+[ext_resource type="Texture2D" uid="uid://dsrpsw2obkf0x" path="res://assets/sprites/skills/skills/fireball/Small_Poisonball_9x25/30.png" id="1_30"]
+[ext_resource type="Texture2D" uid="uid://whhrs0df8ech" path="res://assets/sprites/skills/skills/fireball/Small_Poisonball_9x25/31.png" id="1_31"]
+[ext_resource type="Texture2D" uid="uid://ddne1w6bxmso2" path="res://assets/sprites/skills/skills/fireball/Small_Poisonball_9x25/32.png" id="1_32"]
+[ext_resource type="Texture2D" uid="uid://18wqjb4jy51u" path="res://assets/sprites/skills/skills/fireball/Small_Poisonball_9x25/33.png" id="1_33"]
+[ext_resource type="Texture2D" uid="uid://cflviatbbt5r4" path="res://assets/sprites/skills/skills/fireball/Small_Poisonball_9x25/34.png" id="1_34"]
+[ext_resource type="Texture2D" uid="uid://csv2s3ligl4n7" path="res://assets/sprites/skills/skills/fireball/Small_Poisonball_9x25/35.png" id="1_35"]
+[ext_resource type="Texture2D" uid="uid://cf07fgf3x87h0" path="res://assets/sprites/skills/skills/fireball/Small_Poisonball_9x25/36.png" id="1_36"]
+[ext_resource type="Texture2D" uid="uid://b1l2kal8agdr1" path="res://assets/sprites/skills/skills/fireball/Small_Poisonball_9x25/37.png" id="1_37"]
+[ext_resource type="Texture2D" uid="uid://rb2bnj3e11qw" path="res://assets/sprites/skills/skills/fireball/Small_Poisonball_9x25/38.png" id="1_38"]
+[ext_resource type="Texture2D" uid="uid://dpkershxfujn" path="res://assets/sprites/skills/skills/fireball/Small_Poisonball_9x25/39.png" id="1_39"]
+[ext_resource type="Texture2D" uid="uid://rd6c6810lr38" path="res://assets/sprites/skills/skills/fireball/Small_Poisonball_9x25/40.png" id="1_40"]
+[ext_resource type="Texture2D" uid="uid://pqxjc7khsyco" path="res://assets/sprites/skills/skills/fireball/Small_Poisonball_9x25/41.png" id="1_41"]
+[ext_resource type="Texture2D" uid="uid://clwijyso3004g" path="res://assets/sprites/skills/skills/fireball/Small_Poisonball_9x25/42.png" id="1_42"]
+[ext_resource type="Texture2D" uid="uid://ch5ne7k2yae0a" path="res://assets/sprites/skills/skills/fireball/Small_Poisonball_9x25/43.png" id="1_43"]
+[ext_resource type="Texture2D" uid="uid://esvslxqg7j6l" path="res://assets/sprites/skills/skills/fireball/Small_Poisonball_9x25/44.png" id="1_44"]
+[ext_resource type="Texture2D" uid="uid://dy308cwqia2n2" path="res://assets/sprites/skills/skills/fireball/Small_Poisonball_9x25/45.png" id="1_45"]
+[ext_resource type="Texture2D" uid="uid://cyv7lof5mt75o" path="res://assets/sprites/skills/skills/fireball/Small_Poisonball_9x25/46.png" id="1_46"]
+[ext_resource type="Texture2D" uid="uid://n2v4hclnidjf" path="res://assets/sprites/skills/skills/fireball/Small_Poisonball_9x25/47.png" id="1_47"]
+[ext_resource type="Texture2D" uid="uid://buo3eiqpuoe2o" path="res://assets/sprites/skills/skills/fireball/Small_Poisonball_9x25/48.png" id="1_48"]
+[ext_resource type="Texture2D" uid="uid://dk6d362v0et7e" path="res://assets/sprites/skills/skills/fireball/Small_Poisonball_9x25/49.png" id="1_49"]
+[ext_resource type="Texture2D" uid="uid://bhueb0vx0ujqm" path="res://assets/sprites/skills/skills/fireball/Small_Poisonball_9x25/50.png" id="1_50"]
+[ext_resource type="Texture2D" uid="uid://cpsy4sed4nudq" path="res://assets/sprites/skills/skills/fireball/Small_Poisonball_9x25/51.png" id="1_51"]
+[ext_resource type="Texture2D" uid="uid://chkm6heq48jun" path="res://assets/sprites/skills/skills/fireball/Small_Poisonball_9x25/52.png" id="1_52"]
+[ext_resource type="Texture2D" uid="uid://vwpi8kc74pab" path="res://assets/sprites/skills/skills/fireball/Small_Poisonball_9x25/53.png" id="1_53"]
+[ext_resource type="Texture2D" uid="uid://ho4g4dmbcvwl" path="res://assets/sprites/skills/skills/fireball/Small_Poisonball_9x25/54.png" id="1_54"]
+[ext_resource type="Texture2D" uid="uid://cn2vt7g5f80ht" path="res://assets/sprites/skills/skills/fireball/Small_Poisonball_9x25/55.png" id="1_55"]
+[ext_resource type="Texture2D" uid="uid://cql1jgdp3fvec" path="res://assets/sprites/skills/skills/fireball/Small_Poisonball_9x25/56.png" id="1_56"]
+[ext_resource type="Texture2D" uid="uid://drbw1eu0hb5mi" path="res://assets/sprites/skills/skills/fireball/Small_Poisonball_9x25/57.png" id="1_57"]
+[ext_resource type="Texture2D" uid="uid://dn0qr00cws3ff" path="res://assets/sprites/skills/skills/fireball/Small_Poisonball_9x25/58.png" id="1_58"]
+[ext_resource type="Texture2D" uid="uid://bptorwby6sb1f" path="res://assets/sprites/skills/skills/fireball/Small_Poisonball_9x25/59.png" id="1_59"]
+
+[sub_resource type="SpriteFrames" id="SpriteFrames_1"]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("1_00")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_01")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_02")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_03")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_04")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_05")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_06")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_07")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_08")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_09")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_10")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_11")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_12")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_13")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_14")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_15")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_16")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_17")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_18")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_19")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_20")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_21")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_22")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_23")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_24")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_25")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_26")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_27")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_28")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_29")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_30")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_31")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_32")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_33")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_34")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_35")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_36")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_37")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_38")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_39")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_40")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_41")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_42")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_43")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_44")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_45")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_46")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_47")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_48")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_49")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_50")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_51")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_52")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_53")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_54")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_55")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_56")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_57")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_58")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_59")
+}],
+"loop": 1,
+"name": &"default",
+"speed": 60.0
+}]
+
+[node name="EffectSmallPoisonball9x25" type="Node2D"]
+
+[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
+sprite_frames = SubResource("SpriteFrames_1")
+autoplay = "default"
+flip_h = true

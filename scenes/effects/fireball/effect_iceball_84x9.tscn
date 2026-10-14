@@ -1,0 +1,57 @@
+[gd_scene format=3]
+
+[ext_resource type="Texture2D" uid="uid://nqya5pmpwdjc" path="res://assets/sprites/skills/skills/fireball/Iceball_84x9/00.png" id="1_00"]
+[ext_resource type="Texture2D" uid="uid://l5axg74el882" path="res://assets/sprites/skills/skills/fireball/Iceball_84x9/01.png" id="1_01"]
+[ext_resource type="Texture2D" uid="uid://dc603kmhfjxu0" path="res://assets/sprites/skills/skills/fireball/Iceball_84x9/02.png" id="1_02"]
+[ext_resource type="Texture2D" uid="uid://y1meod8jmihu" path="res://assets/sprites/skills/skills/fireball/Iceball_84x9/03.png" id="1_03"]
+[ext_resource type="Texture2D" uid="uid://b6v2bs4ns1llh" path="res://assets/sprites/skills/skills/fireball/Iceball_84x9/04.png" id="1_04"]
+[ext_resource type="Texture2D" uid="uid://c31tehnq0revr" path="res://assets/sprites/skills/skills/fireball/Iceball_84x9/05.png" id="1_05"]
+[ext_resource type="Texture2D" uid="uid://djgmjt3ek86ta" path="res://assets/sprites/skills/skills/fireball/Iceball_84x9/06.png" id="1_06"]
+[ext_resource type="Texture2D" uid="uid://busbns25vt2g8" path="res://assets/sprites/skills/skills/fireball/Iceball_84x9/07.png" id="1_07"]
+[ext_resource type="Texture2D" uid="uid://jknuynxrglb1" path="res://assets/sprites/skills/skills/fireball/Iceball_84x9/08.png" id="1_08"]
+[ext_resource type="Texture2D" uid="uid://bcx6cwgei5b31" path="res://assets/sprites/skills/skills/fireball/Iceball_84x9/09.png" id="1_09"]
+
+[sub_resource type="SpriteFrames" id="SpriteFrames_1"]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("1_00")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_01")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_02")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_03")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_04")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_05")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_06")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_07")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_08")
+}, {
+"duration": 1.0,
+"texture": ExtResource("1_09")
+}],
+"loop": 1,
+"name": &"default",
+"speed": 60.0
+}]
+
+[node name="EffectIceball84x9" type="Node2D"]
+
+[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
+sprite_frames = SubResource("SpriteFrames_1")
+autoplay = "default"
+flip_h = true
