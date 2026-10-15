@@ -58,7 +58,9 @@
 - 想改站位/站法：直接在编辑器里挪 `battle.tscn` 的 `Stage/PlayerSlots`、`Stage/EnemySlots` 下的 Marker2D，
   **不用改代码**（`_spawn_team()` 只按子节点顺序取位置）；
 - 节点命名用的是 `Front*` / `Back*` 而不是 `Slot1..5`，就是为了在检查器里一眼看出前后排；
-- 地图关卡那边的敌人数量上限在 `scenes/main/main.gd::_make_enemy_team()` 的 `clampi(..., 1, 5)`，和站位数量对齐。
+- 地图关卡那边的敌人数量是"**上阵人数 ±1**"（随机），再钳进 `[1, 5]`：
+  见 `scenes/main/main.gd::_make_enemy_team()`（用的是 `deployed` 上阵名单，团队里没上阵的人不算），
+  5 这个上限就是这里的站位数量（`MAX_ENEMY_COUNT`）。
 
 ## 技能资源
 

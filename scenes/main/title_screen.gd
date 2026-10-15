@@ -14,6 +14,13 @@
 # 数据流：GameRoot.show_title() 会把上一局的结算文案写进 screen.last_result，
 #         本文件在 _ready() 里把它显示到副标题上（所以必须在 add_child 之前赋值 —— 见下）。
 #
+# 键盘操作（和世界地图同一套约定，细节见 Global 的"UI 键盘焦点工具"一节）：
+#   · ↑↓ / Enter / 空格 —— Godot 内置的 ui_* 动作 + GUI 焦点系统直接就能用，
+#     但前提是"有控件拿着焦点" —— 所以 _ready() 末尾会 grab_focus() 第一个可用按钮；
+#   · W S / E —— 工程自己的动作，GUI 不认，由本文件的 _unhandled_input 调 Global 的工具补上；
+#   · 置灰的「继续游戏」不进焦点环（没有存档系统，它永远是灰的），所以 W/S 不会停在它上面；
+#   · Esc 在主菜单**刻意不做事**：这里没有"上一级"可退，免得手滑直接退出游戏。
+#
 # 按钮与信号对应关系：
 #   新的征程 → new_game_requested → GameRoot.start_new_game()
 #   继续游戏 → （暂时禁用，没有存档系统）
@@ -47,6 +54,10 @@ signal quit_requested
 ## 默认空串 = 显示常规副标题。注意它必须在实例化后、add_child 之前赋值才能在 _ready() 里读到。
 var last_result := ""
 
+## 主菜单的"焦点环"：按视觉顺序排列的可点按钮。
+## _ready() 里建好并聚焦第一个；_unhandled_input 里的 W/S 用它循环、E 用它确认。
+var _focus_ring: Array[Control] = []
+
 # ── 节点引用（% = unique_name_in_owner）──────────────────────────────────────
 ## 副标题标签：显示 last_result，没有则显示玩法说明。
 @onready var subtitle_label: Label = %SubtitleLabel
@@ -68,7 +79,7 @@ var last_result := ""
 ##   不需要手动 disconnect；也不会重复连接（每次换屏都是新实例）。
 func _ready() -> void:
 	# 有上一局结果就优先显示它（玩家一眼能看到刚才打赢了/输了）。
-	subtitle_label.text = last_result if not last_result.is_empty() else "回合制战斗 · 选人 → 关卡 → 战斗 → 结算"
+	subtitle_label.text = last_result if not last_result.is_empty() else "回合制战斗 · 关卡 → 战斗 → 结算（队长用 GameRoot.default_leader）"
 
 	# TODO: 存档系统做好后，这里改成"有存档才可点"
 	# 现在还没有存档，所以「继续游戏」永远不可点（宁可禁用也不要做个假按钮）。
@@ -78,6 +89,40 @@ func _ready() -> void:
 	new_game_button.pressed.connect(_on_new_game_pressed)
 	arena_button.pressed.connect(_on_arena_pressed)
 	quit_button.pressed.connect(_on_quit_pressed)
+
+	# ── 键盘操作：先建焦点环，再聚焦第一个可用项 ──
+	# ⚠ 顺序：必须在 continue_button.disabled = true **之后**收集 —— 置灰的按钮要是进了环，
+	#   W/S 会在它上面"停住不动"（grab_focus() 对置灰按钮无效，焦点压根不会动）。
+	# ⚠ 没有最后那句 grab_focus() 的话，方向键按下去会"没人可动"（焦点是空的）——
+	#   这正是主菜单以前不支持键盘的原因：按钮本身是可聚焦的，只是没人给它焦点。
+	var buttons: Array[Button] = [new_game_button, continue_button, arena_button, quit_button]
+	_focus_ring.clear()
+	for button in buttons:
+		if Global.can_focus(button):
+			_focus_ring.append(button)
+	if not _focus_ring.is_empty():
+		_focus_ring[0].grab_focus()
+
+
+## 未被子控件消费掉的输入在这里处理（和世界地图的 _overlay_nav 是同一套思路）。
+## 参数 event：引擎派发的输入事件。
+## 返回值：无。
+## 副作用：可能切换焦点、可能按下当前焦点的按钮（那会 emit 对应信号 → GameRoot 换屏）。
+## 处理范围：只补 W S（move_up / move_down）与 E（交互键）——
+##   ↑↓ / Enter / 空格由 Godot 的 GUI 焦点系统在更早的阶段消费掉，这里根本收不到，也不用管。
+##   也**不处理 Esc**：主菜单没有"上一级"可退，按 Esc 什么都不做是刻意的（免得手滑退出游戏）。
+## 注意 E 按下后本屏幕可能立刻被 queue_free（新的征程会换屏）：
+##   所以两个分支里都是"先做动作、再 set_input_as_handled"，不依赖之后的自身状态。
+func _unhandled_input(event: InputEvent) -> void:
+	if event.is_action_pressed("move_up"):
+		Global.step_focus(self, _focus_ring, -1)
+		get_viewport().set_input_as_handled()
+	elif event.is_action_pressed("move_down"):
+		Global.step_focus(self, _focus_ring, 1)
+		get_viewport().set_input_as_handled()
+	elif Global.is_interact_event(event):
+		if Global.activate_focused(self):
+			get_viewport().set_input_as_handled()
 
 
 ## 「新的征程」按钮回调。

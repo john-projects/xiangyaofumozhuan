@@ -70,6 +70,23 @@ signal travel_requested(map_id: String)
 ## ⚠ 本信号只**请求**，自己不改队伍：GameRoot 收到后按自己的规则判断能不能加
 ##   （见 main.gd 的 _on_recruit_requested），加完再回调本文件的 notify_party_changed() 刷新面板。
 signal recruit_requested(stats: UnitStats)
+
+## 玩家在队伍管理面板里点了某个队友的「移出队伍」。
+## 参数 stats：要移出的 UnitStats 资源。
+## 与 recruit_requested 同样是"只请求"：真正的移除由 GameRoot._on_party_remove_requested()
+## 完成，完成后 GameRoot 回调本文件的 notify_party_changed() 让面板重建列表。
+signal party_remove_requested(stats: UnitStats)
+
+## 玩家在队伍管理面板里点了「上阵」（把名册里的某人放进上阵名单）。
+## 参数 stats：要上阵的 UnitStats 资源。
+## 同样是"只请求"：GameRoot._on_party_deploy_requested() 按规则判断（没在团队里 / 已上阵 /
+## 上阵位满 都会拒绝），成功后回调 notify_party_changed() 让面板重建。
+signal party_deploy_requested(stats: UnitStats)
+
+## 玩家在队伍管理面板里点了「下阵」（把某人从上阵名单拿下来）。
+## 参数 stats：要下阵的 UnitStats 资源。
+## 规则：至少要留 1 人上阵（详见 GameRoot.deploy_can_remove），违反时 GameRoot 只回一条提示。
+signal party_undeploy_requested(stats: UnitStats)
 ## 玩家点了「返回主菜单」。GameRoot 收到后调 show_title()。
 signal back_to_title_requested
 
@@ -79,6 +96,10 @@ signal back_to_title_requested
 ## NPC 场景。用 preload 而不是 load：脚本加载时就把 world_npc.tscn 解析好，
 ## 之后每次 _add_npc() 只是 instantiate()，没有磁盘查找开销。
 const NPC_SCENE := preload("res://scenes/world/world_npc.tscn")
+## 操作菜单（Esc 唤出）。见 scenes/ui/pause_menu/。
+const PAUSE_MENU_SCENE := preload("res://scenes/ui/pause_menu/pause_menu.tscn")
+## 队伍管理二级页（操作菜单 →「队伍管理」）。见 scenes/ui/party_panel/。
+const PARTY_PANEL_SCENE := preload("res://scenes/ui/party_panel/party_panel.tscn")
 ## 玩家离地图边缘的最小留白（像素，世界坐标）。_move_player() 用它做 clamp，
 ## 60.0 大约是一个角色身位，防止贴图放大后角色半个身子走出图片外。
 ## NPC 对话面板的最小高度。**必须和 world_map.tscn 里 TravelPanel 的原始高度一致（460）**，
@@ -106,9 +127,16 @@ const EDGE_MARGIN := 60.0
 # ───────────────────────────────────────────────────────────────────────────
 ## 本屏幕要渲染的那张地图的配置。由 setup() 注入；_ready() 里若为 null 会直接 return。
 var _map: MapData
-## 出战队伍（UnitStats 资源数组）。本文件**只用来展示/传递**，
+## 团队（大名单，UnitStats 资源数组）。本文件**只用来展示/传递**，
 ## 真正的副本化与战斗实例化在 GameRoot._make_player_team() 里做。
 var _party: Array[UnitStats] = []
+## 上阵名单（最多 5 人）。**由 GameRoot 在 add_child 之前注入**（写法同 spawn_override）：
+##   world.deployed = deployed
+## 为什么不在 setup() 的参数里：setup 的参数已经很长了，而 spawn_override 已经确立了
+##   "额外数据用公开字段注入"的写法；另外它与 _party 一样是引用语义，GameRoot 就地增删后
+##   本文件立刻看得到（界面文字靠 notify_party_changed() 刷新）。
+## 本文件只读它来画"上阵/下阵"按钮的状态，从不修改。
+var deployed: Array[UnitStats] = []
 ## 刚进入本图时从 GameRoot 抄过来的金币数，只用于 UI 显示（真值始终是 Global.coins）。
 var _coins := 0
 ## 顶部要飘的结算文案（例如"战斗胜利！获得 40 金币"）。空字符串 = 不显示。
@@ -141,6 +169,21 @@ var _panel_open := false
 ## 关闭面板时置 null（按钮区不清空 —— 旧按钮在隐藏的父节点下不可见也不接收输入，下次打开会重建）。
 var _panel_npc: WorldNPC = null
 
+## 操作菜单开着吗 / 队伍管理二级页开着吗。
+## 这两个开关和 _panel_open 一起构成 _ui_open()：只要有任意一个是 true，
+## 走动就被冻住、输入也走"UI 分支"。
+var _menu_open := false
+var _party_open := false
+
+## 当前浮层的"焦点环"：按视觉顺序排列的可聚焦控件。W/S 用它循环切换焦点；
+## 由 _set_focus_ring() 在打开浮层/重建列表时填，浮层关掉时清空。
+var _focus_ring: Array[Control] = []
+
+## 两个 UI 浮层节点（运行时实例化，见 _setup_overlays）。
+## 写类型化变量是为了后面少写一次强转，也让"它们是什么"一眼可见。
+var _pause_menu: PauseMenu
+var _party_panel: PartyPanel
+
 # ───────────────────────────────────────────────────────────────────────────
 #  ── 场景节点引用（% = unique_name_in_owner，指向本场景里标记为唯一的节点）──
 #  说明：@onready 变量在 _ready() 之前的最后一刻才被赋值，
@@ -170,6 +213,9 @@ var _panel_npc: WorldNPC = null
 @onready var back_button: Button = %BackButton
 ## 中央的 NPC 对话/传送面板（Panel）。默认隐藏。
 @onready var panel: Panel = %TravelPanel
+## UI 层（CanvasLayer）。操作菜单 / 队伍管理面板运行时挂到这里（见 _setup_overlays），
+## 于是它们不随相机移动、也不参与世界的 y_sort 排序。
+@onready var ui_layer: CanvasLayer = $UI
 ## 面板里的 NPC 名字。
 @onready var panel_name: Label = %PanelName
 ## 面板里的 NPC 台词。
@@ -258,6 +304,9 @@ func _ready() -> void:
 	# 初始没有最近 NPC，提示先藏起来；面板同理（场景里默认就是隐藏的，这里再显式关一次）。
 	hint_label.visible = false
 	panel.hide()
+	# 两个 UI 浮层（操作菜单 / 队伍管理）在这里实例化并接线。
+	# 放在 _map 已经拿到的位置之后：操作菜单要按 _map.battle_enabled 决定「进入战斗」灰不灰。
+	_setup_overlays()
 	_show_result()
 
 
@@ -450,9 +499,10 @@ func _update_nearest() -> void:
 ## 副作用：改 player.position / player_sprite.flip_h / hint_label / NPC 高亮（见被调用的两个函数）。
 ## 提前返回的两种情况：
 ##   · _map_size == ZERO：地图没配图，走也看不到（也避免和 _map_size 相关的除零）；
-##   · _panel_open == true：正在和 NPC 对话 → 冻住移动，否则玩家会在看台词时溜走。
+##   · _ui_open() == true：正在看对话框 / 操作菜单 / 队伍管理 → 冻住移动。
+##     这一条现在比过去更重要：WASD 同时被用来在菜单里选条目，不冻住就会"边选边跑"。
 func _process(delta: float) -> void:
-	if _map_size == Vector2.ZERO or _panel_open:
+	if _map_size == Vector2.ZERO or _ui_open():
 		return
 	_move_player(delta)
 	_update_nearest()
@@ -487,25 +537,52 @@ func _move_player(delta: float) -> void:
 ## 未被子控件消费掉的输入在这里处理（按钮点击、面板里的控件会先吃掉自己的事件）。
 ## 参数 event：引擎派发的输入事件。
 ## 返回值：无。
-## 副作用：可能打开/关闭对话面板、可能调 _debug_print_normalized()（print 输出）、
-##        并调用 get_viewport().set_input_as_handled() 把事件标记为已处理（防止继续冒泡到别的节点）。
+## 副作用：可能开/关各种 UI 浮层、移动键盘焦点、按下焦点按钮、
+##        可能调 _debug_print_normalized()（print 输出），
+##        并调用 get_viewport().set_input_as_handled() 把事件标记为已处理（防止继续冒泡）。
 ## 处理顺序（顺序即优先级，不要随便调换）：
-##   1. F1 —— 调试用，任何状态下都先响应（包括面板打开时），并**不因面板打开而被吞掉**；
-##   2. 面板已打开 —— 只认 Esc/ui_cancel 关闭，其它输入一律忽略并 return，
-##      这样玩家不会在面板开着的时候又触发一次交谈或走动；
-##   3. 有最近 NPC 且是交互键 —— 打开它的对话面板。
+##   1. F1 —— 调试用，任何状态下都先响应（包括浮层打开时），并**不因浮层打开而被吞掉**；
+##   2. 队伍管理二级页打开 —— Esc = 退回操作菜单（上一级）；W/S/E 走 _overlay_nav()；其它输入忽略；
+##   3. 操作菜单打开 —— Esc = 关菜单回游戏；W/S/E 走 _overlay_nav()；其它输入忽略；
+##   4. NPC 对话面板打开 —— Esc = 关面板；W/S/E 走 _overlay_nav()（面板按钮也能键盘按了）；其它忽略；
+##   5. 没有任何 UI —— Esc = 打开操作菜单；有最近 NPC 且是交互键 → 打开它的对话面板。
 ## 为什么用 event.pressed and not event.echo：按住键时操作系统会持续发 echo 事件，
 ##   不做这两项过滤会导致"按住 E 一秒开几十次面板"。
+## 说明：方向键 / Enter / 空格**不会**走到这里 —— 它们被 Godot 的 GUI 焦点系统在更早的阶段
+##   消费掉了（换焦点、按下焦点按钮）。所以这边只需要补上 WASD 和 E，不必重复实现一遍。
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_F1:
 		_debug_print_normalized()
 		get_viewport().set_input_as_handled()
 		return
 
+	if _party_open:
+		if event.is_action_pressed("ui_cancel"):
+			_back_from_party_panel()
+			get_viewport().set_input_as_handled()
+		elif _overlay_nav(event):
+			get_viewport().set_input_as_handled()
+		return
+
+	if _menu_open:
+		if event.is_action_pressed("ui_cancel"):
+			_close_pause_menu()
+			get_viewport().set_input_as_handled()
+		elif _overlay_nav(event):
+			get_viewport().set_input_as_handled()
+		return
+
 	if _panel_open:
 		if event.is_action_pressed("ui_cancel"):
 			_close_panel()
 			get_viewport().set_input_as_handled()
+		elif _overlay_nav(event):
+			get_viewport().set_input_as_handled()
+		return
+
+	if event.is_action_pressed("ui_cancel"):
+		_open_pause_menu()
+		get_viewport().set_input_as_handled()
 		return
 
 	if _nearest != null and _is_interact_event(event):
@@ -513,19 +590,170 @@ func _unhandled_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 
 
-## 支持"项目里配了 interact 动作就用它"，没配则用 E / Enter
-## 参数 event：待判定的输入事件。
-## 返回值：true = 这是一个"想和 NPC 说话"的事件。
-## 副作用：无（只读 InputMap）。
-## 为什么两套并存：InputMap.has_action(&"interact") 先判是否存在这个动作，
-##   不存在时 has_action 返回 false、不会报错，于是自然回落到硬编码的 E / Enter，
-##   这样"项目里配了动作"和"没配动作"两种情况下都能用，也不会用到未定义动作名而报错。
-## 注意 &"interact" 是 StringName 字面量（InputMap 的键就是 StringName）。
+## 支持"项目里配了 interact 动作就用它"，没配则用 E / Enter。
+## 实现搬到 Global.is_interact_event()（主菜单也用同一份判断）。
 func _is_interact_event(event: InputEvent) -> bool:
-	if InputMap.has_action(&"interact") and event.is_action_pressed(&"interact"):
+	return Global.is_interact_event(event)
+
+
+# ══════════════════════════════════════════════════════════
+#  UI 浮层：操作菜单 / 队伍管理 / 键盘焦点
+# ══════════════════════════════════════════════════════════
+
+## 有没有任何"挡住走动"的 UI 开着（NPC 对话面板 / 操作菜单 / 队伍管理面板）。
+## 用途：
+##   · _process 判断要不要冻住走动（看面板时玩家不该溜走）；
+##   · _unhandled_input 判断输入该走"UI 分支"还是"游戏分支"；
+##   · _sync_world_button_focus() 判断地图上那两个常驻按钮要不要禁用焦点。
+func _ui_open() -> bool:
+	return _panel_open or _menu_open or _party_open
+
+
+## 实例化两个 UI 浮层并接好信号（由 _ready 调一次）。
+## 为什么挂在 UI（CanvasLayer）下：它们是界面，不该跟着相机跑、也不该被 y_sort 排序。
+## 为什么在代码里接线（而不是 .tscn 的 [connection]）：这两个场景是运行时 instantiate 的，
+##   编辑器里连不了"还没被实例化的父节点"的信号。
+## 注意「进入战斗」「返回主菜单」直接接到 _on_battle_pressed / _on_back_pressed ——
+##   与地图上那两个常驻按钮完全同一条通路，不会出现两份行为不一致的实现。
+func _setup_overlays() -> void:
+	_pause_menu = PAUSE_MENU_SCENE.instantiate() as PauseMenu
+	ui_layer.add_child(_pause_menu)
+	_pause_menu.resume_requested.connect(_close_pause_menu)
+	_pause_menu.party_requested.connect(_open_party_panel)
+	_pause_menu.battle_requested.connect(_on_battle_pressed)
+	_pause_menu.title_requested.connect(_on_back_pressed)
+
+	_party_panel = PARTY_PANEL_SCENE.instantiate() as PartyPanel
+	ui_layer.add_child(_party_panel)
+	_party_panel.close_requested.connect(_back_from_party_panel)
+	_party_panel.deploy_requested.connect(_on_party_deploy_requested)
+	_party_panel.undeploy_requested.connect(_on_party_undeploy_requested)
+	_party_panel.remove_requested.connect(_on_party_remove_requested)
+
+
+## Esc：打开操作菜单。
+## 副作用：_menu_open = true；按本图能不能打决定「进入战斗」是否置灰；
+##        把地图上那两个常驻按钮设成不可聚焦；菜单 show() 并聚焦第一项。
+func _open_pause_menu() -> void:
+	_menu_open = true
+	_pause_menu.open(_map.battle_enabled)
+	_set_focus_ring(_pause_menu.focus_ring())
+	_sync_world_button_focus()
+
+
+## 关闭操作菜单，回到游戏。
+func _close_pause_menu() -> void:
+	_menu_open = false
+	_pause_menu.hide()
+	_focus_ring.clear()
+	_sync_world_button_focus()
+
+
+## 打开队伍管理二级页（从操作菜单的「队伍管理」进来）。
+## 副作用：_party_open = true；把操作菜单先藏起来（二级页盖在它上面，藏掉免得两层都亮着）；
+##        让面板按当前"团队 + 上阵名单"重建列表；把焦点交给它的按钮列表。
+func _open_party_panel() -> void:
+	_party_open = true
+	_pause_menu.hide()
+	_party_panel.clear_message()
+	_party_panel.show_party(_party, deployed)
+	_set_focus_ring(_party_panel.focus_ring())
+	_sync_world_button_focus()
+
+
+## Esc / 「返回」：从队伍管理退回到操作菜单。
+## 为什么是"退回菜单"而不是"直接回游戏"：它是操作菜单下的二级页，按 Esc 应该逐级退，
+## 玩家想继续游戏的话再按一次 Esc 就行（或者直接选菜单里的「继续游戏」）。
+func _back_from_party_panel() -> void:
+	_party_open = false
+	_party_panel.hide()
+	_focus_ring.clear()
+	_open_pause_menu()
+
+
+## 队伍管理面板里点了「上阵」：只把请求转给 GameRoot（真正改数据的地方）。
+## 参数 stats：要上阵的成员。
+func _on_party_deploy_requested(stats: UnitStats) -> void:
+	party_deploy_requested.emit(stats)
+
+
+## 队伍管理面板里点了「下阵」：同上，只转请求。
+## 参数 stats：要下阵的成员。
+func _on_party_undeploy_requested(stats: UnitStats) -> void:
+	party_undeploy_requested.emit(stats)
+
+
+## 队伍管理面板里点了「移出团队」：只把请求转给 GameRoot（真正改队伍的地方）。
+## 参数 stats：要移出的成员。
+func _on_party_remove_requested(stats: UnitStats) -> void:
+	party_remove_requested.emit(stats)
+
+
+## 打开浮层时把地图上那两个常驻按钮设成"不可聚焦"，关掉浮层后再恢复。
+## 为什么需要：Godot 的 GUI 焦点系统是按**空间方向**找邻居的，浮层开着时按方向键
+##   可能跳到「进入战斗」/「返回主菜单」上 —— 焦点就跑出浮层了。把它们的 focus_mode
+##   设成 NONE，方向键只能在浮层的按钮里转，和 W/S 的 _focus_ring 行为也就一致了。
+func _sync_world_button_focus() -> void:
+	var mode := Control.FOCUS_NONE if _ui_open() else Control.FOCUS_ALL
+	battle_button.focus_mode = mode
+	back_button.focus_mode = mode
+
+
+## 设置当前浮层的"焦点环"（按视觉顺序排列的可聚焦按钮），并聚焦第一个。
+## 参数 controls：控件列表；传空数组 = 清空（浮层关掉时）。
+## 注意：调用前浮层必须已经 show() —— grab_focus() 对"隐藏在不可见父节点下"的控件是无效的
+##   （静默失败，键盘就整片失灵），所以本函数的调用点全都排在 show() 之后。
+func _set_focus_ring(controls: Array[Control]) -> void:
+	_focus_ring = controls
+	if not _focus_ring.is_empty():
+		_focus_ring[0].grab_focus()
+
+
+## 在焦点环里前后循环移动焦点（W/S 用）。
+## 实现搬到 Global.step_focus()，与主菜单共用（含"焦点不在环里时从第一个开始"的兜底）。
+func _step_focus(step: int) -> void:
+	Global.step_focus(self, _focus_ring, step)
+
+
+## 按下当前焦点上的按钮（E 键用）。
+## 实现搬到 Global.activate_focused()，与主菜单共用。
+func _activate_focused() -> void:
+	Global.activate_focused(self)
+
+
+## 浮层里的键盘操作：W/S 换焦点、E 确认。
+## 参数 event：待判定的输入事件。
+## 返回值：true = 这个事件已经被消费掉（调用方要调 set_input_as_handled）。
+## 说明：方向键 / Enter / 空格不在这里处理 —— 它们在更早的 GUI 阶段就被焦点系统消费掉了，
+##   _unhandled_input 根本收不到，所以也不会出现"按一次跳两格"。
+func _overlay_nav(event: InputEvent) -> bool:
+	if event.is_action_pressed("move_up"):
+		_step_focus(-1)
 		return true
-	return event is InputEventKey and event.pressed and not event.echo \
-		and (event.keycode == KEY_E or event.keycode == KEY_ENTER)
+	if event.is_action_pressed("move_down"):
+		_step_focus(1)
+		return true
+	if _is_interact_event(event):
+		_activate_focused()
+		return true
+	return false
+
+
+## 收集一个容器里所有可点按钮（按视觉顺序）。
+## 实现搬到 Global.collect_focusable() 了 —— 主菜单也要键盘操作，两边共用同一套规则
+## （尤其是"置灰按钮不进环"这条，两处各写一遍迟早会分叉）。这里保留同名包装，调用处不用改。
+func _collect_focusable(root: Node) -> Array[Control]:
+	return Global.collect_focusable(root)
+
+
+## 延迟同步队伍管理面板的焦点环。
+## 为什么延迟：重建成员行是 call_deferred 的（见 notify_party_changed），焦点环得晚一步再取，
+## 否则拿到的是马上要被释放的旧按钮。
+## 焦点落在环的第一个可点按钮上（移除一位成员后跳到最上面那行）—— 行为可预期，
+## 不搞"记住原来第几行"那套，因为列表长度刚变过，那个下标已经没有意义了。
+func _sync_party_focus() -> void:
+	if _party_open and _party_panel != null:
+		_set_focus_ring(_party_panel.focus_ring())
 
 
 ## 打开某个 NPC 的对话/传送面板。
@@ -547,10 +775,13 @@ func _open_panel(npc: WorldNPC) -> void:
 	_panel_npc = npc
 	panel_name.text = npc.data.display_name
 	panel_dialogue.text = npc.data.dialogue
-
 	_rebuild_panel_buttons()
-
+	# 顺序很重要：先把面板 show() 出来，再设焦点。
+	# grab_focus() 对"隐藏在不可见父节点下"的控件是无效的（静默失败），
+	# 反过来写的话用 E 打开面板后键盘就整片失灵，而且没有任何报错提示。
 	panel.show()
+	_set_focus_ring(_collect_focusable(panel_buttons))
+	_sync_world_button_focus()
 
 
 ## 按当前 NPC 的交互类型重建按钮区。
@@ -622,30 +853,32 @@ func _build_teleport_buttons(data: MapNPC) -> void:
 
 ## 铺招募按钮：每个候选队友一个按钮，已在队里 / 队伍已满的按钮置灰不可点。
 ## 候选来源：MapNPC.recruit_pool 优先，留空则问 Global 要目录扫描结果（见 _recruit_candidates）。
-## 面板底部再补一行"当前队伍（n/5）：…"，玩家点完一眼能看到结果，不用猜有没有生效。
-## 说明：按钮文字里的属性摘要用 _stats_digest()，完整数值放在 tooltip 里（鼠标悬停可见）。
+## 面板底部再补一行"团队 n 人（上阵 m/5）：…"，玩家点完一眼能看到结果，不用猜有没有生效。
+## 说明：招募是往**团队**里加人（上阵由队伍管理面板决定），所以这里判的是"已在团队中"；
+##   团队默认不限人数（GameRoot.MAX_TEAM_SIZE = 0），只有把它设成正数才会有"团队已满"这一档。
 func _build_recruit_buttons(data: MapNPC) -> void:
 	var candidates := _recruit_candidates(data)
 	if candidates.is_empty():
 		_add_panel_note("（没有可招募的队友：Global.RECRUIT_DIR 里没扫到 UnitStats）")
 		return
 	var count := GameRoot.party_count(_party)
+	var team_full := GameRoot.MAX_TEAM_SIZE > 0 and count >= GameRoot.MAX_TEAM_SIZE
 	for stats in candidates:
 		var joined := GameRoot.party_has(_party, stats)
-		var full := count >= GameRoot.MAX_PARTY_SIZE
 		var button := Button.new()
 		if joined:
-			button.text = "%s（已在队伍中）" % stats.name
-		elif full:
-			button.text = "%s（队伍已满 %d/%d）" % [stats.name, count, GameRoot.MAX_PARTY_SIZE]
+			button.text = "%s（已在团队中）" % stats.name
+		elif team_full:
+			button.text = "%s（团队已满 %d/%d）" % [stats.name, count, GameRoot.MAX_TEAM_SIZE]
 		else:
 			button.text = "%s %s   %s" % [data.recruit_label, stats.name, _stats_digest(stats)]
 		button.tooltip_text = "%s\nHP %s / 伤害 %s / 速度 %s / 幸运 %s / 格挡 %s%%" % [
-			stats.name, _num(stats.health), _num(stats.damage), _num(stats.speed),
-			_num(stats.luck), _num(stats.block_chance)]
+			stats.name, Global.format_stat(stats.health), Global.format_stat(stats.damage),
+			Global.format_stat(stats.speed), Global.format_stat(stats.luck),
+			Global.format_stat(stats.block_chance)]
 		button.custom_minimum_size = Vector2(0, 52)
 		button.add_theme_font_size_override("font_size", 20)
-		button.disabled = joined or full
+		button.disabled = joined or team_full
 		if not button.disabled:
 			button.pressed.connect(_on_recruit_pressed.bind(stats))
 		panel_buttons.add_child(button)
@@ -662,22 +895,23 @@ func _recruit_candidates(data: MapNPC) -> Array[UnitStats]:
 
 
 ## 一行属性摘要（招募按钮文字用）。只挑最影响选择的 3 项，避免按钮文字过长挤成一团。
+## 数值格式化统一走 Global.format_stat()：队伍管理面板用的是同一个函数，两处显示不会不一致。
 func _stats_digest(stats: UnitStats) -> String:
-	return "HP %s · 攻 %s · 速 %s" % [_num(stats.health), _num(stats.damage), _num(stats.speed)]
+	return "HP %s · 攻 %s · 速 %s" % [
+		Global.format_stat(stats.health),
+		Global.format_stat(stats.damage),
+		Global.format_stat(stats.speed),
+	]
 
 
-## 数值转短字符串：整数不带小数点（25 而不是 25.0），真小数保留原样（12.5）。
-## 存在的原因：UnitStats 的字段有些是 float（health = 15.0），直接 str() 会在 UI 上出现 "15.0" 这种噪音。
-func _num(value) -> String:
-	var f := float(value)
-	return str(int(f)) if is_equal_approx(f, roundf(f)) else str(f)
-
-
-## 面板底部的"当前队伍"摘要文字。
+## 面板底部的摘要文字：团队人数 + 上阵人数 + 团队成员名单。
+## 一行里同时给出两个数字，是为了让"团队可以很多人、但只有 5 个上阵"这件事在招募时也可见。
 func _party_summary() -> String:
 	var names := GameRoot.party_names_of(_party)
 	var body := "、".join(names) if not names.is_empty() else "（空）"
-	return "当前队伍（%d/%d）：%s" % [GameRoot.party_count(_party), GameRoot.MAX_PARTY_SIZE, body]
+	return "团队 %d 人（上阵 %d/%d）：%s" % [
+		GameRoot.party_count(_party), GameRoot.party_count(deployed),
+		GameRoot.MAX_DEPLOYED, body]
 
 
 ## 往按钮区加一行不可点击的说明文字。
@@ -705,16 +939,28 @@ func _on_recruit_pressed(stats: UnitStats) -> void:
 	recruit_requested.emit(stats)
 
 
-## 队伍变化后刷新面板（GameRoot 招募成功后调用；失败时也调用，用来显示失败原因）。
-## 参数 message：非空时替换面板台词（例如"Knight 加入了队伍！"/"队伍已经满了（5 人）。"）。
-## 副作用：改 panel_dialogue.text；面板开着时重建按钮区；面板没关时**不动** _panel_npc。
-## 注意：面板没开时只改了台词，下次打开会被 NPC 自己的 dialogue 覆盖 —— 这是刻意的
-##   （招募流程一定发生在面板开着的时候，没必要为它维护一份"待显示消息"状态）。
+## 队伍变化后刷新界面（GameRoot 招募/移除成功后调用；失败时也调用，用来显示失败原因）。
+## 参数 message：非空时作为提示文字（例如"Knight 加入了队伍！"/"队伍已经满了（5 人）。"）。
+## 副作用：
+##   · NPC 对话面板开着 → 台词换成 message、重建按钮区、重设焦点环；
+##   · 队伍管理面板开着 → 提示行显示 message、重建成员行、重设焦点环；
+##   · 两个都没开 → 什么都不做（message 直接丢掉）。
+## 为什么两个面板都要管：招募发生在 NPC 面板里、移除发生在队伍管理面板里，
+##   但两者最后都走到这一个函数 —— 这就是"队伍数据只有 GameRoot 一份"带来的好处：刷新点也只有一个。
+## 为什么队伍面板要 call_deferred 重建：这条调用链很可能是"队伍管理面板里某个按钮的
+##   pressed 回调"发起的，立刻 remove_child 会把正在发信号的按钮从树上摘掉；延到帧末最省心。
 func notify_party_changed(message := "") -> void:
-	if not message.is_empty():
-		panel_dialogue.text = message
 	if _panel_open:
+		if not message.is_empty():
+			panel_dialogue.text = message
 		_rebuild_panel_buttons()
+		# 重建后按钮是新节点，焦点环必须跟着换（否则 W/S 会在已释放的旧按钮上打转）。
+		_set_focus_ring(_collect_focusable(panel_buttons))
+	if _party_open:
+		if not message.is_empty():
+			_party_panel.show_message(message)
+		_party_panel.show_party.call_deferred(_party, deployed)
+		_sync_party_focus.call_deferred()
 
 ## 关闭对话面板。由「再想想」按钮和 Esc 两处调用。
 ## 参数：无。返回值：无。
@@ -724,7 +970,9 @@ func notify_party_changed(message := "") -> void:
 func _close_panel() -> void:
 	_panel_open = false
 	_panel_npc = null
+	_focus_ring.clear()
 	panel.hide()
+	_sync_world_button_focus()
 
 
 ## 玩家选了某个传送目的地（按钮回调）。

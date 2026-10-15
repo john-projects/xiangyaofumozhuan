@@ -5,16 +5,30 @@
 ## 流程
 
 ```
-主菜单 TitleScreen
-   ├── 新的征程   → 选人 SelectionPanel（复用 scenes/ui/selection_panel）
+主菜单 TitleScreen          ← 支持纯键盘：↑↓ / W S 选择，Enter / 空格 / E 确认（Esc 不做事）
+   ├── 新的征程   → **直接开局**：队长取 GameRoot.default_leader（留空则用 DEFAULT_LEADER，
+   │                 当前指向 resources/units/players/stats_player_well_rounded.tres），
+   │                 初始武器取 default_weapon / DEFAULT_START_WEAPON（拳头）
+   ├── 继续游戏   → 恒为置灰（没有存档系统），不进键盘焦点环
    ├── 经典模式   → 直接进 arena（老的竞技场玩法，自带选人/波次/商店）
    └── 退出游戏
-选人 → 世界地图 WorldMap（起点：建邺城，可走动探索）
+直接开局 → 世界地图 WorldMap（起点：建邺城，可走动探索）
    ├── 走到 NPC 旁按 E 交谈 → 选目的地 → 传送到另一张图（双向）
-   ├── 进入战斗（右下按钮）→ 回合制战斗 Battle（scenes/battle）
-   └── 返回主菜单
+   ├── 找「队友」NPC 招募队友（进"团队"名册，默认不限人数；最多 5 人"上阵"）
+   │   └── Esc →「队伍管理」里切换上阵/下阵、把人移出团队（敌人数量跟着**上阵人数**变）
+   ├── 进入战斗（右下按钮，或 Esc 操作菜单）→ 回合制战斗 Battle（scenes/battle）
+   └── 返回主菜单（Esc 操作菜单）
 战斗结束 → 结算 → 回到同一张地图的**原位置**（胜利：发金币、记录已通关；失败：可再挑战）
 ```
+
+> **键盘约定**（主菜单 / 世界地图 / 三个浮层都一样）：`↑↓`+`Enter`/`空格` 走 Godot 内置的
+> `ui_*` 与 GUI 焦点系统；`W S` + `E` 由各屏幕的 `_unhandled_input` 调 `Global` 里的
+> 焦点工具补上（`can_focus` / `collect_focusable` / `step_focus` / `activate_focused` /
+> `is_interact_event`）。屏幕一出现就必须 `grab_focus()` 一个按钮，否则方向键"没人可动"。
+
+> **选人界面（SelectionPanel）已不在主流程里**：`start_new_game()` 末尾调的是
+> `start_game_with_defaults()`，直接拿默认队长开局。想恢复"选人 → 选武器"：
+> 把那行换回 `show_character_select()` —— 面板场景与脚本都还留着。
 
 地图玩法（走动/相机/NPC/传送）细节见 **[../world/README.md](../world/README.md)**。
 
@@ -46,7 +60,7 @@
 ```
 Main (Node)  [main.gd = GameRoot]
 ├── WorldRoot       (Node2D)      —— 世界类屏幕：WorldMap / Battle / Arena
-├── UIRoot          (CanvasLayer) —— UI 类屏幕：TitleScreen / SelectionPanel
+├── UIRoot          (CanvasLayer) —— UI 类屏幕：TitleScreen（SelectionPanel 已不在流程里，但脚本还在）
 └── TransitionLayer (CanvasLayer, layer=200)
     └── Fade        (ColorRect)   —— 黑幕淡入淡出（过渡期间挡输入）
 ```
@@ -59,7 +73,7 @@ Main (Node)  [main.gd = GameRoot]
 |---|---|---|
 | 起点地图 | `maps[0]`（或 `start_map_id`） | 建邺城 |
 | 敌人池 | 地图的 `enemy_pool`，留空则用 `GameRoot.enemy_pool` | 5 个敌人 `.tres` 挂在 `main.tscn` |
-| 敌人数量 | `1 + (难度-1)/2`，上限 4 | 难度 = 地图在 `maps` 数组里的序号 |
+| 敌人数量 | **上阵人数 ±1**（随机，钳进 1~5） | 只看 `deployed`（上阵名单），团队里坐板凳的人不算；上限 = `MAX_ENEMY_COUNT` / Battle 的 5 个敌方站位 |
 | 敌人强度 | `enemy_scale_per_map = 0.15` | 每图血量/伤害 +15%，用 `duplicate()` 生成副本，不污染 `.tres` |
 | 通关奖励 | `coin_reward_per_map(40) × 难度` | 累加进 `Global.coins` |
 | 初始金币 | `starting_coins = 500` | 新游戏时重置 |
@@ -86,7 +100,7 @@ headless 跑过完整的走图流程脚本（跑完已删）：
 
 ```
 启动      UI=TitleScreen
-新游戏 →  选人 → 建邺城  世界尺寸=(4096,2304) 缩放=2.0 NPC=1 玩家=(1843.2,1497.6)
+新游戏 →  直接开局（默认队长）→ 建邺城  世界尺寸=(4096,2304) 缩放=2.0 NPC=2 玩家=(1843.2,1497.6)
 靠近NPC   最近NPC=船夫 提示可见=true → 对话框可见=true 按钮数=1
 传送到    东海湾 归一化=(0.3,0.59) from=jianyecheng   (落在指向建邺城的 NPC 旁边)
 双向回程  建邺城 归一化=(0.62,0.54)                    (落在指向东海湾的 NPC 旁边)

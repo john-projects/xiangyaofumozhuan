@@ -205,6 +205,98 @@ func get_recruitable_players(refresh := false) -> Array[UnitStats]:
 	_recruit_cache = found
 	return _recruit_cache
 
+# ───────────────────────────────────────────────────────────────────────────
+#  ── UI 文本工具 ──
+# ───────────────────────────────────────────────────────────────────────────
+
+## 把属性数值转成界面上显示的短字符串：整数不带小数点（25 而不是 25.0），真小数保留原样（12.5）。
+## 存在的原因：UnitStats 里有些字段是 float（例如 health = 15.0），直接 str() 会在 UI 上
+##   出现 "15.0" 这种噪音；而让每处 UI 各写一遍格式化，迟早会出现两处不一致。
+## 谁在用：WorldMap 的招募按钮/悬停提示、PartyPanel 的成员属性行。
+static func format_stat(value) -> String:
+	var f := float(value)
+	return str(int(f)) if is_equal_approx(f, roundf(f)) else str(f)
+
+
+# ───────────────────────────────────────────────────────────────────────────
+#  ── UI 键盘焦点工具（主菜单 / 世界地图共用）──
+# ───────────────────────────────────────────────────────────────────────────
+#  为什么放在 Global 里：这几段逻辑本来只在世界地图里（_collect_focusable / _step_focus /
+#  _activate_focused / _is_interact_event）。主菜单也要键盘操作之后，它们就成了"两处要维护
+#  同一套规则"的东西 —— 抽到这里一份，两边都调，行为不会分叉
+#  （最容易分叉的正是"置灰按钮不进焦点环"这条）。
+#
+#  三处 UI 共同遵守的键盘约定：
+#    · ↑↓ / Enter / 空格 —— 交给 Godot 内置的 ui_* 动作 + GUI 焦点系统，不用写代码；
+#    · W S / E —— 工程自己的动作（move_up/move_down 与交互键），GUI 不认，
+#      由各屏幕的 _unhandled_input 调下面的工具函数补上；
+#    · E 之所以不能靠 Input 模拟 ui_accept：ui_accept 是 Enter/空格，GUI 会自己按；
+#      E 不在其中，所以这里直接把按钮的 pressed 信号发出去（效果与点一下完全一样）。
+
+## 这个控件现在能不能被键盘选中：可见、没被禁用、且自己允许获得焦点。
+## 参数 control：任意 Control（可以为 null，返回 false）。
+static func can_focus(control: Control) -> bool:
+	if control == null or not control.visible:
+		return false
+	if control is Button and (control as Button).disabled:
+		return false
+	return control.focus_mode != Control.FOCUS_NONE
+
+
+## 收集一个容器里所有"可点"的按钮（按树的顺序 = 视觉顺序；会递归进子容器）。
+## 参数 root：容器节点（例如队伍面板的行容器、主菜单的 Center）。
+## 只认 Button 是有意的：Label / 各种容器默认不该成为键盘停留点；万一某个容器
+##   把 focus_mode 设成了 ALL（主题里有可能），也不该混进环里让 W/S 白停一格。
+static func collect_focusable(root: Node) -> Array[Control]:
+	var out: Array[Control] = []
+	for child in root.get_children():
+		if child is Button and can_focus(child as Control):
+			out.append(child as Control)
+		out.append_array(collect_focusable(child))
+	return out
+
+
+## 在焦点环里前后循环移动焦点。
+## 参数 context：树里的任意节点（只用它拿 viewport → 问"当前焦点是谁"）。
+## 参数 ring：按视觉顺序排列的可聚焦控件（调用方维护，通常由 collect_focusable 得到）。
+## 参数 step：+1 = 下一个，-1 = 上一个。
+## 细节：当前焦点不在环里（例如玩家刚用鼠标点了别处、或环刚被重建）时从环的第一个开始 ——
+##   这样 W/S 永远能"接手"焦点，不会出现"按了没反应"。
+static func step_focus(context: Node, ring: Array[Control], step: int) -> void:
+	if ring.is_empty():
+		return
+	var current := context.get_viewport().gui_get_focus_owner()
+	var index := ring.find(current)
+	index = 0 if index < 0 else wrapi(index + step, 0, ring.size())
+	ring[index].grab_focus()
+
+
+## 按下"当前焦点上的那个按钮"（给 E 键用）。
+## 参数 context：树里的任意节点（用它拿 viewport）。
+## 返回值：true = 确实按下去了；false = 当前没有聚焦的按钮（或它是置灰的）。
+static func activate_focused(context: Node) -> bool:
+	var current := context.get_viewport().gui_get_focus_owner()
+	if current is Button and not (current as Button).disabled:
+		(current as Button).pressed.emit()
+		return true
+	return false
+
+
+## 这个事件是不是"想确认/交互"（E 或 Enter）。
+## 参数 event：待判定的输入事件。
+## 返回值：true = 是交互事件。
+## 两套并存的原因：InputMap.has_action 先判项目里有没有配 interact 动作，
+##   没配时返回 false 且不报错，于是自然回落到硬编码的 E / Enter —— 配了动作用动作，
+##   没配也能用（&"interact" 是 StringName 字面量，InputMap 的键就是 StringName）。
+## 注意：Enter 同时也是内置 ui_accept，会被 GUI 焦点系统先消费掉；所以实际落到调用方手里的
+##   主要是 E —— 这也正是"Enter 不会触发两次"的原因。
+static func is_interact_event(event: InputEvent) -> bool:
+	if InputMap.has_action(&"interact") and event.is_action_pressed(&"interact"):
+		return true
+	return event is InputEventKey and event.pressed and not event.echo \
+		and (event.keycode == KEY_E or event.keycode == KEY_ENTER)
+
+
 ## 参数：无 —— 用 main_player_selected（SelectionPanel 写入的 UnitStats）。
 ## 返回值：新建的 Player 节点实例（同一个对象也已经写进了 Global.player）。
 ## 副作用（比较重，注意）：

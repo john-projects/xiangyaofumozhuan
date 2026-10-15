@@ -9,8 +9,13 @@
 | 走动 | `W A S D`（用的是项目里已有的 `move_left/right/up/down`） |
 | 加速走 | `空格`（复用 `dash` 动作），世界地图里它只是加速，不是冲刺技能 |
 | 与 NPC 交谈 | `E` 或 `Enter`（靠近后底部会出现"按 E 与 XX 交谈"提示） |
+| 打开操作菜单 | `ESC`（没有任何面板开着时 = 打开菜单） |
+| 菜单 / 面板里选择 | `↑↓` 或 `W S`（也可以直接用鼠标点） |
+| 菜单 / 面板里确认 | `Enter` / `空格` / `E` 都能按下当前高亮的按钮 |
 | 关闭对话框 | `ESC` 或点「再想想」 |
-| 进入战斗 | 右下角「进入战斗」按钮（打当前地图的敌人） |
+| 退回上一级 | 队伍管理页按 `ESC` 退回操作菜单（不是直接回游戏） |
+| 进入战斗 | 操作菜单里的「进入战斗」，或右下角那个按钮（同一条通路） |
+| 返回主菜单 | 操作菜单里的「返回主菜单」，或左下角那个按钮（同一条通路） |
 | 调试：取坐标 | 鼠标移到目标位置按 **F1**，控制台打印归一化坐标 |
 
 ## 结构
@@ -168,24 +173,82 @@ func _ready() -> void:
 在 `.tres` 里 `action` 是整数（`AUTO=0 / TALK=1 / TELEPORT=2 / RECRUIT_PARTY=3`），
 因为枚举整数值会落盘，**不要调整 `MapNPC.Action` 的成员顺序**。
 
-## 招募队友（队伍系统）
+## 队伍系统：团队（名册）与上阵名单
+
+队伍分成**两层**，这是理解这一段的钥匙：
+
+| | 团队 `GameRoot.party` | 上阵名单 `GameRoot.deployed` |
+|---|---|---|
+| 是什么 | 招募到的所有人（大名单） | 真正进战斗的那几个人 |
+| 人数 | 默认**不限**（`MAX_TEAM_SIZE = 0`；设成正数才会有"团队已满"） | **最多 5 人**（`MAX_DEPLOYED`，= Battle 的 `Stage/PlayerSlots` 五个站位） |
+| 关系 | 上阵名单永远是团队的**子集** | 移出团队的人会自动从上阵名单摘掉 |
 
 - **候选来源**：`MapNPC.recruit_pool`（显式列表）优先；留空 → `Global.get_recruitable_players()`
   扫 `res://resources/units/players/`（就是选人界面那 5 个 `stats_player_*.tres`）；
   往那个目录丢一个新 `UnitStats` 的 `.tres`，它就能被招募，不用改 NPC；
-- **点击之后**：`WorldMap.recruit_requested(stats)` → `GameRoot._on_recruit_requested()`
-  → `GameRoot.add_party_member()`（上限 `GameRoot.MAX_PARTY_SIZE = 5`，与 Battle 的
-  `Stage/PlayerSlots` 五个站位、选人界面 5 个角色一致）→ 回调 `WorldMap.notify_party_changed()`
-  把面板台词换成"XXX 加入了队伍！"并重建按钮（那个按钮随即变成灰的"已在队伍中"）；
-- **规则只有一份**：`GameRoot.party_count / party_has / party_can_join` 是静态函数，
-  面板画按钮和真正入队用的是同一套判定，不会出现"按钮能点但加不进去"；
-- **界面同步**：`GameRoot.party` 是引用语义的数组，`WorldMap._party` 是同一个实例，
-  所以数据立刻同步，需要的只是"刷新文字"这一步（面板底部那行「当前队伍（n/5）：…」）；
-- **战斗里怎么体现**：`_make_player_team()` 把 `party` 逐项 `duplicate()` 后交给
-  `Battle.start_battle()`，每个队友就是一个额外的 `BattleUnit` —— 贴图取 `UnitStats.icon`、
+- **点击「加入」之后**：`WorldMap.recruit_requested(stats)` → `GameRoot._on_recruit_requested()`
+  → `GameRoot.add_party_member()`：**进团队**；如果上阵位还有空位就**顺手一起上阵**
+  （招募的直觉就是"这人来一起打"），上阵位满了就先坐板凳，面板里显示 `[待上阵]`；
+  然后回调 `WorldMap.notify_party_changed()` 把台词换成"XXX 加入了团队！"并重建按钮
+  （那个人随即变成灰的"已在团队中"）；
+- **上阵 / 下阵**：队伍管理页每行的按钮 → `WorldMap.party_deploy_requested` /
+  `party_undeploy_requested` → `GameRoot.deploy_member()` / `undeploy_member()`。
+  两条硬约束：上阵最多 5 人；**至少要留 1 人上阵**（否则进不了战斗），
+  违反的按钮会直接置灰并在 tooltip 里写明原因；
+- **规则只有一份**：`GameRoot.party_count / party_has / party_can_join / deployed_count /
+  is_deployed / deploy_can_add / deploy_can_remove` 全是静态函数，
+  面板画按钮（灰不灰、文字是"上阵"还是"下阵"）和真正改数据用的是同一套判定，
+  不会出现"按钮能点但点完没反应"；
+- **界面同步**：`party` 与 `deployed` 都是引用语义的数组，`WorldMap._party` / `WorldMap.deployed`
+  是同一个实例，所以数据立刻同步，需要的只是"刷新文字"这一步
+  （面板底部那行「团队 n 人（上阵 m/5）：…」）；
+- **战斗里怎么体现**：`_make_player_team()` 把 **`deployed`** 逐项 `duplicate()` 后交给
+  `Battle.start_battle()`，每个上阵成员就是一个 `BattleUnit` —— 贴图取 `UnitStats.icon`、
   数值全取自 `.tres`，所以**队友不需要额外的角色场景**（只有"当主角"才需要
   `Global.available_players` 里那把 `name → PackedScene` 的映射）；
-- **出队**：`GameRoot.remove_party_member()` 已经实现（主角不允许移除），但暂时没有 UI 调它。
+- **敌人数量看上阵人数**：`_make_enemy_team()` 用 `deployed_count(deployed) ± 1`（钳进 1~5），
+  不是团队总人数 —— 坐板凳的人不该让敌人变多。
 
 **加一个新的招募 NPC**：复制 `map_jianyecheng.tres` 里 `duiyou` 那条子资源 → 改 `id` /
 `display_name` / `position` / `texture` → 把 `action` 设成 `3`（`RECRUIT_PARTY`）即可。
+
+## 操作菜单（Esc）与队伍管理页
+
+两个浮层都是**独立场景**，由 `WorldMap._setup_overlays()` 运行时实例化后挂到世界地图的
+`UI`（CanvasLayer）下面 —— 它们不跟着相机跑，也不参与世界的 y_sort：
+
+| 场景 | 是什么 | 信号 → 谁处理 |
+|---|---|---|
+| `scenes/ui/pause_menu/pause_menu.tscn` | 操作菜单：继续游戏 / 队伍管理 / 进入战斗 / 返回主菜单 | `resume_requested` → 关菜单；`party_requested` → 开二级页；`battle_requested` / `title_requested` → 直接接到 `_on_battle_pressed` / `_on_back_pressed`（**与地图上那两个常驻按钮同一条通路**，不存在两份实现） |
+| `scenes/ui/party_panel/party_panel.tscn` | 队伍管理页：每个成员一行（头像 + 属性 + 上阵状态 + 「上阵/下阵」+「移出团队」），标题带「团队 n 人 · 上阵 m/5」 | `deploy_requested` / `undeploy_requested` / `remove_requested` → `WorldMap.party_deploy_requested` / `party_undeploy_requested` / `party_remove_requested` → `GameRoot` 对应的三个 `_on_party_*`；`close_requested` → 退回操作菜单 |
+
+**Esc 的逐级语义**（`WorldMap._unhandled_input()` 里的状态机，顺序即优先级）：
+
+```
+没有任何 UI          → Esc 打开操作菜单
+操作菜单开着          → Esc 关掉菜单，回游戏
+队伍管理页开着        → Esc 退回操作菜单（上一级），面板没开时才会开菜单
+NPC 对话面板开着      → Esc 关掉面板（不会顺手把菜单也打开）
+```
+
+**键盘焦点是怎么工作的**（这是"整个游戏都能纯键盘玩"的关键，主菜单也用同一套）：
+
+- 共用工具都在 **`Global`**（"UI 键盘焦点工具"一节）：`can_focus` / `collect_focusable` /
+  `step_focus` / `activate_focused` / `is_interact_event`。抽到那里的原因：主菜单也要键盘操作，
+  两处各写一遍的话，"置灰按钮不进焦点环"这类规则迟早分叉；
+- `↑↓` / `Enter` / `空格` 走的是 **Godot 内置的 `ui_*` 动作 + GUI 焦点系统**：
+  方向键换焦点、`ui_accept` 按下焦点上的按钮 —— 这些在更早的 GUI 阶段就被消费掉了，
+  所以 `_unhandled_input()` 收不到，也不需要我们重复实现；
+- `W S` / `E` 是工程自己的动作（`move_up` / `move_down` / 没配的交互键），GUI 不认，
+  于是在 `WorldMap._overlay_nav()`（主菜单则是 `TitleScreen._unhandled_input()`）里补上：
+  W/S 按"焦点环"循环、E 直接 `pressed.emit()`；
+- **屏幕/浮层一出现就必须 `grab_focus()` 一个按钮** —— 按钮本身是可聚焦的，但没人给它焦点时
+  方向键按下去什么也不会发生（主菜单以前就是这样）；
+- **焦点环**（`WorldMap._focus_ring` / `TitleScreen._focus_ring`）是"当前界面上所有可点按钮
+  按视觉顺序排成的数组"，由 `collect_focusable()` 收集 —— 它**跳过 disabled 的按钮**
+  （置灰按钮 `grab_focus()` 无效，留在环里会让 W/S 卡住不动；主菜单那个恒灰的
+  「继续游戏」就是这样被排除的）；
+- 打开浮层时还要把地图上那两个常驻按钮设成 `FOCUS_NONE`（`_sync_world_button_focus()`），
+  否则按方向键时 GUI 会按空间方向找到它们，焦点就"跑出"浮层了；
+- 顺序坑：`grab_focus()` 必须排在 `show()` **之后** —— 对隐藏在不可见父节点下的控件
+  设焦点是静默失败的（不报错，键盘整片失灵），这个坑在 `_open_panel()` 里有注释。

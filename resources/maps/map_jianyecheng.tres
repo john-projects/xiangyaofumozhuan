@@ -26,7 +26,6 @@ texture = ExtResource("4_yulw2")
 position = Vector2(0.45, 0.4)
 dialogue = "需要加入队伍吗？"
 action = 3
-recruit_label = "加入"
 metadata/_custom_type_script = "uid://ctu1nt07fqrnc"
 
 [resource]
@@ -35,6 +34,7 @@ id = "jianyecheng"
 display_name = "建邺城"
 texture = ExtResource("2_texture")
 scene = ExtResource("4_world")
+map_scale = 3.0
 spawn_point = Vector2(0.45, 0.65)
 npcs = Array[ExtResource("3_npc")]([SubResource("Resource_chuanfu"), SubResource("Resource_pi0uk")])
 next_id = "donghaiwan"

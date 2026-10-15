@@ -25,10 +25,10 @@ texture = ExtResource("2_bg")
 unique_name_in_owner = true
 
 [node name="Front1" type="Marker2D" parent="Stage/PlayerSlots" unique_id=2134681543]
-position = Vector2(550, 0)
+position = Vector2(400, 175)
 
 [node name="Front2" type="Marker2D" parent="Stage/PlayerSlots" unique_id=1117295865]
-position = Vector2(400, 175)
+position = Vector2(550, 0)
 
 [node name="Front3" type="Marker2D" parent="Stage/PlayerSlots" unique_id=810898511]
 position = Vector2(250, 350)
@@ -52,10 +52,10 @@ position = Vector2(-650, -175)
 position = Vector2(-250, -350)
 
 [node name="Front2" type="Marker2D" parent="Stage/EnemySlots" unique_id=704680627]
-position = Vector2(-400, -175)
+position = Vector2(-550, 0)
 
 [node name="Front1" type="Marker2D" parent="Stage/EnemySlots" unique_id=1210383374]
-position = Vector2(-550, 0)
+position = Vector2(-400, -175)
 
 [node name="Units" type="Node2D" parent="Stage" unique_id=422389222]
 unique_name_in_owner = true

@@ -1,4 +1,4 @@
-[gd_scene load_steps=13 format=3 uid="uid://fq8flsft7wst"]
+[gd_scene format=3 uid="uid://fq8flsft7wst"]
 
 [ext_resource type="Script" uid="uid://8t1qqfpf4anf" path="res://scenes/main/main.gd" id="1_main"]
 [ext_resource type="Script" uid="uid://j6ibt5vlkg3t" path="res://resources/units/unit_stats.gd" id="2_unitstats"]
@@ -7,11 +7,11 @@
 [ext_resource type="Resource" uid="uid://622t0mky2hth" path="res://resources/units/enemies/stats_enemy_chaser_fast.tres" id="5_enemy3"]
 [ext_resource type="Resource" uid="uid://bth6q7r6ny6l0" path="res://resources/units/enemies/stats_enemy_charger.tres" id="6_enemy4"]
 [ext_resource type="Resource" uid="uid://cyechaphh6uux" path="res://resources/units/enemies/stats_enemy_shooter.tres" id="7_enemy5"]
-[ext_resource type="Script" path="res://resources/maps/map_data.gd" id="8_mapdata"]
-[ext_resource type="Resource" path="res://resources/maps/map_jianyecheng.tres" id="9_map1"]
-[ext_resource type="Resource" path="res://resources/maps/map_donghaiwan.tres" id="10_map2"]
-[ext_resource type="Resource" path="res://resources/maps/map_aolaiguo.tres" id="11_map3"]
-[ext_resource type="Resource" path="res://resources/maps/map_huaguoshan.tres" id="12_map4"]
+[ext_resource type="Script" uid="uid://v6570clid4e6" path="res://resources/maps/map_data.gd" id="8_mapdata"]
+[ext_resource type="Resource" uid="uid://cu1hl6rhepwgx" path="res://resources/maps/map_jianyecheng.tres" id="9_map1"]
+[ext_resource type="Resource" uid="uid://coix8xh1bfjx6" path="res://resources/maps/map_donghaiwan.tres" id="10_map2"]
+[ext_resource type="Resource" uid="uid://elatn316kl5d" path="res://resources/maps/map_aolaiguo.tres" id="11_map3"]
+[ext_resource type="Resource" uid="uid://doyd3a0utytw5" path="res://resources/maps/map_huaguoshan.tres" id="12_map4"]
 
 [node name="Main" type="Node" unique_id=1825466943]
 script = ExtResource("1_main")

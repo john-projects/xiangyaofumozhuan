@@ -21,14 +21,20 @@
 #
 # 一次完整的新游戏流程（照着读一遍就理解本文件了）：
 #   _ready() → fade 全黑 → await show_title()
-#     → 主菜单「新的征程」→ start_new_game()（清空所有局内状态、金币重置、进选人）
-#     → show_character_select() → 选人完成 → _on_selection_completed()
-#         → party = [选中角色]，把初始武器塞进 Global.equipped_weapons，emit map_changed
+#     → 主菜单「新的征程」→ start_new_game()（清空所有局内状态、金币重置）
+#     → start_game_with_defaults()（**跳过选人/选武器界面**：直接取 default_leader / default_weapon）
+#         → _on_selection_completed()
+#             → party（团队）= [队长]、deployed（上阵）= [队长]，初始武器入包，emit map_changed
 #     → show_map()（把 WorldMap 挂到 WorldRoot 下）
 #         → 地图里点「进入战斗」→ enter_battle() → _swap(battle, world_root)
 #             → 打完 emit battle_ended → _on_battle_ended()：记通关、发奖励、回地图（原地）
 #         → 地图里点传送 → travel_to(next_id)：记住位置、换 current_map_id、show_map() 到新图
 #   竞技场（TitleScreen 的「经典模式」）走另一条线：enter_arena() → Arena 自成一体的玩法。
+#
+# ⚠ 选人界面（SelectionPanel）现在**不在主流程里**了：主菜单「新的征程」直接用
+#   default_leader + default_weapon 开局。想恢复"选人 → 选武器"的老流程：
+#   把 start_new_game() 末尾的 start_game_with_defaults() 换回 show_character_select() 即可
+#   （面板场景与脚本一直留着，一行都没删）。
 #
 # 数据流（谁写 Global）：
 #   本文件会写 Global.coins（start_new_game 重置 / _on_battle_ended 发奖励）、
@@ -102,6 +108,15 @@ const BATTLE_SCENE := preload("res://scenes/battle/battle.tscn")
 const ARENA_SCENE := preload("res://scenes/arena/arena.tscn")
 ## 选人界面场景（SelectionPanel）。
 const SELECTION_SCENE := preload("res://scenes/ui/selection_panel/selection_panel.tscn")
+## 默认队长：主菜单「新的征程」**跳过选人界面**时直接用的 UnitStats。
+## 换人只要改这一行（或是在 main.tscn 的检查器里填 default_leader 覆盖它）。
+## ⚠ 用"敌人"资源当队长也是安全的（想快速测队伍/敌人数量时可以这么干）：
+##   战斗走的是 Battle.start_battle(我方数组, 敌方数组) 显式传参，
+##   UnitStats.type 只影响 Arena 那条老玩法，本项目里没有任何代码读它。
+const DEFAULT_LEADER := preload("res://resources/units/players/stats_player_well_rounded.tres")
+## 默认初始武器：跳过选武器界面时塞进 Global.equipped_weapons 的那一把。
+## 取的是原来选人界面里的第一把（拳头），保证"直接开局"和"手选最左边那个"效果一致。
+const DEFAULT_START_WEAPON := preload("res://resources/items/weapons/melee/punch/item_punch_1.tres")
 
 # ───────────────────────────────────────────────────────────────────────────
 #  ── 配置（在 main.tscn 的检视面板里填；改这些等于改关卡结构与难度曲线）──
@@ -121,6 +136,11 @@ const SELECTION_SCENE := preload("res://scenes/ui/selection_panel/selection_pane
 @export var coin_reward_per_map := 40          # 通关奖励 = coin_reward_per_map * 地图序号
 ## 新开一局时的初始金币。默认 500（和 Global.coins 的默认值刻意保持一致，避免两处对不上）。
 @export var starting_coins := 500
+## 跳过选人界面时的队长（UnitStats）。**在 main.tscn 的检查器里填**；留空 = 用 DEFAULT_LEADER。
+## 想临时试别的角色/敌人，填这里最省事（不用改代码、也不用改那句 preload）。
+@export var default_leader: UnitStats
+## 跳过选武器界面时的初始武器（ItemWeapon）。留空 = 用 DEFAULT_START_WEAPON。
+@export var default_weapon: ItemWeapon
 
 # ── 场景容器引用（% = main.tscn 里标记为 unique_name_in_owner 的节点）────────
 ## 世界类屏幕容器（Node2D）。WorldMap / Battle / Arena 都挂这里（受世界坐标与 y_sort 影响）。
@@ -136,16 +156,34 @@ const SELECTION_SCENE := preload("res://scenes/ui/selection_panel/selection_pane
 # ───────────────────────────────────────────────────────────────────────────
 ## 玩家当前所在的地图 id。初值由 _ready() 里的 _first_map_id() 给出（maps 为空时是 ""）。
 var current_map_id := ""
-## 我方队伍人数上限。= Battle 的 Stage/PlayerSlots 站位数量（前三后二，见 battle.tscn），
-## 也 = 选人界面那 5 个角色。超过这个数 Battle._spawn_team() 会 push_warning 并丢掉多出来的人，
-## 所以在这里先拦住（招募按钮会置灰）。
-const MAX_PARTY_SIZE := 5
+## **上阵**人数上限 = Battle 的 Stage/PlayerSlots 站位数量（前三后二，见 battle.tscn）。
+## 超过这个数 Battle._spawn_team() 会 push_warning 并丢掉多出来的人，所以在这里先拦住
+## （队伍管理面板里"上阵"按钮会置灰）。
+## ⚠ 它**不是团队人数上限**：团队（大名单）可以有很多人，能上场的只有这么多。
+const MAX_DEPLOYED := 5
 
-## 出战队伍（UnitStats 资源数组）。第 0 位是主角，后面是招募来的队友。
-## 进战斗前会被 _make_player_team() 逐个 duplicate() 成副本，所以战斗中的掉血不会污染 .tres。
-## ⚠ 这个数组是**引用语义**地传给 WorldMap / MapScreen 的（GDScript 的 Array 按引用传参），
-##   所以这里 append 之后，它们手里的 _party 立刻就是同一份新数据 —— 需要刷新的只是界面文字。
+## 团队（大名单）人数上限。0 = 不限。
+## 留这个旋钮是为了以后想加"最多带 12 人"这类限制时有个统一的地方改；
+## 默认不限，因为真正的限制在"上阵最多 5 人"上。
+const MAX_TEAM_SIZE := 0
+
+## 敌方队伍人数上限。= Battle 的 Stage/EnemySlots 站位数量（前三后二，见 battle.tscn），
+## 再多就没有位置可站（Battle._spawn_team() 会 push_warning 并把多出来的人丢掉）。
+## 实际数量由 _make_enemy_team() 决定：以**上阵人数**为基准 ±1，再钳进 [1, 本值]。
+const MAX_ENEMY_COUNT := 5
+
+## 团队（大名单）：第 0 位是队长，后面是招募来的队友。上限见 MAX_TEAM_SIZE（默认不限）。
+## ⚠ 在团队里 ≠ 会出战：出战的是下面的 deployed（上阵名单）。队伍管理面板负责两件事的切换。
+## ⚠ 这个数组是**引用语义**地传给 WorldMap 的（GDScript 的 Array 按引用传参），所以这里
+##   append 之后，它手里的 _party 立刻就是同一份新数据 —— 需要刷新的只是界面文字。
+##   ⚠ 也正因为是引用：**只能 clear()/append()/remove_at() 改内容，不要整个重新赋值** ——
+##   整个换掉会让 WorldMap 手里的旧数组变成孤儿，界面从此不再跟着变。
 var party: Array[UnitStats] = []
+
+## 上阵名单（**最多 MAX_DEPLOYED = 5 人**）：真正进战斗的这几个人，必须是 party 的子集。
+## 进战斗前会被 _make_player_team() 逐个 duplicate() 成副本，所以战斗中的掉血不会污染 .tres。
+## 与 party 一样是引用语义交给 WorldMap 展示，所以也**不要整个重新赋值**。
+var deployed: Array[UnitStats] = []
 ## 已通关地图集合：map_id -> true。用于地图名后缀"（已通关）"与将来"必须先打赢才能走"。
 var cleared_maps: Dictionary = {}              # map_id -> true
 ## 是否正在战斗中。enter_battle() 置 true、_on_battle_ended() 置 false。
@@ -224,7 +262,7 @@ func map_index(map_id: String) -> int:
 ## 参数：无（读 current_map_id）。返回值：难度档，1 起算（= 下标 + 1）。
 ## 副作用：无。
 ## 两个消费方：_on_battle_ended()（奖励 = coin_reward_per_map × 本值）、
-##   _make_enemy_team()（敌人数量与血量/伤害缩放都按压这个档位）。
+##   _make_enemy_team()（**只用来缩放敌人的血量/伤害**；敌人数量现在按我方队伍人数算，与本档无关）。
 func map_difficulty() -> int:
 	return map_index(current_map_id) + 1
 
@@ -323,22 +361,23 @@ func show_title() -> void:
 	await _swap(screen)
 
 
-## 开始一局新游戏：把所有**局内状态**清干净，然后进选人界面。
-## 参数：无。返回值：无（本身不含 await；末尾的 show_character_select() 没被 await）。
+## 开始一局新游戏：把所有**局内状态**清干净，然后用默认队长直接开局。
+## 参数：无。返回值：无（本身不含 await；末尾的 start_game_with_defaults() 没被 await）。
 ## 副作用（这份清单就是"新档重置"的完整定义）：
 ##   · party / cleared_maps / _map_positions / _last_result 清空；
 ##   · current_map_id 回到 _first_map_id()；
 ##   · Global.coins = starting_coins（**唯一的金币重置点**）；
 ##   · Global.equipped_weapons.clear()（否则上一局的装备会带进新档）；
 ##   · Global.main_player_selected / main_weapon_selected 置 null（清掉上次选人结果）；
-##   · 调用 show_character_select()（协程，未被 await —— 它会自己跑完换屏）。
-## ⚠ 注意它**没有清 Global.player**：那个字段仍指向上一次选人时造出来的旧节点
+##   · 调用 start_game_with_defaults()（**跳过选人界面**，直接按 default_leader 开局）。
+## ⚠ 注意它**没有清 Global.player**：那个字段仍指向上一次造出来的旧节点
 ##   （可能已被回收）。这正是项目里到处写 is_instance_valid(Global.player) 的原因，
 ##   以后加"存档/重开"时要把这一项也补上。
 ## 为什么这些状态由 GameRoot 清而不是 Global 自己清：Global 是 autoload，跨屏存活，
 ##   它只知道"当前值"，不知道"什么时候算新的一局" —— 那个时机只有 GameRoot 懂。
 func start_new_game() -> void:
 	party.clear()
+	deployed.clear()
 	cleared_maps.clear()
 	_map_positions.clear()
 	_last_result = ""
@@ -347,10 +386,29 @@ func start_new_game() -> void:
 	Global.equipped_weapons.clear()
 	Global.main_player_selected = null
 	Global.main_weapon_selected = null
-	show_character_select()
+	start_game_with_defaults()
+
+
+## 用"默认队长 + 默认武器"直接开局（不经过选人/选武器界面）。
+## 参数：无（读 default_leader / default_weapon，留空则回落到本文件顶部的两个 preload 常量）。
+## 返回值：无（不含 await；末尾 _on_selection_completed() 未被 await）。
+## 副作用：写 Global.main_player_selected / Global.main_weapon_selected，然后复用 _on_selection_completed()
+##   —— 组队、初始武器入包、emit map_changed、进第一张地图这四件事都只写在那一个地方，
+##   所以"跳过选人"和"手选角色"走的是同一段收尾逻辑，不会出现两套行为不一致。
+## 想换回选人界面：把 start_new_game() 末尾的调用换成 show_character_select() 即可。
+func start_game_with_defaults() -> void:
+	var leader := default_leader if default_leader != null else DEFAULT_LEADER
+	if leader == null:
+		push_warning("GameRoot: 没有配置默认队长（default_leader / DEFAULT_LEADER），无法直接开局")
+		return
+	Global.main_player_selected = leader
+	Global.main_weapon_selected = default_weapon if default_weapon != null else DEFAULT_START_WEAPON
+	_on_selection_completed()
 
 
 ## 显示选人界面（SelectionPanel）。
+## ⚠ 当前**不在主流程里**：主菜单「新的征程」走的是 start_game_with_defaults()。
+##   想恢复"选人 → 选武器"的老流程，只要把 start_new_game() 末尾那一行换回本函数即可。
 ## 参数：无。返回值：无（协程：await _swap(panel)）。
 ## 副作用：实例化 SelectionPanel、把它的 on_selection_completed 连到本文件的
 ##   _on_selection_completed、await _swap(panel)（挂到 ui_root），并等过场结束。
@@ -361,14 +419,18 @@ func show_character_select() -> void:
 	await _swap(panel)
 
 
-## 选人完成 → 组成队伍、准备初始武器，进入第一张地图。
-## 参数：无（选人结果在 Global.main_player_selected / main_weapon_selected 里）。
+## 队长/武器确定 → 组成队伍、准备初始武器，进入第一张地图。
+## 谁调它：两条路都汇到这里 ——
+##   · start_game_with_defaults()（**当前主流程**：跳过选人界面，直接用默认队长+默认武器）；
+##   · SelectionPanel 的 on_selection_completed（老流程，面板还留着，见 show_character_select()）。
+## 参数：无（队长与武器在 Global.main_player_selected / main_weapon_selected 里）。
 ## 返回值：无（不含 await；末尾 show_map() 未被 await）。
 ## 副作用：
 ##   · Global.main_player_selected 为 null 时警告并**直接 return**（不往下走，避免用 null 组队）；
-##   · party = [选中角色]（本局队伍；以后加伙伴就往这个数组里多加几个）；
+##   · party = [队长]（团队名册，第 0 位永远是队长）、deployed = [队长]（队长默认上阵）；
+##     招募来的队友会在之后由 add_party_member() 追加，上阵/下阵由队伍管理面板切换；
 ##   · Global.equipped_weapons.clear() 后把初始武器 append 进去
-##     （清一次是为了防止"选人界面重复进入"导致武器翻倍）；
+##     （清一次是为了防止"重复开局"导致武器翻倍）；
 ##   · emit map_changed(current_map_id)（当前无人接听，属于预留）；
 ##   · 调 show_map() 进入第一张图。
 ## 注意 party 里放的是**资源引用**（不是节点）：战斗前 _make_player_team() 会 duplicate() 成副本，
@@ -377,7 +439,13 @@ func _on_selection_completed() -> void:
 	if Global.main_player_selected == null:
 		push_warning("GameRoot: 还没选角色")
 		return
-	party = [Global.main_player_selected]
+	# 用 clear()+append() 而不是 `party = [...]`：数组是"引用语义"交给 WorldMap 的，
+	# 整个重新赋值会让地图手里的旧数组变孤儿，界面从此不再跟着变（见 party 字段的注释）。
+	party.clear()
+	party.append(Global.main_player_selected)
+	# 队长默认上阵：开局只有他一个人，如果不上阵就会连战斗都进不去。
+	deployed.clear()
+	deployed.append(Global.main_player_selected)
 	Global.equipped_weapons.clear()
 	if Global.main_weapon_selected != null:
 		Global.equipped_weapons.append(Global.main_weapon_selected)
@@ -395,9 +463,13 @@ func _on_selection_completed() -> void:
 ##   · 找不到地图时警告 + await show_title() 退回主菜单（避免黑屏卡死）；
 ##   · 可能实例化 MapData.scene 指定的**专用场景**（而不是通用 world_map.tscn）；
 ##   · 给 world.spawn_override 赋值（必须在 add_child 之前 —— WorldMap._ready() 会立刻读它）；
+##   · 给 world.deployed 赋值（上阵名单，同样是"add_child 之前的注入"，用于队伍管理面板显示状态）；
 ##   · 调 world.setup(...)（同样必须在 add_child 之前，见 WorldMap.setup 的注释）；
-##   · connect 四条信号：battle_requested → enter_battle、travel_requested → travel_to、
-##     back_to_title_requested → show_title、recruit_requested → _on_recruit_requested；
+##   · connect 七条信号：battle_requested → enter_battle、travel_requested → travel_to、
+##     back_to_title_requested → show_title、recruit_requested → _on_recruit_requested、
+##     party_remove_requested → _on_party_remove_requested、
+##     party_deploy_requested → _on_party_deploy_requested、
+##     party_undeploy_requested → _on_party_undeploy_requested；
 ##   · await _swap(world, world_root) —— 世界类屏幕挂到 **world_root**（不是 ui_root）。
 ## 细节：
 ##   · 连接在 add_child **之前**完成，这样屏幕一进树（甚至 _ready 里就 emit）也不会漏事件；
@@ -416,11 +488,15 @@ func show_map(result_text := "", from_map_id := "", restore_position := false) -
 	var world := packed.instantiate() as WorldMap
 	if restore_position and _map_positions.has(map.id):
 		world.spawn_override = _map_positions[map.id]     # 打完战斗回到原地
+	world.deployed = deployed      # 上阵名单（引用语义；队伍管理面板要按它显示"上阵/下阵"）
 	world.setup(map, party, Global.coins, result_text, cleared_maps.has(map.id), _map_names(), from_map_id)
 	world.battle_requested.connect(enter_battle)
 	world.travel_requested.connect(travel_to)
 	world.back_to_title_requested.connect(show_title)
 	world.recruit_requested.connect(_on_recruit_requested)
+	world.party_deploy_requested.connect(_on_party_deploy_requested)
+	world.party_undeploy_requested.connect(_on_party_undeploy_requested)
+	world.party_remove_requested.connect(_on_party_remove_requested)
 	await _swap(world, world_root)
 
 
@@ -493,7 +569,7 @@ func _remember_position() -> void:
 ## 参数：无（敌方队伍由 _make_enemy_team() 现算）。
 ## 返回值：无（协程：await _swap(battle, world_root)）。
 ## 副作用：
-##   · 队伍为空时警告 + show_map() 退回地图（不空手进战斗）；
+##   · 上阵名单为空时警告 + show_map() 退回地图（不空手进战斗）；
 ##   · _remember_position() —— 记下位置，打完回来还站这儿；
 ##   · 敌人池为空时警告并 return（防止进一场没有敌人的战斗）；
 ##   · 实例化 Battle、把 auto_start_demo 设 false、connect battle_ended、
@@ -510,8 +586,8 @@ func _remember_position() -> void:
 ## 另外：start_battle 内部有 await（整个战斗流程），这里**不 await 它**——
 ##   不然 enter_battle 会一直挂到战斗结束；战斗结束走的是 battle_ended 信号回调。
 func enter_battle() -> void:
-	if party.is_empty():
-		push_warning("GameRoot: 队伍是空的，先进选人界面")
+	if deployed.is_empty():
+		push_warning("GameRoot: 没有上阵的队员（去队伍管理里上阵，或先招募队友）")
 		show_map()
 		return
 	_remember_position()                    # 打完回来还站在这儿
@@ -588,14 +664,21 @@ func _on_battle_ended(player_won: bool) -> void:
 # ══════════════════════════════════════════════════════════
 
 # ═══════════════════════════════════════════════════════════════════════════
-#  队伍（party）
+#  团队（party）与上阵名单（deployed）
 # ═══════════════════════════════════════════════════════════════════════════
-#  这里是队伍**唯一**的写入点。地图上的招募按钮只 emit WorldMap.recruit_requested，
-#  能不能加、加谁，一律由下面这几个函数决定 —— 规则只有一份，面板只负责显示同一个规则的结果。
+#  这里是队伍**唯一**的写入点。地图上的招募按钮与队伍管理面板都只 emit 请求信号
+#  （recruit_requested / party_deploy_requested / party_undeploy_requested / party_remove_requested），
+#  能不能加、能不能上阵，一律由下面这几个函数决定 —— 规则只有一份，
+#  面板只负责显示"同一套规则算出来的结果"，不会出现"按钮能点但点完没反应"。
 #
-#  数据形态：party 装的是"资源引用"（Array[UnitStats]），不是节点、也不是副本：
-#    · 数组实例被传给了 WorldMap / MapScreen，append 后它们立刻看得到；
+#  两层结构（这是本段的核心概念）：
+#    · party      —— **团队（大名单）**：招到的人都在这里，人数上限见 MAX_TEAM_SIZE（默认不限）；
+#    · deployed   —— **上阵名单**：真正进战斗的那几个人，最多 MAX_DEPLOYED = 5 人，
+#                    且必须是 party 的子集（移出团队会自动把人从上阵名单里摘掉）。
+#  两者都是"资源引用"数组（Array[UnitStats]，不是节点、不是副本）：
+#    · 数组实例被引用语义地传给 WorldMap，append 后它立刻看得到（界面文字需要另行刷新）；
 #    · 战斗前 _make_player_team() 才逐项 duplicate()，所以打到一半掉血不会改到 .tres。
+#    ⚠ 正因为是引用语义：这两个数组**只能就地增删，不要整个重新赋值**。
 
 ## 队伍里非 null 的成员数。party 允许留空位（见 _make_enemy_team 的注释），所以不能用 size()。
 ## 做成静态函数的原因：WorldMap 手里也有同一份数组，画招募按钮要按**同样的规则**判断按钮灰不灰，
@@ -628,15 +711,47 @@ static func party_has(p_party: Array[UnitStats], stats: UnitStats) -> bool:
 	return false
 
 
-## 这个角色现在能不能加入（去重 + 人数上限）。
-## 参数 max_size：<= 0 时用 MAX_PARTY_SIZE（默认参数写常量在这里是为了让静态函数也能被外部按别的上限复用）。
-static func party_can_join(p_party: Array[UnitStats], stats: UnitStats, max_size := 0) -> bool:
+## 这个角色现在能不能**加入团队**（去重 + 团队人数上限）。
+## 参数 max_size：覆盖上限；-1（默认）= 用 MAX_TEAM_SIZE，而 MAX_TEAM_SIZE = 0 表示不限人数。
+## ⚠ 这里**不**看上阵人数 —— 上阵有自己的一套规则（deploy_can_add / deploy_can_remove）。
+## 做成静态函数是因为 WorldMap 手里也有同一份数组，画招募按钮要用**同样的规则**判断灰不灰。
+static func party_can_join(p_party: Array[UnitStats], stats: UnitStats, max_size := -1) -> bool:
 	if stats == null:
 		return false
-	var limit := max_size if max_size > 0 else MAX_PARTY_SIZE
-	if party_count(p_party) >= limit:
+	var limit := max_size if max_size >= 0 else MAX_TEAM_SIZE
+	if limit > 0 and party_count(p_party) >= limit:
 		return false
 	return not party_has(p_party, stats)
+
+
+## 上阵名单里有几个人。
+## 语义上与 party_count() 完全一样（都是"非 null 元素个数"），单独包一层是为了让调用处
+## 读起来是"上阵几人"而不是"数组里有几个"，不容易和团队人数看混。
+static func deployed_count(p_deployed: Array[UnitStats]) -> int:
+	return party_count(p_deployed)
+
+
+## 这个人现在是不是在上阵名单里。
+static func is_deployed(p_deployed: Array[UnitStats], stats: UnitStats) -> bool:
+	return party_has(p_deployed, stats)
+
+
+## 这个人现在能不能上阵：没在上阵名单里，且上阵位没满。
+static func deploy_can_add(p_deployed: Array[UnitStats], stats: UnitStats) -> bool:
+	if stats == null:
+		return false
+	if party_count(p_deployed) >= MAX_DEPLOYED:
+		return false
+	return not party_has(p_deployed, stats)
+
+
+## 这个人现在能不能下阵：确实在上阵名单里，且下阵之后还剩至少 1 人。
+## "至少留 1 人上阵"是硬约束：一个上阵的人都没有就进不了战斗（enter_battle 会拦），
+## 与其让玩家点出一个空阵容，不如把按钮置灰并写明原因（见 PartyPanel._make_member_row）。
+static func deploy_can_remove(p_deployed: Array[UnitStats], stats: UnitStats) -> bool:
+	if stats == null or not party_has(p_deployed, stats):
+		return false
+	return party_count(p_deployed) > 1
 
 
 ## 队伍成员名列表（给 UI 拼文字用；跳过空位）。
@@ -650,22 +765,26 @@ static func party_names_of(p_party: Array[UnitStats]) -> PackedStringArray:
 	return names
 
 
-## 把队友加进队伍。返回值：true = 加进去了；false = 没加（已满 / 已在队里 / 传了 null）。
-## 副作用：就地 append 到 party（引用语义，WorldMap 同步看到）、emit party_changed。
-## 注意：本函数**不**负责刷新界面 —— 界面由调用方（_on_recruit_requested）去通知 WorldMap，
+## 把队友招进**团队（大名单）**。返回值：true = 加进去了；false = 没加（团队满 / 已在团队里 / 传了 null）。
+## 副作用：就地 append 到 party（引用语义，WorldMap 同步看到）；
+##        **有空的上阵位时顺手把他上阵**；emit party_changed。
+## 为什么顺手自动上阵：招募的直觉是"这人来跟我一起打"。上阵位满了就只进名册，
+##   队伍管理面板里会显示"待上阵"，玩家自己去决定换谁下来。
+## 注意：本函数**不**负责刷新界面 —— 界面由调用方（_on_recruit_requested 等）去通知 WorldMap，
 ##   因为"要不要弹提示"是界面的事，不是队伍数据的事。
 func add_party_member(stats: UnitStats) -> bool:
 	if not party_can_join(party, stats):
 		return false
 	party.append(stats)
+	if deploy_can_add(deployed, stats):
+		deployed.append(stats)
 	party_changed.emit()
 	return true
 
 
-## 把队友移出队伍。返回值：true = 移掉了；false = 不在队里 / 想移的是主角 / 传了 null。
-## 主角（下标 0）不允许移除 —— 移除主角会让整局没有可操作角色，属于数据损坏而非法操作。
-## 为什么现在留着它：目前没有"踢人"的 UI，但队伍功能要完整就得有"出队"这一半，
-##   以后加队友菜单 / 换人 NPC 直接调它即可（它会 emit party_changed）。
+## 把队友移出**团队**。返回值：true = 移掉了；false = 不在团队里 / 想移的是队长 / 传了 null。
+## 队长（下标 0）不允许移除 —— 移除队长会让整局没有稳定的大名单首位，属于数据损坏而非法操作。
+## 副作用：party.remove_at() + **同时从上阵名单里摘掉**（移出团队的人当然不能再上阵）+ emit party_changed。
 func remove_party_member(stats: UnitStats) -> bool:
 	if stats == null:
 		return false
@@ -675,39 +794,136 @@ func remove_party_member(stats: UnitStats) -> bool:
 			continue
 		if member == stats or member.name == stats.name:
 			if i == 0:
-				push_warning("GameRoot: 主角不能移出队伍")
+				push_warning("GameRoot: 队长不能移出团队")
 				return false
 			party.remove_at(i)
+			_undeploy_silently(member)
 			party_changed.emit()
 			return true
 	return false
 
 
+## 让某个队员**上阵**。返回值：true = 成功；false = 没成（不在团队 / 已上阵 / 上阵位已满）。
+## 副作用：deployed.append() + emit party_changed。
+## 上阵位满时**不**自动踢人下来：换谁下来是玩家的决定，不是代码的（面板会把按钮置灰并写明原因）。
+func deploy_member(stats: UnitStats) -> bool:
+	if not party_has(party, stats):
+		return false
+	if not deploy_can_add(deployed, stats):
+		return false
+	deployed.append(stats)
+	party_changed.emit()
+	return true
+
+
+## 让某个队员**下阵**。返回值：true = 成功；false = 没成（不在上阵名单 / 只剩他一个）。
+## 副作用：从 deployed 里摘掉 + emit party_changed。
+func undeploy_member(stats: UnitStats) -> bool:
+	if not deploy_can_remove(deployed, stats):
+		return false
+	_undeploy_silently(stats)
+	party_changed.emit()
+	return true
+
+
+## 把某人从 deployed 里摘掉：不检查规则、不发信号（内部工具）。
+## 为什么要单独一个"不检查"的版本：remove_party_member() 里那人**可能正被下阵规则保护**
+##   （例如上阵只剩他一个时 deploy_can_remove() 会返回 false），但"被移出团队"必须无条件生效。
+func _undeploy_silently(stats: UnitStats) -> void:
+	if stats == null:
+		return
+	for i in deployed.size():
+		var member := deployed[i]
+		if member != null and (member == stats or member.name == stats.name):
+			deployed.remove_at(i)
+			return
+
+
 ## 世界地图的招募按钮回调（WorldMap.recruit_requested → 这里）。
 ## 参数 stats：玩家点了「加入」的那个角色（UnitStats 资源，由 WorldMap 从面板按钮 bind 过来）。
 ## 副作用：
-##   · 成功后 add_party_member()（改 party + emit party_changed），再让地图面板把台词换成
-##     "XXX 加入了队伍！"并重建按钮（那个按钮会变成灰的"已在队伍中"）；
-##   · 失败时不改任何状态，只把原因写回面板台词（"已经在队伍里了" / "队伍已经满了"）。
+##   · 成功后 add_party_member()（进名册 + 有空位就上阵 + emit party_changed），再让地图面板把台词
+##     换成"XXX 加入了团队！"（并注明是已上阵还是待上阵），按钮重建后那个人会变成灰的"已在团队"；
+##   · 失败时不改任何状态，只把原因写回面板台词（"已经在团队里了" / "团队已经满了"）。
 ## 注意：_current_world_map() 可能返回 null（理论上进战斗时不会有招募面板，但别假设），
 ##   所以下面所有对 world 的访问都判了 null。
 func _on_recruit_requested(stats: UnitStats) -> void:
 	var world := _current_world_map()
 	if not party_can_join(party, stats):
-		var why := "队伍已经满了（%d 人）。" % MAX_PARTY_SIZE
+		var why := "团队已经满了（上限 %d 人）。" % MAX_TEAM_SIZE
 		if stats != null and party_has(party, stats):
-			why = "%s 已经在队伍里了。" % stats.name
+			why = "%s 已经在团队里了。" % stats.name
 		if world != null:
 			world.notify_party_changed(why)
 		return
 	add_party_member(stats)
+	var tail := "（已上阵）" if is_deployed(deployed, stats) else "（先进名册，上阵位已满）"
 	if world != null:
-		world.notify_party_changed("%s 加入了队伍！" % stats.name)
+		world.notify_party_changed("%s 加入了团队！%s" % [stats.name, tail])
 
-## 把 party（资源引用）变成一份**可以随便改**的我方队伍，交给 Battle。
-## 参数：无（读成员 party）。
-## 返回值：新的 Array[UnitStats]，长度 = party 里非 null 的元素个数。
-## 副作用：无（不写 Global、不改 party 里的原资源 —— 这正是本函数存在的意义）。
+
+## 队伍管理面板里点了「上阵」（WorldMap.party_deploy_requested → 这里）。
+## 参数 stats：要上阵的成员。
+## 副作用：成功后 deploy_member()（改 deployed + emit party_changed），再让面板刷新成"XXX 已上阵。"；
+##        失败时只把原因写回面板（"上阵位已经满了" / "不在团队里"）。
+func _on_party_deploy_requested(stats: UnitStats) -> void:
+	var world := _current_world_map()
+	if not deploy_member(stats):
+		var why := "上阵位已经满了（%d 人），先让一个下阵。" % MAX_DEPLOYED
+		if stats != null and not party_has(party, stats):
+			why = "%s 不在团队里。" % stats.name
+		elif stats != null and is_deployed(deployed, stats):
+			why = "%s 已经在上阵名单里了。" % stats.name
+		if world != null:
+			world.notify_party_changed(why)
+		return
+	if world != null:
+		world.notify_party_changed("%s 已上阵。" % stats.name)
+
+
+## 队伍管理面板里点了「下阵」（WorldMap.party_undeploy_requested → 这里）。
+## 参数 stats：要下阵的成员。
+## 副作用：成功后 undeploy_member()（改 deployed + emit party_changed），面板刷新成"XXX 已下阵。"；
+##        失败时只把原因写回面板（"至少要留 1 人上阵" / "本来就没上阵"）。
+func _on_party_undeploy_requested(stats: UnitStats) -> void:
+	var world := _current_world_map()
+	if not undeploy_member(stats):
+		var why := "至少要留 1 人上阵。"
+		if stats != null and not is_deployed(deployed, stats):
+			why = "%s 本来就没在上阵名单里。" % stats.name
+		if world != null:
+			world.notify_party_changed(why)
+		return
+	if world != null:
+		world.notify_party_changed("%s 已下阵。" % stats.name)
+
+
+## 队伍管理面板里点了「移出团队」（WorldMap.party_remove_requested → 这里）。
+## 参数 stats：要移出的成员（UnitStats 资源，由 WorldMap 从面板按钮 bind 过来）。
+## 副作用：
+##   · 成功后 remove_party_member()（出团队 + 顺带从 deployed 摘掉 + emit party_changed），
+##     再让地图那边把提示写成"XXX 已离开团队。"（面板会重建成只剩剩下的人）；
+##   · 失败时不改任何状态，只把原因写回去（"队长不能移出团队。"）。
+## 注意：移出**不用**关面板 —— 玩家通常想连着踢几个 / 看着列表变化。
+##   这与"招募"一样，界面刷新交给 WorldMap.notify_party_changed()。
+func _on_party_remove_requested(stats: UnitStats) -> void:
+	var world := _current_world_map()
+	if not remove_party_member(stats):
+		var why := "这个成员不在团队里。"
+		if stats != null and not party.is_empty() and party[0] == stats:
+			why = "队长不能移出团队。"
+		if world != null:
+			world.notify_party_changed(why)
+		return
+	if world != null:
+		world.notify_party_changed("%s 已离开团队。" % stats.name)
+
+
+## 把**上阵名单**（deployed）变成一份**可以随便改**的我方队伍，交给 Battle。
+## 参数：无（读成员 deployed）。
+## 返回值：新的 Array[UnitStats]，长度 = deployed 里非 null 的元素个数（最多 MAX_DEPLOYED = 5）。
+## 副作用：无（不写 Global、不改 deployed 里的原资源 —— 这正是本函数存在的意义）。
+## ⚠ 用的是 deployed 而**不是** party：团队名册可以有很多人，但只有上阵的那几个进战斗。
 ## 为什么要 duplicate()：
 ##   UnitStats 是 Resource（引用语义），战斗会改血量/蓝量等字段。如果直接把 .tres 本体扔进战斗，
 ##   一场战斗就会永久改坏整个项目里所有引用同一资源的角色；复制一份后，
@@ -717,7 +933,7 @@ func _on_recruit_requested(stats: UnitStats) -> void:
 ##   但谁要是就地往哪个副本的 skills 里 append，原 .tres 也会跟着变。
 func _make_player_team() -> Array[UnitStats]:
 	var out: Array[UnitStats] = []
-	for stats in party:
+	for stats in deployed:
 		if stats == null:
 			continue
 		# duplicate：战斗改的是副本，不污染 .tres（以后做"战斗结束回写血量"也方便）
@@ -734,12 +950,17 @@ func _make_player_team() -> Array[UnitStats]:
 ##   MapData.enemy_pool 非空就用它，否则回落到 GameRoot.enemy_pool（本文件的全局池）。
 ##   条件里先判 map != null，所以 map 为 null 时不会去访问 map.enemy_pool（短路保护）。
 ##
-## 数量公式：count = clampi(1 + (difficulty - 1) / 2, 1, 5)
-##   ⚠ `(difficulty - 1) / 2` 是**整数除法**（两边都是 int，小数部分直接截断）：
-##     难度档 1→0、2→0、3→1、4→1、5→2 …，所以括号里那部分是"每两张图 +1"。
-##   于是实际是 1图1只、2图1只、3图2只、4图2只、5图3只…9图5只。
-##   clampi 上界 5 是硬约束：Battle 只有 5 个敌方站位（对齐 Stage/EnemySlots 的 Marker2D 数量，
-##   站法是**前三后二**：Front1~3 在前排、Back1~2 在后排），再多就没有位置可站了。
+## 数量公式：count = clampi(上阵人数 ± 1, 1, MAX_ENEMY_COUNT)
+##   · 基准是**上阵人数**（deployed，也就是这场战斗真正上场的人数），不是难度档、也不是团队总人数 ——
+##     团队名册里坐板凳的人不该让敌人变多，只有真上场的人才会；
+##   · ±1 用 randi_range(-1, 1)，三种结果等概率：少 1 人 / 一样多 / 多 1 人。
+##     想改成"必定 +1 或 -1、绝不相同"，把这一行换成
+##       var count := clampi(deployed_count(deployed) + (-1 if randi() % 2 == 0 else 1), 1, MAX_ENEMY_COUNT)
+##     即可（其余逻辑不用动）；
+##   · 下界 1：0 个敌人的话 Battle.start_battle() 会判定"有一方队伍是空的"、警告后回 IDLE，
+##     也就是打不起来 —— 所以再少也要留 1 只；
+##   · 上界 MAX_ENEMY_COUNT：对齐 Stage/EnemySlots 的 Marker2D 数量（前三后二），再多没位置站。
+##   · 难度档 difficulty 仍然要算，但**只**用来算下面的 scale。
 ## 血量/伤害缩放：scale = 1.0 + (difficulty - 1) × enemy_scale_per_map，
 ##   并且都是用**原始 base 的值**乘 scale（而不是在副本上累乘）——
 ##   所以同一只敌人被抽到多次也不会出现"越乘越大"的复利。
@@ -755,8 +976,7 @@ func _make_enemy_team() -> Array[UnitStats]:
 		return out
 
 	var difficulty := map_difficulty()
-	@warning_ignore("integer_division")
-	var count: int = clampi(1 + (difficulty - 1) / 2, 1, 5)   # 双方上限都是 5 人（站位：前排 3 + 后排 2）
+	var count := clampi(deployed_count(deployed) + randi_range(-1, 1), 1, MAX_ENEMY_COUNT)
 	var scale: float = 1.0 + (difficulty - 1) * enemy_scale_per_map
 	for i in count:
 		var base: UnitStats = pool[i % pool.size()]
