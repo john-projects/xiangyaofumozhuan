@@ -3,17 +3,31 @@
 [ext_resource type="Script" uid="uid://j6ibt5vlkg3t" path="res://resources/units/unit_stats.gd" id="1_abwhm"]
 [ext_resource type="Script" uid="uid://v6570clid4e6" path="res://resources/maps/map_data.gd" id="1_mapdata"]
 [ext_resource type="Texture2D" uid="uid://dudt86f6iqppy" path="res://assets/map/map_jianyecheng.png" id="2_texture"]
+[ext_resource type="Texture2D" uid="uid://dpxw8tsbgrfse" path="res://assets/sprites/tomato/Players/Player_2.png" id="3_h1f2s"]
 [ext_resource type="Script" uid="uid://ctu1nt07fqrnc" path="res://resources/maps/map_npc.gd" id="3_npc"]
-[ext_resource type="PackedScene" path="res://scenes/world/maps/world_jianyecheng.tscn" id="4_world"]
+[ext_resource type="PackedScene" uid="uid://bl3xpexlvqo3u" path="res://scenes/world/maps/world_jianyecheng.tscn" id="4_world"]
+[ext_resource type="Texture2D" uid="uid://dmox6e28kf6ax" path="res://assets/sprites/tomato/Players/Player_4.png" id="4_yulw2"]
 
 [sub_resource type="Resource" id="Resource_chuanfu"]
 script = ExtResource("3_npc")
 id = "chuanfu"
 display_name = "船夫"
-position = Vector2(0.62, 0.5)
+texture = ExtResource("3_h1f2s")
+position = Vector2(0.6, 0.95)
 dialogue = "客官要出海吗？东海湾就在前头，坐我的船一会儿就到。"
 destinations = Array[String](["donghaiwan"])
 teleport_label = "出海前往"
+
+[sub_resource type="Resource" id="Resource_pi0uk"]
+script = ExtResource("3_npc")
+id = "duiyou"
+display_name = "队友"
+texture = ExtResource("4_yulw2")
+position = Vector2(0.45, 0.4)
+dialogue = "需要加入队伍吗？"
+action = 3
+recruit_label = "加入"
+metadata/_custom_type_script = "uid://ctu1nt07fqrnc"
 
 [resource]
 script = ExtResource("1_mapdata")
@@ -22,7 +36,6 @@ display_name = "建邺城"
 texture = ExtResource("2_texture")
 scene = ExtResource("4_world")
 spawn_point = Vector2(0.45, 0.65)
-npcs = Array[ExtResource("3_npc")]([SubResource("Resource_chuanfu")])
+npcs = Array[ExtResource("3_npc")]([SubResource("Resource_chuanfu"), SubResource("Resource_pi0uk")])
 next_id = "donghaiwan"
 exit_center = Vector2(0.62, 0.5)
-metadata/_custom_type_script = "res://resources/maps/map_data.gd"

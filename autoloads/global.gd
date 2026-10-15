@@ -165,6 +165,46 @@ func get_chance_success(chance: float) -> bool:
 
 ## 按选人结果实例化出玩家节点（**不**入树，由调用方负责 add_child）。
 ## 谁调用：Arena._on_selection_panel_on_selection_completed()，拿到后 add_child(player) 再发初始武器。
+# ───────────────────────────────────────────────────────────────────────────
+#  ── 可招募队友（队伍系统）──
+# ───────────────────────────────────────────────────────────────────────────
+
+## 可招募队友的默认目录：里面每个 UnitStats（.tres / .res）都是一个能加入队伍的角色。
+## MapNPC.recruit_pool 留空时，WorldMap 会调下面的 get_recruitable_players() 扫这个目录。
+## 当前内容 = 选人界面那 5 个角色（stats_player_*.tres），和 selection_panel.tscn 的 players 是同一批。
+const RECRUIT_DIR := "res://resources/units/players/"
+
+## 上一次扫描的缓存。角色的 .tres 在运行期不会变，反复开招募面板没必要反复读盘。
+var _recruit_cache: Array[UnitStats] = []
+
+
+## 扫描 RECRUIT_DIR，返回里面所有 UnitStats，按资源路径排序（顺序稳定，UI 不会每次乱跳）。
+## 参数 refresh：true = 忽略缓存重新扫（改完目录想立刻看到效果时用）。
+## 返回值：Array[UnitStats]；目录打不开时返回缓存（可能是空数组）并 push_warning。
+## 副作用：写 _recruit_cache；只读磁盘，不改任何资源、不发信号。
+## 坑：
+##   · 两种扩展名都收 —— 打包导出后文本资源可能变成 .res，只认 .tres 会扫不到；
+##   · 目录里混进非 UnitStats 的资源会被静默跳过（不报错，因为目录是给人放的）；
+##   · 这条路是"方便"，不是"绝对可靠"：显式填 MapNPC.recruit_pool 才是导出万无一失的做法。
+func get_recruitable_players(refresh := false) -> Array[UnitStats]:
+	if not refresh and not _recruit_cache.is_empty():
+		return _recruit_cache
+	var dir := DirAccess.open(RECRUIT_DIR)
+	if dir == null:
+		push_warning("Global: 打不开可招募队友目录 %s" % RECRUIT_DIR)
+		return _recruit_cache
+	var found: Array[UnitStats] = []
+	for file_name in dir.get_files():
+		if not (file_name.ends_with(".tres") or file_name.ends_with(".res")):
+			continue
+		var res := ResourceLoader.load(RECRUIT_DIR + file_name)
+		if res is UnitStats:
+			found.append(res)
+	found.sort_custom(func(a: UnitStats, b: UnitStats) -> bool:
+		return a.resource_path < b.resource_path)
+	_recruit_cache = found
+	return _recruit_cache
+
 ## 参数：无 —— 用 main_player_selected（SelectionPanel 写入的 UnitStats）。
 ## 返回值：新建的 Player 节点实例（同一个对象也已经写进了 Global.player）。
 ## 副作用（比较重，注意）：

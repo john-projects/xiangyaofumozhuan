@@ -82,6 +82,11 @@ class_name GameRoot
 ##   （以后做"地图名飘字幕 / BGM 切换 / 成就统计"就接这里）。
 signal map_changed(map_id: String)
 
+## 队伍成员发生变化（招募成功时 emit；以后做"队友离队/换人"也会 emit）。
+## ⚠ 目前没人 connect 它 —— 地图面板的刷新是 GameRoot 主动调 WorldMap.notify_party_changed()
+##   做到的（因为那个面板开着的时候才知道要刷）。这个信号留给"别的界面也要跟着变"的场景。
+signal party_changed
+
 # ───────────────────────────────────────────────────────────────────────────
 #  ── 屏幕场景常量 ──
 #  全部 preload：脚本加载时就解析好，换屏时只做 instantiate()，没有磁盘查找开销。
@@ -131,7 +136,15 @@ const SELECTION_SCENE := preload("res://scenes/ui/selection_panel/selection_pane
 # ───────────────────────────────────────────────────────────────────────────
 ## 玩家当前所在的地图 id。初值由 _ready() 里的 _first_map_id() 给出（maps 为空时是 ""）。
 var current_map_id := ""
-## 出战队伍（UnitStats 资源数组）。目前只装主角；进战斗前会被 _make_player_team() 复制成副本。
+## 我方队伍人数上限。= Battle 的 Stage/PlayerSlots 站位数量（前三后二，见 battle.tscn），
+## 也 = 选人界面那 5 个角色。超过这个数 Battle._spawn_team() 会 push_warning 并丢掉多出来的人，
+## 所以在这里先拦住（招募按钮会置灰）。
+const MAX_PARTY_SIZE := 5
+
+## 出战队伍（UnitStats 资源数组）。第 0 位是主角，后面是招募来的队友。
+## 进战斗前会被 _make_player_team() 逐个 duplicate() 成副本，所以战斗中的掉血不会污染 .tres。
+## ⚠ 这个数组是**引用语义**地传给 WorldMap / MapScreen 的（GDScript 的 Array 按引用传参），
+##   所以这里 append 之后，它们手里的 _party 立刻就是同一份新数据 —— 需要刷新的只是界面文字。
 var party: Array[UnitStats] = []
 ## 已通关地图集合：map_id -> true。用于地图名后缀"（已通关）"与将来"必须先打赢才能走"。
 var cleared_maps: Dictionary = {}              # map_id -> true
@@ -383,8 +396,8 @@ func _on_selection_completed() -> void:
 ##   · 可能实例化 MapData.scene 指定的**专用场景**（而不是通用 world_map.tscn）；
 ##   · 给 world.spawn_override 赋值（必须在 add_child 之前 —— WorldMap._ready() 会立刻读它）；
 ##   · 调 world.setup(...)（同样必须在 add_child 之前，见 WorldMap.setup 的注释）；
-##   · connect 三条信号：battle_requested → enter_battle、travel_requested → travel_to、
-##     back_to_title_requested → show_title；
+##   · connect 四条信号：battle_requested → enter_battle、travel_requested → travel_to、
+##     back_to_title_requested → show_title、recruit_requested → _on_recruit_requested；
 ##   · await _swap(world, world_root) —— 世界类屏幕挂到 **world_root**（不是 ui_root）。
 ## 细节：
 ##   · 连接在 add_child **之前**完成，这样屏幕一进树（甚至 _ready 里就 emit）也不会漏事件；
@@ -407,6 +420,7 @@ func show_map(result_text := "", from_map_id := "", restore_position := false) -
 	world.battle_requested.connect(enter_battle)
 	world.travel_requested.connect(travel_to)
 	world.back_to_title_requested.connect(show_title)
+	world.recruit_requested.connect(_on_recruit_requested)
 	await _swap(world, world_root)
 
 
@@ -572,6 +586,123 @@ func _on_battle_ended(player_won: bool) -> void:
 # ══════════════════════════════════════════════════════════
 #  队伍生成
 # ══════════════════════════════════════════════════════════
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  队伍（party）
+# ═══════════════════════════════════════════════════════════════════════════
+#  这里是队伍**唯一**的写入点。地图上的招募按钮只 emit WorldMap.recruit_requested，
+#  能不能加、加谁，一律由下面这几个函数决定 —— 规则只有一份，面板只负责显示同一个规则的结果。
+#
+#  数据形态：party 装的是"资源引用"（Array[UnitStats]），不是节点、也不是副本：
+#    · 数组实例被传给了 WorldMap / MapScreen，append 后它们立刻看得到；
+#    · 战斗前 _make_player_team() 才逐项 duplicate()，所以打到一半掉血不会改到 .tres。
+
+## 队伍里非 null 的成员数。party 允许留空位（见 _make_enemy_team 的注释），所以不能用 size()。
+## 做成静态函数的原因：WorldMap 手里也有同一份数组，画招募按钮要按**同样的规则**判断按钮灰不灰，
+## 静态函数让两边共用一份判定，避免出现"面板说能加、点下去却加不进去"。
+static func party_count(p_party: Array[UnitStats]) -> int:
+	var n := 0
+	for stats in p_party:
+		if stats != null:
+			n += 1
+	return n
+
+
+## p_party 里是否已经有这个角色。
+## 判定顺序：引用 → resource_path → name。
+##   · 先比引用是最快的路径（同一个 .tres 只会加载出一个实例）；
+##   · 再比 resource_path，对付"同一份资源被两条路径各加载一次"的情况（例如显式 recruit_pool 与目录扫描）；
+##   · 最后比 name —— 名字是 Global.available_players 的键（名字相同即同一角色），兜底安全。
+static func party_has(p_party: Array[UnitStats], stats: UnitStats) -> bool:
+	if stats == null:
+		return false
+	for member in p_party:
+		if member == null:
+			continue
+		if member == stats:
+			return true
+		if not member.resource_path.is_empty() and member.resource_path == stats.resource_path:
+			return true
+		if member.name == stats.name:
+			return true
+	return false
+
+
+## 这个角色现在能不能加入（去重 + 人数上限）。
+## 参数 max_size：<= 0 时用 MAX_PARTY_SIZE（默认参数写常量在这里是为了让静态函数也能被外部按别的上限复用）。
+static func party_can_join(p_party: Array[UnitStats], stats: UnitStats, max_size := 0) -> bool:
+	if stats == null:
+		return false
+	var limit := max_size if max_size > 0 else MAX_PARTY_SIZE
+	if party_count(p_party) >= limit:
+		return false
+	return not party_has(p_party, stats)
+
+
+## 队伍成员名列表（给 UI 拼文字用；跳过空位）。
+## 返回 PackedStringArray 而不是 Array[String]：Godot 的 String.join() 只收 PackedStringArray，
+## 这样调用方可以直接 "、".join(GameRoot.party_names_of(party))，不必再转一次。
+static func party_names_of(p_party: Array[UnitStats]) -> PackedStringArray:
+	var names := PackedStringArray()
+	for stats in p_party:
+		if stats != null:
+			names.append(stats.name)
+	return names
+
+
+## 把队友加进队伍。返回值：true = 加进去了；false = 没加（已满 / 已在队里 / 传了 null）。
+## 副作用：就地 append 到 party（引用语义，WorldMap 同步看到）、emit party_changed。
+## 注意：本函数**不**负责刷新界面 —— 界面由调用方（_on_recruit_requested）去通知 WorldMap，
+##   因为"要不要弹提示"是界面的事，不是队伍数据的事。
+func add_party_member(stats: UnitStats) -> bool:
+	if not party_can_join(party, stats):
+		return false
+	party.append(stats)
+	party_changed.emit()
+	return true
+
+
+## 把队友移出队伍。返回值：true = 移掉了；false = 不在队里 / 想移的是主角 / 传了 null。
+## 主角（下标 0）不允许移除 —— 移除主角会让整局没有可操作角色，属于数据损坏而非法操作。
+## 为什么现在留着它：目前没有"踢人"的 UI，但队伍功能要完整就得有"出队"这一半，
+##   以后加队友菜单 / 换人 NPC 直接调它即可（它会 emit party_changed）。
+func remove_party_member(stats: UnitStats) -> bool:
+	if stats == null:
+		return false
+	for i in party.size():
+		var member := party[i]
+		if member == null:
+			continue
+		if member == stats or member.name == stats.name:
+			if i == 0:
+				push_warning("GameRoot: 主角不能移出队伍")
+				return false
+			party.remove_at(i)
+			party_changed.emit()
+			return true
+	return false
+
+
+## 世界地图的招募按钮回调（WorldMap.recruit_requested → 这里）。
+## 参数 stats：玩家点了「加入」的那个角色（UnitStats 资源，由 WorldMap 从面板按钮 bind 过来）。
+## 副作用：
+##   · 成功后 add_party_member()（改 party + emit party_changed），再让地图面板把台词换成
+##     "XXX 加入了队伍！"并重建按钮（那个按钮会变成灰的"已在队伍中"）；
+##   · 失败时不改任何状态，只把原因写回面板台词（"已经在队伍里了" / "队伍已经满了"）。
+## 注意：_current_world_map() 可能返回 null（理论上进战斗时不会有招募面板，但别假设），
+##   所以下面所有对 world 的访问都判了 null。
+func _on_recruit_requested(stats: UnitStats) -> void:
+	var world := _current_world_map()
+	if not party_can_join(party, stats):
+		var why := "队伍已经满了（%d 人）。" % MAX_PARTY_SIZE
+		if stats != null and party_has(party, stats):
+			why = "%s 已经在队伍里了。" % stats.name
+		if world != null:
+			world.notify_party_changed(why)
+		return
+	add_party_member(stats)
+	if world != null:
+		world.notify_party_changed("%s 加入了队伍！" % stats.name)
 
 ## 把 party（资源引用）变成一份**可以随便改**的我方队伍，交给 Battle。
 ## 参数：无（读成员 party）。

@@ -153,3 +153,39 @@ func _ready() -> void:
 - NPC 立绘留空时是占位方块；
 - 同一时刻只有一个 NPC 高亮（`interact_radius = 150`），两个 NPC 靠太近会优先取更近的那个；
 - 战斗目前由 UI 按钮触发，还没和地图上的具体敌人绑定。
+
+
+## NPC 交互类型（`MapNPC.action`）
+
+| 类型 | 交谈时给什么按钮 | 读哪些字段 |
+|---|---|---|
+| `AUTO`（默认） | 按老规则：`destinations` 非空 = 传送，否则纯对话 | `destinations` |
+| `TALK` | 只显示台词，一个按钮都不给 | `dialogue` |
+| `TELEPORT` | 每个目的地一个按钮 | `destinations` / `teleport_label` |
+| `RECRUIT_PARTY` | 每个候选队友一个「加入 XX」按钮 | `recruit_pool`（留空则扫 `Global.RECRUIT_DIR`）/ `recruit_label` |
+
+`AUTO` 存在的意义：老 `.tres` 只填了 `destinations`，加了 `action` 字段后它们的行为**不变**。
+在 `.tres` 里 `action` 是整数（`AUTO=0 / TALK=1 / TELEPORT=2 / RECRUIT_PARTY=3`），
+因为枚举整数值会落盘，**不要调整 `MapNPC.Action` 的成员顺序**。
+
+## 招募队友（队伍系统）
+
+- **候选来源**：`MapNPC.recruit_pool`（显式列表）优先；留空 → `Global.get_recruitable_players()`
+  扫 `res://resources/units/players/`（就是选人界面那 5 个 `stats_player_*.tres`）；
+  往那个目录丢一个新 `UnitStats` 的 `.tres`，它就能被招募，不用改 NPC；
+- **点击之后**：`WorldMap.recruit_requested(stats)` → `GameRoot._on_recruit_requested()`
+  → `GameRoot.add_party_member()`（上限 `GameRoot.MAX_PARTY_SIZE = 5`，与 Battle 的
+  `Stage/PlayerSlots` 五个站位、选人界面 5 个角色一致）→ 回调 `WorldMap.notify_party_changed()`
+  把面板台词换成"XXX 加入了队伍！"并重建按钮（那个按钮随即变成灰的"已在队伍中"）；
+- **规则只有一份**：`GameRoot.party_count / party_has / party_can_join` 是静态函数，
+  面板画按钮和真正入队用的是同一套判定，不会出现"按钮能点但加不进去"；
+- **界面同步**：`GameRoot.party` 是引用语义的数组，`WorldMap._party` 是同一个实例，
+  所以数据立刻同步，需要的只是"刷新文字"这一步（面板底部那行「当前队伍（n/5）：…」）；
+- **战斗里怎么体现**：`_make_player_team()` 把 `party` 逐项 `duplicate()` 后交给
+  `Battle.start_battle()`，每个队友就是一个额外的 `BattleUnit` —— 贴图取 `UnitStats.icon`、
+  数值全取自 `.tres`，所以**队友不需要额外的角色场景**（只有"当主角"才需要
+  `Global.available_players` 里那把 `name → PackedScene` 的映射）；
+- **出队**：`GameRoot.remove_party_member()` 已经实现（主角不允许移除），但暂时没有 UI 调它。
+
+**加一个新的招募 NPC**：复制 `map_jianyecheng.tres` 里 `duiyou` 那条子资源 → 改 `id` /
+`display_name` / `position` / `texture` → 把 `action` 设成 `3`（`RECRUIT_PARTY`）即可。

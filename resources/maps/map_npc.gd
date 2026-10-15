@@ -47,3 +47,36 @@ class_name MapNPC
 ## 传送按钮上的动词措辞，便于营造场景感（例如码头 NPC 用"出海前往"、城门 NPC 用"出城前往"）。
 ## 默认 "我想去" 是通用说法，后面会自动拼上目标地图的 display_name。
 @export var teleport_label := "我想去"                # 传送按钮的措辞，例如"出海前往"
+
+
+# ───────────────────────────────────────────────────────────────────────────
+#  ── 交互类型：按 E 交谈时给玩家什么按钮 ──
+#  ⚠ 枚举整数值会写进 .tres，所以不要调整成员顺序。
+# ───────────────────────────────────────────────────────────────────────────
+## NPC 的交互类型：
+##   AUTO          —— 按老规则推断（destinations 非空 = 传送，否则纯对话）。默认值，
+##                    所以给已存在的 .tres 加这个字段**不会改变**它们的表现。
+##   TALK          —— 只显示台词，一个按钮都不给（即使误填了 destinations 也不显示传送）。
+##   TELEPORT      —— 台词 + 每个目的地一个传送按钮（读 destinations）。
+##   RECRUIT_PARTY —— 台词 + 每个候选队友一个「加入 XX」按钮（读 recruit_pool）。
+enum Action {
+	AUTO,
+	TALK,
+	TELEPORT,
+	RECRUIT_PARTY,
+}
+
+## 交互类型。世界地图的 WorldMap.resolve_action() 负责把 AUTO 解析成具体类型，
+## 于是"这个 NPC 会干什么"这条规则只有一份，面板和以后别的界面都问它。
+@export var action: Action = Action.AUTO
+
+## RECRUIT_PARTY 专用：可招募的队友（UnitStats 资源）。
+## 留空 = 自动扫描 Global.RECRUIT_DIR（res://resources/units/players/）下的所有 UnitStats
+## —— 于是"往那个目录里丢一个新角色 .tres，他就能被招募"，不用回来改 NPC。
+## ⚠ 导出（打包）后文本资源可能被转成 .res，扫描依赖 PCK 的文件索引；要绝对稳妥就把
+##   候选逐个拖进这个数组（显式列表优先于自动扫描，见 WorldMap._recruit_candidates）。
+@export var recruit_pool: Array[UnitStats] = []
+
+## RECRUIT_PARTY 专用：招募按钮上的动词前缀，最终文字形如「加入 Knight」。
+## 与 teleport_label 分开是为了语义清楚：招募 NPC 根本不需要填传送措辞。
+@export var recruit_label := "加入"

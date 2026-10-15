@@ -64,6 +64,12 @@ signal battle_requested
 ## 玩家在 NPC 对话面板里选了目的地。参数是目标地图的 id（MapData.id）。
 ## GameRoot 收到后调 travel_to(map_id)。
 signal travel_requested(map_id: String)
+
+## 玩家在 NPC 面板里点了某个队友的「加入」按钮。
+## 参数 stats：要招募的 UnitStats 资源（不是节点）。
+## ⚠ 本信号只**请求**，自己不改队伍：GameRoot 收到后按自己的规则判断能不能加
+##   （见 main.gd 的 _on_recruit_requested），加完再回调本文件的 notify_party_changed() 刷新面板。
+signal recruit_requested(stats: UnitStats)
 ## 玩家点了「返回主菜单」。GameRoot 收到后调 show_title()。
 signal back_to_title_requested
 
@@ -75,6 +81,10 @@ signal back_to_title_requested
 const NPC_SCENE := preload("res://scenes/world/world_npc.tscn")
 ## 玩家离地图边缘的最小留白（像素，世界坐标）。_move_player() 用它做 clamp，
 ## 60.0 大约是一个角色身位，防止贴图放大后角色半个身子走出图片外。
+## NPC 对话面板的最小高度。**必须和 world_map.tscn 里 TravelPanel 的原始高度一致（460）**，
+## 否则没打开过招募面板时，传送面板的高度会莫名其妙变一下。
+const PANEL_MIN_HEIGHT := 460.0
+
 const EDGE_MARGIN := 60.0
 
 # ───────────────────────────────────────────────────────────────────────────
@@ -125,6 +135,11 @@ var _npcs: Array[WorldNPC] = []
 var _nearest: WorldNPC = null
 ## 对话/传送面板是否打开。为 true 时 _process 不处理走动，避免"一边看对话一边飘走"。
 var _panel_open := false
+
+## 当前打开着面板的那个 NPC（null = 面板没开）。
+## 用途：招募成功后要重建按钮区，而重建需要知道"这是哪个 NPC 的面板"（不同类型按钮不一样）。
+## 关闭面板时置 null（按钮区不清空 —— 旧按钮在隐藏的父节点下不可见也不接收输入，下次打开会重建）。
+var _panel_npc: WorldNPC = null
 
 # ───────────────────────────────────────────────────────────────────────────
 #  ── 场景节点引用（% = unique_name_in_owner，指向本场景里标记为唯一的节点）──
@@ -518,8 +533,8 @@ func _is_interact_event(event: InputEvent) -> bool:
 ## 返回值：无。
 ## 副作用：
 ##   · 置 _panel_open = true（于是 _process 停止处理走动）；
-##   · 清空并重建 panel_buttons 的子节点（旧的 remove_child + queue_free，新的 add_child）；
-##   · 把每个目的地按钮的 pressed 连接到 _on_destination_pressed.bind(dest_id)；
+##   · 记住是哪个 NPC（_panel_npc），然后调 _rebuild_panel_buttons() 铺按钮区 ——
+##     具体铺什么由 MapNPC.action 决定（传送 / 招募队友 / 只给一句台词）；
 ##   · panel.show()。
 ## 坑：
 ##   · remove_child 之后又 queue_free 是刻意写法 —— 只 queue_free 的话节点会留到帧末，
@@ -529,31 +544,177 @@ func _is_interact_event(event: InputEvent) -> bool:
 ##   · 运行时 new 出来的按钮 owner 是 null，只能 queue_free 自己，不能走 owner 那条路。
 func _open_panel(npc: WorldNPC) -> void:
 	_panel_open = true
+	_panel_npc = npc
 	panel_name.text = npc.data.display_name
 	panel_dialogue.text = npc.data.dialogue
 
-	for child in panel_buttons.get_children():
-		panel_buttons.remove_child(child)
-		child.queue_free()
-
-	if npc.data.destinations.is_empty():
-		# 不给任何目的地时，放一行说明文字（Label 不可点，只是告诉玩家"这里没传送"）。
-		var none := Label.new()
-		none.text = "（这个 NPC 目前不送人去别处）"
-		none.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		panel_buttons.add_child(none)
-	else:
-		for dest_id in npc.data.destinations:
-			var button := Button.new()
-			# 显示名优先查 _map_names；查不到（例如指向了一张没进 main.tscn 的地图）就退化成 id 本身。
-			button.text = "%s %s" % [npc.data.teleport_label, _map_names.get(dest_id, dest_id)]
-			button.custom_minimum_size = Vector2(300, 52)
-			button.add_theme_font_size_override("font_size", 22)
-			button.pressed.connect(_on_destination_pressed.bind(dest_id))
-			panel_buttons.add_child(button)
+	_rebuild_panel_buttons()
 
 	panel.show()
 
+
+## 按当前 NPC 的交互类型重建按钮区。
+## 调用时机：每次打开面板（_open_panel）以及招募成功后刷新（notify_party_changed）。
+## 副作用：清空 panel_buttons 的子节点（先 remove_child 再 queue_free，理由同旧代码的注释），
+##        再按类型铺新按钮。
+## 坑：一个按钮都不铺也是合法状态（TALK 类型）—— 面板只显示台词，靠「再想想」关闭。
+func _rebuild_panel_buttons() -> void:
+	for child in panel_buttons.get_children():
+		panel_buttons.remove_child(child)
+		child.queue_free()
+	if _panel_npc == null:
+		return
+	match resolve_action(_panel_npc.data):
+		MapNPC.Action.RECRUIT_PARTY:
+			_build_recruit_buttons(_panel_npc.data)
+		MapNPC.Action.TELEPORT:
+			_build_teleport_buttons(_panel_npc.data)
+		_:
+			_add_panel_note("（这个 NPC 目前不送人去别处）")
+	_fit_panel_height()
+
+
+## 按按钮区的实际需要把面板撑高，避免按钮溢出面板背景。
+## 为什么需要：world_map.tscn 里 TravelPanel 是**固定 460 高**的居中面板，而招募 NPC 有 5 个候选
+## （5×52 + 4×12 = 308 px 的按钮区），加上名字/台词/关闭按钮后总需求约 626 px ——
+## 不调整的话后两个按钮和「再想想」会被画到面板外面去（Control 容器默认不裁剪，会直接漏到游戏画面上）。
+## 做法：面板是"居中锚点 + 对称 offset"，高度 = offset_bottom - offset_top，改这一对即可；
+##   上限取视口高度的 85%，小窗口下也不会顶出屏幕（真超了就靠 VBox 自己挤，属于极端情况）。
+## 参数：无（直接读 panel_buttons 里已有子节点的最小尺寸）。
+## 副作用：改 panel 的 offset_top / offset_bottom。
+func _fit_panel_height() -> void:
+	var needed := 0.0
+	for child in panel_buttons.get_children():
+		needed += child.get_combined_minimum_size().y
+	if panel_buttons.get_child_count() > 1:
+		needed += panel_buttons.get_theme_constant("separation") * float(panel_buttons.get_child_count() - 1)
+	# 名字 ~40 + 台词 90 + 关闭按钮 52 + 外框上下边距 48 + 三段间隔（16×3）= 278
+	var total := needed + 278.0
+	total = clampf(total, PANEL_MIN_HEIGHT, get_viewport_rect().size.y * 0.85)
+	panel.offset_top = -total * 0.5
+	panel.offset_bottom = total * 0.5
+
+## 把 MapNPC.Action.AUTO 解析成"具体会干什么"。
+## 静态函数：面板、GameRoot、以后的成就/任务系统想判断"这个 NPC 是干什么的"都可以问它，
+## 于是"有 destinations 就算传送 NPC"这条老规则只写在这里一份（老的 .tres 不用改就能继续用）。
+static func resolve_action(data: MapNPC) -> MapNPC.Action:
+	if data == null:
+		return MapNPC.Action.TALK
+	if data.action != MapNPC.Action.AUTO:
+		return data.action
+	return MapNPC.Action.TELEPORT if not data.destinations.is_empty() else MapNPC.Action.TALK
+
+
+## 铺传送按钮（从 _open_panel 里原样搬过来的，行为不变）。
+func _build_teleport_buttons(data: MapNPC) -> void:
+	if data.destinations.is_empty():
+		_add_panel_note("（这个 NPC 目前不送人去别处）")
+		return
+	for dest_id in data.destinations:
+		var button := Button.new()
+		# 显示名优先查 _map_names；查不到（例如指向了一张没进 main.tscn 的地图）就退化成 id 本身。
+		button.text = "%s %s" % [data.teleport_label, _map_names.get(dest_id, dest_id)]
+		button.custom_minimum_size = Vector2(300, 52)
+		button.add_theme_font_size_override("font_size", 22)
+		button.pressed.connect(_on_destination_pressed.bind(dest_id))
+		panel_buttons.add_child(button)
+
+
+## 铺招募按钮：每个候选队友一个按钮，已在队里 / 队伍已满的按钮置灰不可点。
+## 候选来源：MapNPC.recruit_pool 优先，留空则问 Global 要目录扫描结果（见 _recruit_candidates）。
+## 面板底部再补一行"当前队伍（n/5）：…"，玩家点完一眼能看到结果，不用猜有没有生效。
+## 说明：按钮文字里的属性摘要用 _stats_digest()，完整数值放在 tooltip 里（鼠标悬停可见）。
+func _build_recruit_buttons(data: MapNPC) -> void:
+	var candidates := _recruit_candidates(data)
+	if candidates.is_empty():
+		_add_panel_note("（没有可招募的队友：Global.RECRUIT_DIR 里没扫到 UnitStats）")
+		return
+	var count := GameRoot.party_count(_party)
+	for stats in candidates:
+		var joined := GameRoot.party_has(_party, stats)
+		var full := count >= GameRoot.MAX_PARTY_SIZE
+		var button := Button.new()
+		if joined:
+			button.text = "%s（已在队伍中）" % stats.name
+		elif full:
+			button.text = "%s（队伍已满 %d/%d）" % [stats.name, count, GameRoot.MAX_PARTY_SIZE]
+		else:
+			button.text = "%s %s   %s" % [data.recruit_label, stats.name, _stats_digest(stats)]
+		button.tooltip_text = "%s\nHP %s / 伤害 %s / 速度 %s / 幸运 %s / 格挡 %s%%" % [
+			stats.name, _num(stats.health), _num(stats.damage), _num(stats.speed),
+			_num(stats.luck), _num(stats.block_chance)]
+		button.custom_minimum_size = Vector2(0, 52)
+		button.add_theme_font_size_override("font_size", 20)
+		button.disabled = joined or full
+		if not button.disabled:
+			button.pressed.connect(_on_recruit_pressed.bind(stats))
+		panel_buttons.add_child(button)
+	_add_panel_note(_party_summary())
+
+
+## 候选队友列表：显式 recruit_pool 优先，否则用 Global 的目录扫描。
+## 为什么不缓存"合并后的候选"：recruit_pool 是 .tres 里的数据，运行期可能被编辑器改，
+## 每次开面板现取最不容易出现"改了没生效"的困惑；Global 那边自己有缓存，开销可忽略。
+func _recruit_candidates(data: MapNPC) -> Array[UnitStats]:
+	if not data.recruit_pool.is_empty():
+		return data.recruit_pool
+	return Global.get_recruitable_players()
+
+
+## 一行属性摘要（招募按钮文字用）。只挑最影响选择的 3 项，避免按钮文字过长挤成一团。
+func _stats_digest(stats: UnitStats) -> String:
+	return "HP %s · 攻 %s · 速 %s" % [_num(stats.health), _num(stats.damage), _num(stats.speed)]
+
+
+## 数值转短字符串：整数不带小数点（25 而不是 25.0），真小数保留原样（12.5）。
+## 存在的原因：UnitStats 的字段有些是 float（health = 15.0），直接 str() 会在 UI 上出现 "15.0" 这种噪音。
+func _num(value) -> String:
+	var f := float(value)
+	return str(int(f)) if is_equal_approx(f, roundf(f)) else str(f)
+
+
+## 面板底部的"当前队伍"摘要文字。
+func _party_summary() -> String:
+	var names := GameRoot.party_names_of(_party)
+	var body := "、".join(names) if not names.is_empty() else "（空）"
+	return "当前队伍（%d/%d）：%s" % [GameRoot.party_count(_party), GameRoot.MAX_PARTY_SIZE, body]
+
+
+## 往按钮区加一行不可点击的说明文字。
+## 抽出来的原因：以前这句 Label 是内联写在 _open_panel 里的，现在"传送/招募/兜底"三条路都要用。
+## ⚠ 这里**不要**开 autowrap：容器里的 Label 在拿到真实宽度之前算最小尺寸时，自动换行会按
+##    "每个字一行"报一个巨大的最小高度（实测 25 字的队伍摘要把面板撑到了 1013 px），
+##    而 _fit_panel_height() 正是按子节点的最小高度算面板高度的，会被这个假高度带跑。
+##    说明文字都很短（一行放得下），横向溢出的极端情况远比纵向撑破面板好看。
+func _add_panel_note(text: String) -> void:
+	var label := Label.new()
+	label.text = text
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.add_theme_font_size_override("font_size", 18)
+	label.autowrap_mode = TextServer.AUTOWRAP_OFF
+	label.clip_text = true
+	panel_buttons.add_child(label)
+
+
+## 招募按钮回调。本函数**只发请求**：真正的入队判定在 GameRoot._on_recruit_requested()。
+## 参数 stats：候选角色（由 bind 绑进来的 UnitStats 资源）。
+## 副作用：播 UI 音效、emit recruit_requested(stats)。刻意**不关面板** —— 玩家要能连着招第二个，
+##   也才能看到按钮变成"已在队伍中"。
+func _on_recruit_pressed(stats: UnitStats) -> void:
+	SoundManager.play_sound(SoundManager.Sound.UI)
+	recruit_requested.emit(stats)
+
+
+## 队伍变化后刷新面板（GameRoot 招募成功后调用；失败时也调用，用来显示失败原因）。
+## 参数 message：非空时替换面板台词（例如"Knight 加入了队伍！"/"队伍已经满了（5 人）。"）。
+## 副作用：改 panel_dialogue.text；面板开着时重建按钮区；面板没关时**不动** _panel_npc。
+## 注意：面板没开时只改了台词，下次打开会被 NPC 自己的 dialogue 覆盖 —— 这是刻意的
+##   （招募流程一定发生在面板开着的时候，没必要为它维护一份"待显示消息"状态）。
+func notify_party_changed(message := "") -> void:
+	if not message.is_empty():
+		panel_dialogue.text = message
+	if _panel_open:
+		_rebuild_panel_buttons()
 
 ## 关闭对话面板。由「再想想」按钮和 Esc 两处调用。
 ## 参数：无。返回值：无。
@@ -562,6 +723,7 @@ func _open_panel(npc: WorldNPC) -> void:
 ##   留在树上的旧按钮因为隐藏的父节点不可见，也不接收输入。
 func _close_panel() -> void:
 	_panel_open = false
+	_panel_npc = null
 	panel.hide()
 
 

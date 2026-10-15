@@ -1,5 +1,5 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene format=3 uid="uid://bl3xpexlvqo3u"]
 
 [ext_resource type="PackedScene" path="res://scenes/world/world_map.tscn" id="1_base"]
 
-[node name="WorldMap" instance=ExtResource("1_base")]
+[node name="WorldMap" unique_id=823134645 instance=ExtResource("1_base")]
