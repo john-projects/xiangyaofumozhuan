@@ -120,7 +120,7 @@ func _ready() -> void:
 ##   每帧拉取比"每帧 emit 一次信号"更省事，也不会漏帧。
 ## 为什么 game_paused 时要提前 return：暂停期间 spawner 的计时器虽然还在跑，
 ##   但画面应该冻住 —— 这样"选完升级弹商店"的那段时间里倒计时数字不会继续跳。
-func _process(delta: float) -> void:
+func _process(_delta: float) -> void:
 	if Global.game_paused:
 		return
 	wave_index_label.text = spawner.get_wave_text()

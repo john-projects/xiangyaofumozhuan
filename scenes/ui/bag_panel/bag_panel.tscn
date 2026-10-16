@@ -1,0 +1,216 @@
+[gd_scene format=3 uid="uid://xxwagewbx3in"]
+
+[ext_resource type="Script" uid="uid://bidikokgbhow8" path="res://scenes/ui/bag_panel/bag_panel.gd" id="1_bag"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_panel"]
+bg_color = Color(0.07058824, 0.07058824, 0.09019608, 0.94)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.45490196, 0.38039216, 0.23921569, 1)
+corner_radius_top_left = 16
+corner_radius_top_right = 16
+corner_radius_bottom_right = 16
+corner_radius_bottom_left = 16
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_frame"]
+bg_color = Color(0.12941177, 0.12941177, 0.16078432, 0.9)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.45490196, 0.38039216, 0.23921569, 1)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_nameplate"]
+bg_color = Color(0, 0, 0, 0.55)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[node name="BagPanel" type="Control" unique_id=1005733960]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_bag")
+
+[node name="Dim" type="ColorRect" parent="." unique_id=81497682]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0, 0, 0, 0.35)
+
+[node name="Panel" type="Panel" parent="." unique_id=789147370]
+layout_mode = 1
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -678.0
+offset_top = -1060.0
+offset_right = -16.0
+offset_bottom = -16.0
+grow_horizontal = 0
+grow_vertical = 0
+theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
+
+[node name="Margin" type="MarginContainer" parent="Panel" unique_id=655324482]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_top = 16
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_bottom = 16
+
+[node name="VBox" type="VBoxContainer" parent="Panel/Margin" unique_id=422099662]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="CountLabel" type="Label" parent="Panel/Margin/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 28
+text = "背包"
+horizontal_alignment = 1
+
+[node name="PlayerRow" type="HBoxContainer" parent="Panel/Margin/VBox"]
+layout_mode = 2
+alignment = 1
+theme_override_constants/separation = 16
+
+[node name="LeftSlots" type="VBoxContainer" parent="Panel/Margin/VBox/PlayerRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 4
+theme_override_constants/separation = 10
+
+[node name="PrevPlayerButton" type="Button" parent="Panel/Margin/VBox/PlayerRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(44, 60)
+layout_mode = 2
+size_flags_vertical = 4
+theme_override_font_sizes/font_size = 24
+text = "◀"
+
+[node name="PlayerColumn" type="VBoxContainer" parent="Panel/Margin/VBox/PlayerRow"]
+layout_mode = 2
+size_flags_vertical = 4
+theme_override_constants/separation = 6
+
+[node name="PlayerFrame" type="Panel" parent="Panel/Margin/VBox/PlayerRow/PlayerColumn"]
+custom_minimum_size = Vector2(240, 308)
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_frame")
+
+[node name="PlayerView" type="TextureRect" parent="Panel/Margin/VBox/PlayerRow/PlayerColumn/PlayerFrame"]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 10.0
+offset_top = 10.0
+offset_right = -10.0
+offset_bottom = -36.0
+grow_horizontal = 2
+grow_vertical = 2
+expand_mode = 1
+stretch_mode = 5
+
+[node name="PlayerFallback" type="Label" parent="Panel/Margin/VBox/PlayerRow/PlayerColumn/PlayerFrame"]
+unique_name_in_owner = true
+modulate = Color(1, 1, 1, 0.45)
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_bottom = -36.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_font_sizes/font_size = 18
+text = "（未选角色）"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="PlayerNameLabel" type="Label" parent="Panel/Margin/VBox/PlayerRow/PlayerColumn/PlayerFrame"]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 6.0
+offset_top = -30.0
+offset_right = -6.0
+offset_bottom = -5.0
+grow_horizontal = 2
+grow_vertical = 0
+theme_override_font_sizes/font_size = 16
+theme_override_styles/normal = SubResource("StyleBoxFlat_nameplate")
+text = "主角"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="NextPlayerButton" type="Button" parent="Panel/Margin/VBox/PlayerRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(44, 60)
+layout_mode = 2
+size_flags_vertical = 4
+theme_override_font_sizes/font_size = 24
+text = "▶"
+
+[node name="RightSlots" type="VBoxContainer" parent="Panel/Margin/VBox/PlayerRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 4
+theme_override_constants/separation = 10
+
+[node name="InfoRow" type="HBoxContainer" parent="Panel/Margin/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="CoinsLabel" type="Label" parent="Panel/Margin/VBox/InfoRow"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 20
+text = "金币：0"
+modulate = Color(1, 0.86, 0.45, 1)
+
+[node name="MessageLabel" type="Label" parent="Panel/Margin/VBox/InfoRow" unique_id=425407109]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 18
+modulate = Color(1, 0.9, 0.55, 1)
+
+[node name="Scroll" type="ScrollContainer" parent="Panel/Margin/VBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 614)
+layout_mode = 2
+size_flags_horizontal = 4
+size_flags_vertical = 4
+follow_focus = true
+horizontal_scroll_mode = 0
+
+[node name="Grid" type="GridContainer" parent="Panel/Margin/VBox/Scroll" unique_id=1164863150]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/h_separation = 10
+theme_override_constants/v_separation = 10
+columns = 8

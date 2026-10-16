@@ -5,8 +5,10 @@
 [ext_resource type="Texture2D" uid="uid://dudt86f6iqppy" path="res://assets/map/map_jianyecheng.png" id="2_texture"]
 [ext_resource type="Texture2D" uid="uid://dpxw8tsbgrfse" path="res://assets/sprites/tomato/Players/Player_2.png" id="3_h1f2s"]
 [ext_resource type="Script" uid="uid://ctu1nt07fqrnc" path="res://resources/maps/map_npc.gd" id="3_npc"]
+[ext_resource type="Script" uid="uid://cuccl3awnxe15" path="res://resources/items/weapons/item_weapon.gd" id="3_st1wf"]
 [ext_resource type="PackedScene" uid="uid://bl3xpexlvqo3u" path="res://scenes/world/maps/world_jianyecheng.tscn" id="4_world"]
 [ext_resource type="Texture2D" uid="uid://dmox6e28kf6ax" path="res://assets/sprites/tomato/Players/Player_4.png" id="4_yulw2"]
+[ext_resource type="Texture2D" uid="uid://bt0lww88864ws" path="res://assets/sprites/tomato/Players/Player_5.png" id="5_yulw2"]
 
 [sub_resource type="Resource" id="Resource_chuanfu"]
 script = ExtResource("3_npc")
@@ -28,6 +30,16 @@ dialogue = "需要加入队伍吗？"
 action = 3
 metadata/_custom_type_script = "uid://ctu1nt07fqrnc"
 
+[sub_resource type="Resource" id="Resource_rgkfj"]
+script = ExtResource("3_npc")
+id = "shangren"
+display_name = "商人"
+texture = ExtResource("5_yulw2")
+position = Vector2(0.4, 0.3)
+dialogue = "看看有没有趁手的家伙？都是现货。"
+action = 4
+metadata/_custom_type_script = "uid://ctu1nt07fqrnc"
+
 [resource]
 script = ExtResource("1_mapdata")
 id = "jianyecheng"
@@ -36,6 +48,6 @@ texture = ExtResource("2_texture")
 scene = ExtResource("4_world")
 map_scale = 3.0
 spawn_point = Vector2(0.45, 0.65)
-npcs = Array[ExtResource("3_npc")]([SubResource("Resource_chuanfu"), SubResource("Resource_pi0uk")])
+npcs = Array[ExtResource("3_npc")]([SubResource("Resource_chuanfu"), SubResource("Resource_pi0uk"), SubResource("Resource_rgkfj")])
 next_id = "donghaiwan"
 exit_center = Vector2(0.62, 0.5)

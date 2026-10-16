@@ -51,7 +51,7 @@ class_name StatsContainer
 ## 单位口径：life_steal 与 block_chance 在 UnitStats 里都是**百分数语义**（0~100+），
 ##   所以这里直接拼 "%"；而 health/damage/speed/luck/hp_regen/harvesting 是裸数值，原样 str()。
 ## Called every frame. 'delta' is the elapsed time since the previous frame.
-func _process(delta: float) -> void:
+func _process(_delta: float) -> void:
 	# 必须在取字段之前判有效：Global.player 是跨场景存活的引用，主菜单/选人阶段它是 null，
 	# 上一局结束后它还可能是"已被 queue_free 的节点"。is_instance_valid 能同时挡住这两种情况。
 	if not is_instance_valid(Global.player):

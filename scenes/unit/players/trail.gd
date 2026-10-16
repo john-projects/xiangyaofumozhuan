@@ -88,7 +88,7 @@ func _ready() -> void:
 ##   · 采样点是玩家的节点原点（脚底），不是 sprite 位置，所以尾巴贴地；配合场景里
 ##     Trail 的 position 偏移和 width_curve，得到"地面拖影"的观感。
 # Called every frame. 'delta' is the elapsed time since the previous frame.
-func _process(delta: float) -> void:
+func _process(_delta: float) -> void:
 	if not is_active:
 		return
 

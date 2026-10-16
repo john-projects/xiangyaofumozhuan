@@ -22,6 +22,8 @@ class_name PauseMenu
 signal resume_requested
 ## 「队伍管理」：进入二级页（WorldMap 打开 PartyPanel）。
 signal party_requested
+## 「背包」：进入二级页（WorldMap 打开 BagPanel）。地图上按 B 也能直接开，不用先按 Esc。
+signal bag_requested
 ## 「进入战斗」：与地图右下角那个按钮同一条通路（WorldMap._on_battle_pressed）。
 signal battle_requested
 ## 「返回主菜单」：与地图左下角那个按钮同一条通路（WorldMap._on_back_pressed）。
@@ -29,6 +31,7 @@ signal title_requested
 
 @onready var resume_button: Button = %ResumeButton
 @onready var party_button: Button = %PartyButton
+@onready var bag_button: Button = %BagButton
 @onready var battle_button: Button = %BattleButton
 @onready var title_button: Button = %TitleButton
 
@@ -39,6 +42,7 @@ func _ready() -> void:
 	# 少一处"改了名字忘了改连线"的隐患（本工程的 UI 节点大多这么做）。
 	resume_button.pressed.connect(_emit_resume)
 	party_button.pressed.connect(_emit_party)
+	bag_button.pressed.connect(_emit_bag)
 	battle_button.pressed.connect(_emit_battle)
 	title_button.pressed.connect(_emit_title)
 
@@ -58,7 +62,7 @@ func open(battle_enabled: bool) -> void:
 ## 跳过 disabled 的按钮：置灰按钮 grab_focus() 无效，混在环里会让 W/S 卡住不动。
 func focus_ring() -> Array[Control]:
 	var out: Array[Control] = []
-	var buttons: Array[Button] = [resume_button, party_button, battle_button, title_button]
+	var buttons: Array[Button] = [resume_button, party_button, bag_button, battle_button, title_button]
 	for button in buttons:
 		if not button.disabled:
 			out.append(button)
@@ -71,6 +75,10 @@ func _emit_resume() -> void:
 
 func _emit_party() -> void:
 	party_requested.emit()
+
+
+func _emit_bag() -> void:
+	bag_requested.emit()
 
 
 func _emit_battle() -> void:

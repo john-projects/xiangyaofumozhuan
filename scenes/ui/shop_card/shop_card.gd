@@ -86,7 +86,7 @@ func _on_buy_button_pressed() -> void:
 	# 上限 6：只对武器生效（被动道具不限量）。6 这个数字是硬编码的，
 	# Global.equipped_weapons 是"已装备武器的数据列表"，商店买入/合成/卖出都在增删它。
 	# 提示：这里没有给玩家任何反馈（没有变灰、没有提示音差异），玩家只会觉得"按钮没反应"。
-	if shop_item.item_type == ItemBase.ItemType.WEAPON and Global.equipped_weapons.size() >= 6:
+	if shop_item.item_type == ItemBase.ItemType.WEAPON and Global.equipped_weapons.size() >= GameRoot.BAG_SLOTS:
 		return
 	
 	# 先扣钱再广播，保证订阅者看到的是"已经付过款"的状态；

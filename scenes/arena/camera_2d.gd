@@ -44,6 +44,6 @@ func _ready() -> void:
 ## 为什么用 is_instance_valid 而不是 `!= null`：
 ##   Global.player 指向的节点可能已经被释放，此时引用既不是 null 也不能访问，
 ##   `!= null` 判断不出来，只有 is_instance_valid() 能安全拦住。
-func _process(delta: float) -> void:
+func _process(_delta: float) -> void:
 	if is_instance_valid(Global.player):
 		global_position = Global.player.global_position

@@ -465,11 +465,13 @@ func _on_selection_completed() -> void:
 ##   · 给 world.spawn_override 赋值（必须在 add_child 之前 —— WorldMap._ready() 会立刻读它）；
 ##   · 给 world.deployed 赋值（上阵名单，同样是"add_child 之前的注入"，用于队伍管理面板显示状态）；
 ##   · 调 world.setup(...)（同样必须在 add_child 之前，见 WorldMap.setup 的注释）；
-##   · connect 七条信号：battle_requested → enter_battle、travel_requested → travel_to、
+##   · connect 九条信号：battle_requested → enter_battle、travel_requested → travel_to、
 ##     back_to_title_requested → show_title、recruit_requested → _on_recruit_requested、
 ##     party_remove_requested → _on_party_remove_requested、
 ##     party_deploy_requested → _on_party_deploy_requested、
-##     party_undeploy_requested → _on_party_undeploy_requested；
+##     party_undeploy_requested → _on_party_undeploy_requested、
+##     weapon_buy_requested → _on_weapon_buy_requested、
+##     weapon_sell_requested → _on_weapon_sell_requested；
 ##   · await _swap(world, world_root) —— 世界类屏幕挂到 **world_root**（不是 ui_root）。
 ## 细节：
 ##   · 连接在 add_child **之前**完成，这样屏幕一进树（甚至 _ready 里就 emit）也不会漏事件；
@@ -489,13 +491,15 @@ func show_map(result_text := "", from_map_id := "", restore_position := false) -
 	if restore_position and _map_positions.has(map.id):
 		world.spawn_override = _map_positions[map.id]     # 打完战斗回到原地
 	world.deployed = deployed      # 上阵名单（引用语义；队伍管理面板要按它显示"上阵/下阵"）
-	world.setup(map, party, Global.coins, result_text, cleared_maps.has(map.id), _map_names(), from_map_id)
+	world.setup(map, party, result_text, cleared_maps.has(map.id), _map_names(), from_map_id)
 	world.battle_requested.connect(enter_battle)
 	world.travel_requested.connect(travel_to)
 	world.back_to_title_requested.connect(show_title)
 	world.recruit_requested.connect(_on_recruit_requested)
 	world.party_deploy_requested.connect(_on_party_deploy_requested)
 	world.party_undeploy_requested.connect(_on_party_undeploy_requested)
+	world.weapon_buy_requested.connect(_on_weapon_buy_requested)
+	world.weapon_sell_requested.connect(_on_weapon_sell_requested)
 	world.party_remove_requested.connect(_on_party_remove_requested)
 	await _swap(world, world_root)
 
@@ -917,6 +921,147 @@ func _on_party_remove_requested(stats: UnitStats) -> void:
 		return
 	if world != null:
 		world.notify_party_changed("%s 已离开团队。" % stats.name)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  武器背包（商人 NPC 卖武器用）
+# ═══════════════════════════════════════════════════════════════════════════
+#  背包就是 Global.equipped_weapons（**数据**列表，不是节点）。这里只做三件事：
+#    · 给出"能不能买"的**统一判定**（面板画按钮和真正购买共用同一份，见 weapon_can_buy）；
+#    · 买下时扣钱 + 记进列表（buy_weapon）；
+#    · 把结果接到界面刷新上（_on_weapon_buy_requested → WorldMap.notify_shop_changed）。
+#
+#  ⚠ 与老的竞技场商店（ShopPanel / ShopCard）的关系：
+#    那套是"候选池 → 按波数随机抽 4 件 → 买到手还要 Global.player.add_weapon() 造 Weapon 节点"；
+#    地图模式没有玩家节点（战斗里的单位是 BattleUnit，数值全来自 UnitStats），
+#    所以这里**只记数据**，不造节点。容量用同一个常量 BAG_SLOTS（老的 ShopCard 里也改成引用它了）。
+
+## 背包格数。梦幻西游式的方格背包：BagPanel 一行 8 格，120 格 = 15 行。
+## 面板只显示前 7 行（8×7=56 格），剩下的靠**滚动**看（ScrollContainer + follow_focus，
+## 键盘往下走会自动滚过去）—— 所以"能放 120 件"和"一屏只看 56 格"是两件事。
+## 买到的东西都进 Global.equipped_weapons，超过这个数就买不进去（商人按钮会置灰并说明）。
+## ⚠ 与 BagPanel.GRID_COLUMNS（每行几格）要能整除得好看，但**不必**相等。
+const BAG_SLOTS := 120
+
+
+## 背包里同名武器有几把（商人面板用它显示"已持有 ×n"）。
+## 判定顺序与 party_has() 一致：引用 → resource_path → item_name。
+static func weapon_owned_count(p_equipped: Array[ItemWeapon], weapon: ItemWeapon) -> int:
+	if weapon == null:
+		return 0
+	var n := 0
+	for owned in p_equipped:
+		if owned == null:
+			continue
+		if owned == weapon:
+			n += 1
+		elif not owned.resource_path.is_empty() and owned.resource_path == weapon.resource_path:
+			n += 1
+		elif owned.item_name == weapon.item_name:
+			n += 1
+	return n
+
+
+## 现在能不能买这把武器：返回**空串** = 能买；否则返回"不能买的原因"（面板直接显示这句话）。
+## 做成静态函数的原因与队伍那套一样：MerchantPanel 要按同样的规则决定按钮灰不灰，
+## 两边共用一份判定，就不会出现"按钮能点、点下去却什么都没发生"——
+## 老 ShopCard 正是反例（金币不够 / 背包满时静默 return，玩家只会觉得按钮坏了）。
+static func weapon_can_buy(weapon: ItemWeapon, coins: int, p_equipped: Array[ItemWeapon]) -> String:
+	if weapon == null:
+		return "这件武器不存在。"
+	if weapon.item_cost > 0 and coins < weapon.item_cost:
+		return "金币不够（需要 %d，现在 %d）。" % [weapon.item_cost, coins]
+	if p_equipped.size() >= BAG_SLOTS:
+		return "背包满了（%d 格都占着），先卖出或合成。" % BAG_SLOTS
+	return ""
+
+
+## 买下一把武器：扣 Global.coins + 记进 Global.equipped_weapons。
+## 参数 weapon：要买的武器（调用方通常已用 weapon_can_buy() 校验过；这里再校验一次更稳）。
+## 返回值：true = 买成功；false = 没买（金币不够 / 背包满 / 传了 null）。
+## 副作用：改 Global.coins、Global.equipped_weapons —— 这里是背包**唯一的写入点**。
+## 刻意**不**发信号：队伍和武器是两回事；界面刷新由调用方走 WorldMap.notify_shop_changed()。
+func buy_weapon(weapon: ItemWeapon) -> bool:
+	if not weapon_can_buy(weapon, Global.coins, Global.equipped_weapons).is_empty():
+		return false
+	Global.coins -= weapon.item_cost
+	Global.equipped_weapons.append(weapon)
+	return true
+
+
+## 商人面板的「购买」回调（WorldMap.weapon_buy_requested → 这里）。
+## 参数 weapon：玩家点了购买的那把武器（ItemWeapon 资源，由 WorldMap 从面板按钮 bind 过来）。
+## 副作用：成功后 buy_weapon()（扣钱 + 入包），再让商人面板按新状态重建 ——
+##   余额、按钮灰不灰、"已持有 ×n" 都会跟着变；失败时只把原因写回面板（不改任何状态）。
+func _on_weapon_buy_requested(weapon: ItemWeapon) -> void:
+	var world := _current_world_map()
+	var why := weapon_can_buy(weapon, Global.coins, Global.equipped_weapons)
+	if not why.is_empty():
+		if world != null:
+			world.notify_shop_changed(why)
+		return
+	buy_weapon(weapon)
+	if world != null:
+		world.notify_shop_changed("买下了 %s（-%d 金币）。" % [weapon.item_name, weapon.item_cost])
+
+
+# ── 卖出（交易界面上把背包里的武器卖回给商人）────────────────────────────
+## 卖出返还比例。**与老的 ShopPanel._on_sell_button_pressed() 保持一致**
+##   （那边写的是 `int(item_cost * 0.75)`，截断不是四舍五入：21 金币卖 15）。
+## 留 25% 折旧，买卖来回会亏，避免"低买高卖刷钱"。
+const SELL_REFUND_RATIO := 0.75
+
+
+## 这把武器卖出去能拿多少金币：`int(item_cost × SELL_REFUND_RATIO)`（截断）。
+## 参数 weapon：要卖的武器。返回值：金币数；武器为空 / 非卖品（item_cost ≤ 0）时返回 0。
+static func weapon_sell_price(weapon: ItemWeapon) -> int:
+	if weapon == null or weapon.item_cost <= 0:
+		return 0
+	return int(weapon.item_cost * SELL_REFUND_RATIO)
+
+
+## 现在能不能卖这把武器：返回**空串** = 能卖；否则返回不能卖的原因（界面直接显示这句话）。
+## 做成静态函数的原因与 weapon_can_buy 一样：商人面板画"卖"确认框、真正卖的时候，
+##   两边共用同一份判定。目前唯一的规则是"背包里得有这把武器"。
+static func weapon_can_sell(weapon: ItemWeapon, p_equipped: Array[ItemWeapon]) -> String:
+	if weapon == null:
+		return "这件武器不存在。"
+	if weapon_owned_count(p_equipped, weapon) <= 0:
+		return "背包里没有这件武器。"
+	if weapon_sell_price(weapon) <= 0:
+		return "这件武器卖不出价钱（非卖品）。"
+	return ""
+
+
+## 卖掉一把武器：从 Global.equipped_weapons 里移除一件 + 把卖价加进 Global.coins。
+## 参数 weapon：要卖的武器（调用方通常已用 weapon_can_sell() 校验过；这里再校验一次更稳）。
+## 返回值：true = 卖成功；false = 没卖（背包里没有 / 非卖品 / 传了 null）。
+## 副作用：改 Global.coins、Global.equipped_weapons —— 与 buy_weapon 一样，这里是背包的写入点。
+## 注意 erase() 删的是"第一件相等的元素"：同一把武器在背包里有多件（多次购买会 append 同一个
+##   资源实例）时只减一件，符合"卖一把"的语义。
+func sell_weapon(weapon: ItemWeapon) -> bool:
+	if not weapon_can_sell(weapon, Global.equipped_weapons).is_empty():
+		return false
+	Global.equipped_weapons.erase(weapon)
+	Global.coins += weapon_sell_price(weapon)
+	return true
+
+
+## 商人面板的「卖出确认」回调（WorldMap.weapon_sell_requested → 这里）。
+## 参数 weapon：玩家在背包里点着要卖的那件武器。
+## 副作用：成功后 sell_weapon()（出包 + 加钱），再让两个面板按新状态重建
+##   （商人货架的"持×n"、背包的格子与金币都跟着变）；失败时只把原因写回面板。
+func _on_weapon_sell_requested(weapon: ItemWeapon) -> void:
+	var world := _current_world_map()
+	var why := weapon_can_sell(weapon, Global.equipped_weapons)
+	if not why.is_empty():
+		if world != null:
+			world.notify_shop_changed(why)
+		return
+	var price := weapon_sell_price(weapon)
+	sell_weapon(weapon)
+	if world != null:
+		world.notify_shop_changed("卖掉了 %s（+%d 金币）。" % [weapon.item_name, price])
 
 
 ## 把**上阵名单**（deployed）变成一份**可以随便改**的我方队伍，交给 Battle。

@@ -51,5 +51,5 @@ class_name CoinsBag
 ## 为什么不做成信号驱动：Global.coins 是裸 int 变量，没有对应的 changed 信号，
 ##   所以"每帧轮询"是当前结构下最不容易出错的做法。
 ## Called every frame. 'delta' is the elapsed time since the previous frame.
-func _process(delta: float) -> void:
+func _process(_delta: float) -> void:
 	coins.text = str(Global.coins)

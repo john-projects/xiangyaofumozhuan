@@ -241,10 +241,10 @@ func _layout_exit() -> void:
 	var rect := map_image.get_rect()                     # 图片实际显示区域（MapArea 里那块 16:9）
 	if rect.size.x <= 0.0 or rect.size.y <= 0.0:
 		return
-	var size := Vector2(0.16, 0.12) * rect.size          # 旧版热点大小（MapData.exit_size 已移除）
+	var hotspot_size := Vector2(0.16, 0.12) * rect.size          # 旧版热点大小（MapData.exit_size 已移除）
 	var center := rect.position + _map.exit_center * rect.size
-	_exit_button.size = size
-	_exit_button.position = center - size * 0.5
+	_exit_button.size = hotspot_size
+	_exit_button.position = center - hotspot_size * 0.5
 
 
 # ══════════════════════════════════════════════════════════

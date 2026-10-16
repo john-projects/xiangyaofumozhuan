@@ -152,10 +152,10 @@ func _rebuild() -> void:
 ## 坑：unit.stats 可能为 null（资源没配全），所以贴图取值前有 `if unit.stats != null else null` 兜底。
 func _make_icon(unit: BattleUnit, is_current: bool) -> Control:
 	# 当前出手者更大：52 → 64（约 +23%），够明显又不会把顺序条挤变形。
-	var size := 64.0 if is_current else 52.0
+	var icon_size := 64.0 if is_current else 52.0
 
 	var panel := Panel.new()
-	panel.custom_minimum_size = Vector2(size, size)
+	panel.custom_minimum_size = Vector2(icon_size, icon_size)
 	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 	var style := StyleBoxFlat.new()

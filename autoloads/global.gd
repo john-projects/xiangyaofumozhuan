@@ -174,8 +174,16 @@ func get_chance_success(chance: float) -> bool:
 ## 当前内容 = 选人界面那 5 个角色（stats_player_*.tres），和 selection_panel.tscn 的 players 是同一批。
 const RECRUIT_DIR := "res://resources/units/players/"
 
+## 武器（商品）的根目录。商人 NPC（MapNPC.sell_pool 留空时）会调 get_all_weapons() 扫它。
+## 结构是 weapons/melee/<类型>/item_<类型>_<阶>.tres 与 weapons/range/<类型>/…，
+## 所以扫描必须**递归**；同目录里的 stats_*.tres 是 WeaponStats（数值表，不是商品），要靠前缀区分。
+const WEAPON_DIR := "res://resources/items/weapons/"
+
 ## 上一次扫描的缓存。角色的 .tres 在运行期不会变，反复开招募面板没必要反复读盘。
 var _recruit_cache: Array[UnitStats] = []
+
+## 武器扫描的缓存（理由同 _recruit_cache）。
+var _weapon_cache: Array[ItemWeapon] = []
 
 
 ## 扫描 RECRUIT_DIR，返回里面所有 UnitStats，按资源路径排序（顺序稳定，UI 不会每次乱跳）。
@@ -205,6 +213,56 @@ func get_recruitable_players(refresh := false) -> Array[UnitStats]:
 	_recruit_cache = found
 	return _recruit_cache
 
+
+## 扫描 WEAPON_DIR（**递归**），返回里面所有武器，按"价格升序、同价按名字"排序。
+## 参数 refresh：true = 忽略缓存重新扫（改完目录想立刻看到效果时用）。
+## 返回值：Array[ItemWeapon]；目录打不开时返回缓存（可能是空数组）并 push_warning。
+## 副作用：写 _weapon_cache；只读磁盘，不改任何资源、不发信号。
+## 谁在用：MapNPC.sell_pool 留空时，WorldMap 打开商人面板会调它 —— 于是"往
+##   resources/items/weapons/ 里丢一把新武器，商人自动上架"，不用改 NPC。
+## 坑：
+##   · 必须递归：weapons/ 下面分了 melee / range，各自再按武器类型分一层子目录；
+##   · 只收 **item_** 前缀的 .tres —— 同一个目录里的 stats_*.tres 是 WeaponStats（数值表），
+##     不是商品；不加这个前缀判断的话，货架上会多出一堆"没有名字没有价格"的空条目；
+##   · 两种扩展名都收（打包导出后文本资源可能变成 .res）；
+##   · 排序按 item_cost 升序：商店从便宜到贵读起来最自然，也顺手让"买得起的"集中在上面
+##     （键盘焦点环只收买得起的，见 MerchantPanel.focus_ring）。
+func get_all_weapons(refresh := false) -> Array[ItemWeapon]:
+	if not refresh and not _weapon_cache.is_empty():
+		return _weapon_cache
+	var found: Array[ItemWeapon] = []
+	_collect_weapons(WEAPON_DIR, found)
+	found.sort_custom(func(a: ItemWeapon, b: ItemWeapon) -> bool:
+		if a.item_cost != b.item_cost:
+			return a.item_cost < b.item_cost
+		return a.item_name < b.item_name)
+	_weapon_cache = found
+	return _weapon_cache
+
+
+## get_all_weapons() 的递归实现：把一个目录（及其子目录）里的 ItemWeapon 收进 out。
+## 参数 dir_path：形如 "res://resources/items/weapons/melee/axe/"（**末尾要带斜杠**）。
+## 参数 out：收集用的数组（原地追加，不返回新数组）。
+## 返回值：无。副作用：只读磁盘。
+## 注意：目录打不开（路径写错/被删）时**静默返回**，不 push_warning ——
+##   递归进去的某个子目录打不开是正常的（例如以后有人加了个 .gdignore 的空目录），
+##   顶层打不开的情况由调用方按"结果为空"处理。
+func _collect_weapons(dir_path: String, out: Array[ItemWeapon]) -> void:
+	var dir := DirAccess.open(dir_path)
+	if dir == null:
+		return
+	for file_name in dir.get_files():
+		if not (file_name.ends_with(".tres") or file_name.ends_with(".res")):
+			continue
+		if not file_name.begins_with("item_"):
+			continue
+		var res := ResourceLoader.load(dir_path + file_name)
+		if res is ItemWeapon:
+			out.append(res)
+	for sub_dir in dir.get_directories():
+		_collect_weapons(dir_path + sub_dir + "/", out)
+
+
 # ───────────────────────────────────────────────────────────────────────────
 #  ── UI 文本工具 ──
 # ───────────────────────────────────────────────────────────────────────────
@@ -213,7 +271,10 @@ func get_recruitable_players(refresh := false) -> Array[UnitStats]:
 ## 存在的原因：UnitStats 里有些字段是 float（例如 health = 15.0），直接 str() 会在 UI 上
 ##   出现 "15.0" 这种噪音；而让每处 UI 各写一遍格式化，迟早会出现两处不一致。
 ## 谁在用：WorldMap 的招募按钮/悬停提示、PartyPanel 的成员属性行。
-static func format_stat(value) -> String:
+## ⚠ 故意**不写 static**：调用点都是通过 autoload 单例写的（`Global.format_stat(...)`），
+##   而"static 函数被实例调用"会触发 GDScript 的 static_called_on_instance
+##   （编辑器错误面板里一刷就是几十条）。写成普通成员函数就没这个噪音，调用点一个都不用改。
+func format_stat(value) -> String:
 	var f := float(value)
 	return str(int(f)) if is_equal_approx(f, roundf(f)) else str(f)
 
@@ -232,10 +293,16 @@ static func format_stat(value) -> String:
 #      由各屏幕的 _unhandled_input 调下面的工具函数补上；
 #    · E 之所以不能靠 Input 模拟 ui_accept：ui_accept 是 Enter/空格，GUI 会自己按；
 #      E 不在其中，所以这里直接把按钮的 pressed 信号发出去（效果与点一下完全一样）。
+#
+#  ⚠ 下面这几个函数**故意不写 static**（和 format_stat 同一个理由）：调用点统一通过
+#    autoload 单例调用（`Global.step_focus(...)`），而 static 函数被实例调用会被 GDScript
+#    报 static_called_on_instance —— 编辑器错误面板里一次能刷出 20 多条。
+#    想改成 static 就必须把所有调用点改成"类名调用"，而本脚本没有 class_name（它就是 Global 本身），
+#    所以保持普通成员函数是这里唯一干净的做法。同理别把它们挪进"static 工具类"。
 
 ## 这个控件现在能不能被键盘选中：可见、没被禁用、且自己允许获得焦点。
 ## 参数 control：任意 Control（可以为 null，返回 false）。
-static func can_focus(control: Control) -> bool:
+func can_focus(control: Control) -> bool:
 	if control == null or not control.visible:
 		return false
 	if control is Button and (control as Button).disabled:
@@ -247,7 +314,7 @@ static func can_focus(control: Control) -> bool:
 ## 参数 root：容器节点（例如队伍面板的行容器、主菜单的 Center）。
 ## 只认 Button 是有意的：Label / 各种容器默认不该成为键盘停留点；万一某个容器
 ##   把 focus_mode 设成了 ALL（主题里有可能），也不该混进环里让 W/S 白停一格。
-static func collect_focusable(root: Node) -> Array[Control]:
+func collect_focusable(root: Node) -> Array[Control]:
 	var out: Array[Control] = []
 	for child in root.get_children():
 		if child is Button and can_focus(child as Control):
@@ -262,7 +329,7 @@ static func collect_focusable(root: Node) -> Array[Control]:
 ## 参数 step：+1 = 下一个，-1 = 上一个。
 ## 细节：当前焦点不在环里（例如玩家刚用鼠标点了别处、或环刚被重建）时从环的第一个开始 ——
 ##   这样 W/S 永远能"接手"焦点，不会出现"按了没反应"。
-static func step_focus(context: Node, ring: Array[Control], step: int) -> void:
+func step_focus(context: Node, ring: Array[Control], step: int) -> void:
 	if ring.is_empty():
 		return
 	var current := context.get_viewport().gui_get_focus_owner()
@@ -274,7 +341,7 @@ static func step_focus(context: Node, ring: Array[Control], step: int) -> void:
 ## 按下"当前焦点上的那个按钮"（给 E 键用）。
 ## 参数 context：树里的任意节点（用它拿 viewport）。
 ## 返回值：true = 确实按下去了；false = 当前没有聚焦的按钮（或它是置灰的）。
-static func activate_focused(context: Node) -> bool:
+func activate_focused(context: Node) -> bool:
 	var current := context.get_viewport().gui_get_focus_owner()
 	if current is Button and not (current as Button).disabled:
 		(current as Button).pressed.emit()
@@ -290,11 +357,46 @@ static func activate_focused(context: Node) -> bool:
 ##   没配也能用（&"interact" 是 StringName 字面量，InputMap 的键就是 StringName）。
 ## 注意：Enter 同时也是内置 ui_accept，会被 GUI 焦点系统先消费掉；所以实际落到调用方手里的
 ##   主要是 E —— 这也正是"Enter 不会触发两次"的原因。
-static func is_interact_event(event: InputEvent) -> bool:
+func is_interact_event(event: InputEvent) -> bool:
 	if InputMap.has_action(&"interact") and event.is_action_pressed(&"interact"):
 		return true
 	return event is InputEventKey and event.pressed and not event.echo \
 		and (event.keycode == KEY_E or event.keycode == KEY_ENTER)
+
+
+## 方格布局里用 W A S D 移动焦点（背包格子、商人货架共用）。
+## 参数 event：待判定的输入事件。
+## 参数 context：拿 viewport 用的节点（传哪个都行，一般就是面板自己 self）。
+## 返回值：true = 这是移动键（已处理完，调用方不用再管）；false = 不是移动键，别理它。
+## 副作用：可能改焦点，并把事件标记为已处理（set_input_as_handled）。
+## 实现要点：**借 Godot 自己的"按几何位置找邻居"**（Control.find_valid_focus_neighbor），
+##   而不是在焦点环里 ±columns 跳。原因是方格中间可能夹着不可聚焦的格子
+##   （背包的空格、商人买不起的货），环里少了几格之后"±6"就不再等于"下一行同一列"了；
+##   几何查找则永远按屏幕上的实际位置走，还会自动跳过不可聚焦的控件。
+## 为什么抽到这里：背包和商人货架都是 6 列方格，各写一遍迟早写歪一处；
+##   而且**只有面板自己知道该怎么走**，所以 WorldMap 那边对这两个浮层不能替它们处理 WASD
+##   （那边是线性 ±1 的 _overlay_nav，在方格上会变成"斜着走"）。
+func grid_nav(event: InputEvent, context: Node) -> bool:
+	var side := -1
+	if event.is_action_pressed("move_up"):
+		side = SIDE_TOP
+	elif event.is_action_pressed("move_down"):
+		side = SIDE_BOTTOM
+	elif event.is_action_pressed("move_left"):
+		side = SIDE_LEFT
+	elif event.is_action_pressed("move_right"):
+		side = SIDE_RIGHT
+	if side < 0:
+		return false
+	var viewport := context.get_viewport()
+	var owner := viewport.gui_get_focus_owner()
+	# 焦点还不在方格上时（例如刚打开面板）先不动，交给 _set_focus_ring() 的初始聚焦
+	if owner != null:
+		var neighbor := owner.find_valid_focus_neighbor(side)
+		if neighbor != null:
+			neighbor.grab_focus()
+	viewport.set_input_as_handled()
+	return true
 
 
 ## 参数：无 —— 用 main_player_selected（SelectionPanel 写入的 UnitStats）。

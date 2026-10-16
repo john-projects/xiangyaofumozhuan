@@ -100,7 +100,7 @@ func _ready() -> void:
 ##   · 攻击中不会重新索敌、也不会因目标跑掉而中断 —— 一套动作必须播完（behavior 靠 tween 复位）；
 ##   · 本文件不认识"玩家朝向变化"以外的任何输入，武器完全自动攻击（没有开火键）。
 # Called every frame. 'delta' is the elapsed time since the previous frame.
-func _process(delta: float) -> void:
+func _process(_delta: float) -> void:
 	# 暂停时不索敌、不转向、不攻击（Timer 和 tween 不受影响，见 Global.game_paused 的说明）。
 	if Global.game_paused:
 		return

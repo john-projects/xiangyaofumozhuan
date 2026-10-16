@@ -104,5 +104,5 @@ func _on_visible_on_screen_notifier_2d_screen_exited() -> void:
 ## ⚠ 自毁发生在物理回调链里，是安全的（queue_free 不动碰撞状态）；
 ##   但同一物理帧若同时擦到两个 Hurtbox，本函数会被调两次 → 两次 queue_free（幂等，无副作用）。
 ##   受击方那一侧才是"会不会吃两次伤害"的关键（见 hurtbox_component.gd 的说明）。
-func _on_hitbox_component_on_hit_hurtbox(hurtbox: HurtboxComponent) -> void:
+func _on_hitbox_component_on_hit_hurtbox(_hurtbox: HurtboxComponent) -> void:
 	queue_free()

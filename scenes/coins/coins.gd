@@ -149,5 +149,5 @@ func set_collection_target(screen_pos: Vector2) -> void:
 ## 注意：这个回调在**物理帧**里被调用；本函数只改一个 bool，没有动碰撞形状/层掩码，
 ##   所以不需要 set_deferred —— 若以后要在这里改 collision_layer/mask 或 disabled 之类，
 ##   就必须用 set_deferred（物理回调期间改碰撞状态会被引擎拒绝并报错）。
-func _on_area_entered(area: Area2D) -> void:
+func _on_area_entered(_area: Area2D) -> void:
 	collected = true
