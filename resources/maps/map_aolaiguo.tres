@@ -3,6 +3,7 @@
 [ext_resource type="Script" uid="uid://v6570clid4e6" path="res://resources/maps/map_data.gd" id="1_mapdata"]
 [ext_resource type="Script" uid="uid://j6ibt5vlkg3t" path="res://resources/units/unit_stats.gd" id="1_nr2oc"]
 [ext_resource type="Texture2D" uid="uid://dlgr8nxf143up" path="res://assets/map/map_aolaiguo.png" id="2_texture"]
+[ext_resource type="Script" uid="uid://c60dn4pj1cfw7" path="res://resources/items/item_base.gd" id="3_mehxe"]
 [ext_resource type="Script" uid="uid://ctu1nt07fqrnc" path="res://resources/maps/map_npc.gd" id="3_npc"]
 [ext_resource type="PackedScene" path="res://scenes/world/maps/world_aolaiguo.tscn" id="4_world"]
 

@@ -6,21 +6,17 @@
 ##   谁要飘字就 instantiate() 它。本文件不读也不写 Global，不发任何信号，
 ##   对玩法数值零影响 —— 只是"把一串已经算好的文字弹出来再删掉"。
 ##
-## 谁在用它（两条互不相干的调用链）：
-##   1) 实时战斗链（当前主用）：单位在受击/格挡/回血时 emit Global.on_create_damage_text /
-##      on_create_block_text / on_create_heal_text（信号定义在 autoloads/global.gd）
-##      → Arena 的三个回调各自调 Arena.create_floating_text(unit) 生成并摆位，
-##      然后把（文案, 颜色）交给本文件的 setup()。
-##      注意 Arena.create_floating_text() 是 add 到 `get_tree().root` 下的：
-##      所以飘字是视口级节点，既不会跟着单位移动、也不会被地图/容器裁剪。
-##   2) 回合制战斗 UI（另一套）：scenes/battle/battle.gd 的 create_floating_text() 同样生成它。
+## 谁在用它：
+##   回合制战斗：scenes/battle/battle.gd 的 create_floating_text() 生成它（伤害 / "Blocked!" 数字），
+##   挂到 Battle 的 %Fx 下面，所以飘字跟着战斗屏幕走。
+##   （竞技场时代那条"实时战斗链 + Arena.create_floating_text"已经随竞技场一起移除。）
 ##
 ## 数据流：
 ##   （文案 String，颜色 Color）由调用方给出 → setup() 写进 $ValueLabel.text 与 self.modulate
 ##   → 内部 tween 播一段动画 → 动画结束自己 queue_free()。调用方不需要回收它。
 ##
 ## 生命周期顺序（关键，写错了会崩）：
-##   Arena 的用法是：instantiate() → add_child() → 摆 global_position → 最后才调 setup()。
+##   Battle 的用法是：instantiate() → add_child() → 摆 global_position → 最后才调 setup()。
 ##   这个顺序**必须**保持：setup() 里要写 @onready var value_label，而 @onready 只在
 ##   "节点进入场景树"那一刻之后才有值；如果先 setup() 后 add_child()，value_label 还是 null，
 ##   第一行赋值就会报 "Cannot set property 'text' on a null instance"。
@@ -28,7 +24,7 @@
 ## 坑：
 ##   · setup() 是 async（函数体里有 await）：调用方**不加 await 也完全正常** ——
 ##     函数会一路执行到 await 那一行才"挂起"，返回的是一个协程信号而不是等它结束；
-##     所以 Arena 直接 text.setup(...) 不管它，飘字照样会在动画结束后自己消失。
+##     所以 Battle 直接 text.setup(...) 不管它，飘字照样会在动画结束后自己消失。
 ##   · 动画总时长不是 0.4 + 0.5 + 0.4，而是 ≈ 0.9 秒，原因见 setup() 里的详细说明
 ##     （parallel() 的实际语义和直觉不同）。
 ##   · 因为末尾是 queue_free()，调用方在 setup() 之后**不能再**对这个实例做假定它一直活着的事；
@@ -42,11 +38,11 @@ class_name FloatingText
 @onready var value_label: Label = $ValueLabel
 
 ## 播放一次飘字：弹入 → 随机微旋转 → 缩回并淡出 → 自毁。
-## 参数 value：要显示的最终文本（例如 "12"、"+ 3.0"、"Blocked!"）。本函数**不做**任何
-##   格式化或单位换算，来的什么就显示什么；数字转字符串是调用方（Arena.create_floating_text 的调用点）做的。
+## 参数 value：要显示的最终文本（例如 "12"、"Blocked!"）。本函数**不做**任何
+##   格式化或单位换算，来的什么就显示什么；数字转字符串是调用方（Battle.create_floating_text）做的。
 ## 参数 color：整条飘字的颜色。写的是 self.modulate 而不是 value_label.modulate，
 ##   所以它会连描边一起染色（Label 的 outline 也会被 modulate 乘算）—— 这是刻意的，浅色文字配黑边更清楚。
-##   Arena 按来源传：普通伤害 normal_color、暴击 critical_color、格挡 blocked_color、回血 hp_color。
+##   Battle 按来源传：普通伤害 normal_color、暴击 critical_color、格挡 blocked_color。
 ## 返回值：无（函数体里有 await，严格说返回的是协程信号；调用方忽略它即可，但**不要** await 后再操作本节点，
 ##   因为那时它已经被 queue_free() 了）。
 ## 副作用（按时间顺序）：
@@ -68,8 +64,8 @@ func setup(value: String, color: Color) -> void:
 	var random_scale := randf_range(0.8, 1.6)
 	
 	# create_tween() 是 Node 的方法：tween 由本节点驱动，节点没了 tween 自动失效，
-	# 不需要手动 kill。本 tween 也不受 Global.game_paused 影响 —— 那个开关只是让各单位
-	# 脚本在 _process 里提前 return，并没有真的暂停 SceneTree，所以暂停期间飘字照常播完、照常自毁。
+	# 不需要手动 kill。它不受任何"全局暂停"开关影响（现在工程里已经没有那个开关了），
+	# 飘字会照常播完、照常自毁。
 	var tween := create_tween()
 	tween.parallel().tween_property(self, "scale", random_scale * Vector2.ONE, 0.4)
 	tween.parallel().tween_property(self, "global_position", global_position + Vector2.UP * 15, 0.4)

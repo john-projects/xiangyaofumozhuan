@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="ItemEquipment" format=3]
+
+[ext_resource type="Texture2D" path="res://assets/sprites/equipment/shoes/shoes_03.png" id="1_icon"]
+[ext_resource type="Script" path="res://resources/items/equipment/item_equipment.gd" id="2_script"]
+
+[resource]
+script = ExtResource("2_script")
+item_name = "追风靴"
+item_icon = ExtResource("1_icon")
+item_tier = 2
+item_type = 3
+item_cost = 103
+equip_type = 6
+attack = 0
+defense = 0
+health = 0
+crit_chance = 0.0
+speed = 16
+block_chance = 6.0

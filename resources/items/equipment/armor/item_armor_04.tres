@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="ItemEquipment" format=3]
+
+[ext_resource type="Texture2D" path="res://assets/sprites/equipment/armor/armor_04.png" id="1_icon"]
+[ext_resource type="Script" path="res://resources/items/equipment/item_equipment.gd" id="2_script"]
+
+[resource]
+script = ExtResource("2_script")
+item_name = "天蚕宝衣"
+item_icon = ExtResource("1_icon")
+item_tier = 3
+item_type = 3
+item_cost = 227
+equip_type = 5
+attack = 0
+defense = 39
+health = 92
+crit_chance = 0.0
+speed = 0
+block_chance = 0.0

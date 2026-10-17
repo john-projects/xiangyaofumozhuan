@@ -10,16 +10,22 @@
 | 加速走 | `空格`（复用 `dash` 动作），世界地图里它只是加速，不是冲刺技能 |
 | 与 NPC 交谈 | `E` 或 `Enter`（靠近后底部会出现"按 E 与 XX 交谈"提示） |
 | 打开背包 | `B`（随时，不用先开菜单；再按一次 `B` 或 `ESC` 关掉。背包里没有关闭按钮） |
+| 打开角色属性 | `C`（随时，不用先开菜单；会**同时打开背包**，左属性右背包都能点。再按 `C` / `ESC` / `B` 收摊） |
+| 角色属性里换人 | 点属性面板**或背包**两边的 `◀` / `▶`（两边同步）：属性、装备和"点格子穿给谁"一起换 |
 | 打开操作菜单 | `ESC`（没有任何面板开着时 = 打开菜单） |
 | 菜单 / 面板里选择 | `↑↓` 或 `W S`（也可以直接用鼠标点） |
 | 背包里走格 | `← ↑ → ↓` 或 `W A S D`（一行 8 格，上下跳一整行） |
 | 背包里切换角色 | 点形象两边的 `◀` / `▶`，或用方向键把焦点移过去后按 `Enter` / `空格` / `E` |
-| 商人处买武器 | 方向键 / `W A S D` 选格子 → `Enter` / `空格` / `E` 或点一下 → 确认框里选「确定购买」（`Esc` = 取消，再按一次才关掉交易） |
+| 穿装备 | 没跟商人交易时，点背包里的一格（或焦点移上去按 `E`）= 穿到**当前展示的那个角色**对应的装备栏（左二那个是武器栏） |
+| 脱装备 | 点角色形象两侧**已穿上东西**的装备栏（或焦点移上去按 `E`）= 从**当前展示的角色**身上脱下、放回背包 |
+| 切换角色看装备 | 点形象两边的 `◀` / `▶`（或键盘走到箭头上按 `E`）：装备栏跟着换成那个人的一套 |
+| 商人处买装备 | 方向键 / `W A S D` 选格子 → `Enter` / `空格` / `E` 或点一下 → 确认框里选「确定购买」（`Esc` = 取消，再按一次才关掉交易） |
+| 商人处卖东西 | 交易时点背包里的一格 → 确认框里选「确定卖出」（身上穿着的要先脱下来才会在背包里） |
 | 看背包后面的行 | 滚轮下滑，或键盘往下走（列表会自动滚过去） |
 | 看物品属性 | 鼠标悬停在格子上，或把键盘焦点移到格子上 |
 | 菜单 / 面板里确认 | `Enter` / `空格` / `E` 都能按下当前高亮的按钮 |
 | 关闭对话框 | `ESC` 或点「再想想」 |
-| 退回上一级 | 队伍管理页 / 背包按 `ESC` 退回操作菜单（按 `B` 直接开的背包则直接回游戏） |
+| 退回上一级 | 队伍管理页 / 背包 / 角色属性按 `ESC` 退回操作菜单（直接按 `B` / `C` 开的则直接回游戏） |
 | 进入战斗 | 操作菜单里的「进入战斗」，或右下角那个按钮（同一条通路） |
 | 返回主菜单 | 操作菜单里的「返回主菜单」，或左下角那个按钮（同一条通路） |
 | 调试：取坐标 | 鼠标移到目标位置按 **F1**，控制台打印归一化坐标 |
@@ -33,13 +39,29 @@ WorldMap (Node2D, y_sort_enabled = true)   [world_map.gd]
 │   ├── Shadow (Polygon2D)
 │   ├── PlayerFallback (Polygon2D)
 │   ├── PlayerSprite (Sprite2D)
-│   └── Camera (Camera2D, 带平滑跟随 + 地图边界限制)
+│   ├── Camera (Camera2D, 带平滑跟随 + 地图边界限制)
+│   └── NameLabel (Label, 运行时生成)                            ← 队长头顶的名字
+├── Companion0…N (Node2D, 运行时生成)                            ← 上阵队友：Shadow + Sprite2D + NameLabel
 ├── （NPC 直接挂在 WorldMap 下，运行时生成）
 └── UI (CanvasLayer)：地图名 / 金币 / 结果提示 / 交互提示 / 进入战斗 / 返回主菜单 / 对话框
 ```
 
 > NPC 为什么没有单独的容器节点：`y_sort_enabled` 只对**兄弟节点**排序，NPC 和玩家必须是兄弟，
 > 玩家才能走到 NPC 身后/身前。所以 `_add_npc()` 是直接 `add_child` 到 WorldMap 上的。
+> 队友小人（Companion）同理挂在 WorldMap 下，才能和玩家/NPC 一起按 y 排序。
+
+## 队伍立绘：队长名字 + 队友跟随
+
+- **队长名字**：`_setup_party_visuals()` 在 `Player` 下加一个 `Label`（白字+黑描边，y = -78、宽 220 居中），
+  文字取 `Global.main_player_selected.name`。因为它是 `Player` 的子节点，走动时自动跟着走，不用每帧同步。
+- **上阵队友**：`_rebuild_companions()` 给 `deployed` 里除队长外的每个人生成一个 `Companion` 节点
+  （Shadow + Sprite2D + 名字 Label，立绘用各自的 `UnitStats.icon`，缩放 1.3 和玩家一致）。
+- **跟随方式**：队长每走 **2px** 就往"面包屑轨迹" `_trail` 头部插一个点（`_update_trail()`）；
+  第 i 个队友的目标是轨迹里第 `i × 20` 个点（= 身后约 40px/人），再用
+  `1 - exp(-12 × delta)` 插值挪过去（`_update_companions()`）——
+  拐弯时队友是沿着队长**走过的路**跟过来，不会斜穿墙角，也不会几个小人叠在一起。
+- **队伍变了**：`notify_party_changed()`（上阵/下阵/移除）会 `_rebuild_companions.call_deferred()`，
+  场上小人数量立刻跟着变；队长本人永远不生成小人（他就是 `Player`）。
 
 ## 坐标与缩放
 
@@ -174,11 +196,66 @@ func _ready() -> void:
 | `TALK` | 只显示台词，一个按钮都不给 | `dialogue` |
 | `TELEPORT` | 每个目的地一个按钮 | `destinations` / `teleport_label` |
 | `RECRUIT_PARTY` | 每个候选队友一个「加入 XX」按钮 | `recruit_pool`（留空则扫 `Global.RECRUIT_DIR`）/ `recruit_label` |
-| `SELL_WEAPONS` | **直接打开商人面板**（不在小窗口里铺按钮） | `sell_pool`（留空则扫 `Global.WEAPON_DIR`）/ `shop_label` |
+| `SELL_WEAPONS` | **直接打开商人面板**（不在小窗口里铺按钮） | `sell_pool`（留空则扫 `Global.EQUIPMENT_DIR`）/ `shop_label` |
+| `JOIN_SECT` | 门派掌门：团队里**每人一个「拜入 XX」按钮**，按种族筛（不符/已有门派的置灰并写明原因） | `sect_id`（`Global.SECTS` 的键） |
 
 `AUTO` 存在的意义：老 `.tres` 只填了 `destinations`，加了 `action` 字段后它们的行为**不变**。
-在 `.tres` 里 `action` 是整数（`AUTO=0 / TALK=1 / TELEPORT=2 / RECRUIT_PARTY=3`），
+在 `.tres` 里 `action` 是整数（`AUTO=0 / TALK=1 / TELEPORT=2 / RECRUIT_PARTY=3 / SELL_WEAPONS=4 / JOIN_SECT=5`），
 因为枚举整数值会落盘，**不要调整 `MapNPC.Action` 的成员顺序**。
+
+### 门派（拜师）
+
+- **五个门派**写在 `Global.SECTS`（常量表：名字 / 收哪些种族 / 一句介绍），
+  `Global.SECT_ORDER` 是展示顺序；种族限制只有这一份，**改规则改这里**：
+
+  | 门派 | id | 收 |
+  |---|---|---|
+  | 太虚剑宗 | `taixu` | 人族 |
+  | 缥缈仙府 | `piaomiao` | 人族、仙族 |
+  | 紫霄神道教 | `zixiao` | 仙族 |
+  | 万药谷 | `wanyao` | 仙族、魔族 |
+  | 星罗教 | `xingluo` | 魔族 |
+
+- **种族**在 `UnitStats.race`（`HUMAN / DEMON / IMMORTAL`，默认人族）：
+  陆孤鸣、燕如意 = 人族；行修、霓衣 = 仙族；厉狂澜、夜魑 = 魔族。
+- **默认无门派**：`Global.sect_by_character`（角色键 → 门派 id）一开始是空的；
+  一个角色同时只属于一个门派，**不能改投**（想做得先加"叛出师门"）。
+- **拜师流程**：跟掌门按 E → 面板列出**整支团队**，每人一行：
+  能拜的写「拜入太虚剑宗 · 陆孤鸣（人族）」，种族不符写「行修（仙族）· 太虚剑宗不收仙族」并置灰，
+  已经拜过的写「已入星罗教」并置灰 → 点能点的那个 → `sect_join_requested` →
+  `GameRoot.join_sect()` 再判一次（规则仍只有一份）→ 成功后台词换成「陆孤鸣拜入太虚剑宗！」。
+- **建邺城**的 5 个掌门：`taixu_zhangmen` / `piaomiao_zhangmen` / `zixiao_zhangmen` /
+  `wanyao_guzhu` / `xingluo_jiaozhu`（`map_jianyecheng.tres`，位置分散在城四周）。
+
+### 门派技能
+
+每个门派 **2 个被动 + 3 个主动**，表在 `Global.SECT_SKILLS`（一个门派一项，字段见文件注释）。
+
+- **拜入即学会**：`GameRoot.join_sect()` 成功后把 `Global.sect_skill_level_by_character[角色键]` 设为 **1**
+  —— 也就是本门 5 个技能全部 1 级；没拜师 = 0（没学）。
+- **等级**：**一个门派的 5 个技能共享一个等级**（同时学会、一起升级），最高
+  `Global.SECT_SKILL_MAX_LEVEL = 100`；玩家每升 1 级，所有已拜师角色的门派技能等级 +1
+  （`add_player_exp()` 里调 `_bump_sect_skill_levels()`）。
+- **被动真的生效**：`_make_player_team()` 里 `_apply_sect_passives()` 按等级把加成叠到战斗副本上。
+  目前支持的加成类型：`damage_pct / hp_pct / crit_rate / crit_damage_bonus / speed / defense /
+  spell_damage / healing / seal_hit`（对应 `UnitStats` 的字段；暴击率这一项 `BattleUnit.roll_crit()`
+  已经会读 `stats.crit_rate`）。
+- **主动技能目前只有数据与说明**（目标数阈值、连击数、封印/封法术、治疗/持续回血、状态参数都写在表里），
+  战斗里还不会自动释放 —— 等技能栏/状态系统接好后再执行。属性面板底部有一行「门派技能 Lv.N：…」，
+  悬停能看到每个技能的效果和**当前等级下的目标数**（`Global.sect_skill_targets()`）。
+
+五个门派的技能（`Global.SECT_SKILLS`，改表即可，不用动代码）：
+
+| 门派（定位） | 被动 1 | 被动 2 | 主动 1 | 主动 2 | 主动 3 |
+|---|---|---|---|---|---|
+| 太虚剑宗（物理） | 太虚剑典 +1% 伤害/级 | 剑心通明 +0.5% 暴击率/级 | 三尺清风 2 目标（30 级 3 个） | 太虚神剑 单体 3 连击 | 人剑合一 暴击率状态 |
+| 缥缈仙府（封系） | 云海心法 +0.5 速度/级 | 缥缈封心 +0.5% 封印命中/级 | 太虚封天 **群体封印** | 封灵诀 **封法术**（单体） | 缥缈剑指 固定伤害 2 目标（30 级 3 个） |
+| 紫霄神道教（法系） | 紫霄雷体 +1.5 法伤/级 | 天雷淬体 +1 防御/级 | 五雷正法 单体 | 雷动九天 3 目标（**60 级 5 个**） | 紫霄凝神 法伤状态 |
+| 万药谷（治疗） | 百草心经 +1 治疗/级 | 药王体魄 +0.8% 气血/级 | 回春诀 队友回复气血 + 持续回血（持续回合随等级提升；目标数 1/25/50/75 级 = 2/3/4/5） | 药雾弥漫 固定伤害 2 目标（30 级 3、60 级 4） | 万灵祝福 **全体队友** 伤害 + 法伤 状态 |
+| 星罗教（物理） | 星象魔功 +1% 伤害/级 | 摄魂咒 +0.5% 暴击伤害/级 | 星罗魔爪 单体 2 连击 | 群星陨落 3 目标（30 级 4 个） | 星罗杀机 暴击伤害状态 |
+
+> 主动技能的目标数是**按等级取档**的（`targets` 是一张 `[{等级, 数量}]` 表，
+> 取"当前等级 ≤ 等级"里最大的那档），所以后面调阈值只改数字、不改代码。
 
 ## 队伍系统：团队（名册）与上阵名单
 
@@ -219,25 +296,32 @@ func _ready() -> void:
 **加一个新的招募 NPC**：复制 `map_jianyecheng.tres` 里 `duiyou` 那条子资源 → 改 `id` /
 `display_name` / `position` / `texture` → 把 `action` 设成 `3`（`RECRUIT_PARTY`）即可。
 
-## 商人（武器商店）
+## 商人（装备商店）
 
-建邺城的 `shangren`（`action = 4` = `SELL_WEAPONS`）卖**现有全部武器**：
+建邺城的 `shangren`（`action = 4` = `SELL_WEAPONS`）卖**现有全部装备**（26 件）：
 
-- **货架来源**：`MapNPC.sell_pool`（显式列表）优先；留空 → `Global.get_all_weapons()`
-  递归扫 `res://resources/items/weapons/`，当前 **44 把**（11 种 × 4 阶，`Axe Ⅰ 12 金币` ~
-  `Shotgun Ⅳ 180 金币`），按价格升序排列。往那个目录丢一把新武器就自动上架；
-  ⚠ 只认 `item_*.tres`（同目录的 `stats_*.tres` 是 `WeaponStats` 数值表，不是商品）；
+- **货架来源**：`MapNPC.sell_pool`（显式列表）优先；留空 → `Global.get_all_equipment()`
+  递归扫 `res://resources/items/equipment/`，当前 **26 件**（头盔 4 / 武器 5 / 腰带 4 /
+  项链 5 / 衣服 4 / 鞋子 4），按「栏位 → 价格」排序。往那个目录丢一件新装备就自动上架；
+  ⚠ 只认 `item_*.tres`；货架类型是 `Array[ItemBase]`（以后丹药/卷轴也能上架）；
+  ⚠ **老武器体系（ItemWeapon / resources/items/weapons/）已经整体移除**（连竞技场一起删的），
+  现在工程里能上架、能穿、能卖的道具只有 `ItemEquipment`；
+- **装备数据**：每件是 `ItemEquipment`（`resources/items/equipment/item_equipment.gd`），
+  字段 `equip_type`（穿哪个栏位）+ `attack / defense / health / crit_chance / speed / block_chance`；
+  图标在 `assets/sprites/equipment/<类型>/<类型>_0N.png`。属性是**随机生成后烘进 .tres** 的
+  （固定种子生成，同一件每次打开都一样；主属性保证随品质递增，不会出现"传说不如史诗"）；
+  ⚠ 这些数值目前**只展示、还没参与战斗结算**（战斗读 `UnitStats`），接加成时按同一口径直接加即可；
 - **交互方式**：按 `E` **直接打开商人面板**（`scenes/ui/merchant_panel/`），不经过那个
   600×460 的小对话框（方格货架铺不下）。所以 `WorldMap._open_panel()` 在最开头就把
   `SELL_WEAPONS` 分流到 `_open_merchant()`，并且**不置 `_panel_open`**；
   ⚠ 开交易会**同时打开背包**（`_open_bag(false, true)`，as_companion = true），
   交易窗口贴**最左边**、背包贴**最右边** —— 关了交易，配件背包一起收（Esc / B / 「关闭」都走 `_close_merchant()`）；
-- **购买链路**：面板 `buy_requested(weapon)` → `WorldMap.weapon_buy_requested` →
-  `GameRoot._on_weapon_buy_requested()` → `GameRoot.buy_weapon()`（扣 `Global.coins` +
+- **购买链路**：面板 `buy_requested(item)` → `WorldMap.item_buy_requested` →
+  `GameRoot._on_item_buy_requested()` → `GameRoot.buy_item()`（扣 `Global.coins` +
   append 进 `Global.equipped_weapons`）→ 回调 `WorldMap.notify_shop_changed()`：
   刷新**背包信息行里的余额**、重建货架（灰不灰、"已持有 ×n" 全跟着变）；
 - **购买链路的界面**：货架是**和背包一样的方格** —— **总共 6 列 × 20 行 = 120 格**（`SHELF_SLOTS`），
-  **一屏 6×10 = 60 格**，其余靠滚动。现有 44 把武器只占前 44 格，剩下 **76 格是空格子**
+  **一屏 6×10 = 60 格**，其余靠滚动。现有 26 件装备只占前 26 格，剩下的是**空格子**
   （和背包一样把空格画出来：一眼看得出这个商人一共有多少格、还剩多少空位）；
   格子 **84px**、稀有度描边、悬停/焦点弹属性卡，区别只有两点：格子上多一个**价格角标**（右下）
   和「持×n」角标（左上），**点一下先弹确认框**；
@@ -261,7 +345,7 @@ func _ready() -> void:
   两处一起修：
   · `WorldMap._setup_overlays()` 里**背包先实例化、交易窗口后实例化**（同 CanvasLayer 里树序 = 绘制序）；
   · `ConfirmBox` 自己再设 `z_index = 100`（同一层内永远画在最上面，双保险）；
-- **买不了时一定给理由**：`GameRoot.weapon_can_buy()` 统一判定（金币不够 / 背包满 `BAG_SLOTS` 格），
+- **买不了时一定给理由**：`GameRoot.item_can_buy()` 统一判定（金币不够 / 背包满 `BAG_SLOTS` 格），
   买不起的格子置灰 + 价格角标转红 + 原生 tooltip 写明原因。
   ⚠ 一条格子只走**一种**提示：买得起 → 接属性卡、不设 `tooltip_text`；买不起 → 走原生 tooltip、
   不接属性卡（否则两个提示框会叠在一起）。背包那边也是这个原则；
@@ -269,14 +353,20 @@ func _ready() -> void:
   中间夹着买不起的格子会自动跳过 —— 这是"几何找邻居"而不是"焦点环 ±6"的原因）；
   `Enter` / `空格` / `E` 按下焦点上的那一格（弹确认框）、`Esc` 关闭（先关确认框，再关交易）。
   因为方格语义归面板自己管，`WorldMap` 的商人分支**故意不调 `_overlay_nav()`**，只接 Esc / E；
-- **⚠ 买到的武器目前只在背包里**：`Global.equipped_weapons` 是**数据**列表，
-  战斗里的 `BattleUnit` 只读 `UnitStats`（伤害/血量/技能），**不读武器** ——
-  所以现在买东西是"攒装备"，还不会让战斗变强。要让武器真正生效，得再加一层映射
-  （例如每把武器的 `stats.damage` 加到上阵单位身上，或把武器映射成一个技能）。
+- **⚠ 属性还没接进战斗**：`Global.equipped_weapons` / `Global.equipment_by_character` 都是**数据**，
+  战斗里的 `BattleUnit` 只读 `UnitStats`（伤害/血量/技能），**不读装备** ——
+  所以现在买装备/穿装备是"攒属性"，还不会让战斗变强。要让装备真正生效，在
+  `GameRoot._make_player_team()` 里把 `Global.equipment_by_character` 的加成叠到对应角色的 `UnitStats` 副本上即可
+  （字段口径和 `UnitStats` 一致，见 `ItemEquipment` 的注释）。
 
 **加一个新商人**：复制 `map_jianyecheng.tres` 里 `shangren` 那条子资源 → 改 `id` /
 `display_name` / `position` / `texture` / `dialogue` → `action` 保持 `4`。
-想让他只卖几件（限量商人）：把那几把武器拖进 `sell_pool`。
+想让他只卖几件（限量商人）：把那几件装备拖进 `sell_pool`。
+
+**加一件新装备**：把图标丢进 `assets/sprites/equipment/<类型>/`，在
+`resources/items/equipment/<类型>/` 里复制一个 `item_*.tres` 改图标/名字/价格/属性/`equip_type`
+即可（商人下一次打开就会自动上架；`Global.get_all_equipment(true)` 可强制重扫）。
+数值不用自己配也行：`ItemEquipment` 的字段都是 `@export`，属性卡会按非 0 项自动列出来。
 
 ## 背包（`scenes/ui/bag_panel/`）
 
@@ -306,17 +396,30 @@ func _ready() -> void:
   `_coins` 快照字段、`world_map.tscn` 里的 `CoinsLabel` 都一并删了）；
 - **和商人做买卖时各占一边，而且背包是"活的"**：交易窗口贴**最左边**、背包贴**最右边**，天然不重叠；
   交易时背包**保持可交互**（点格子 / 键盘选格子都能用），因为这就是**卖出**的入口：
-  · 点背包里的一格 → `BagPanel.sell_requested` → `WorldMap._on_bag_sell_requested()`：
-    交易开着就调用**交易面板**的 `ask_sell()`（复用同一个确认框，措辞换成"卖出「X」？卖价 N 金币 · 卖后共 M 金币"）；
-  · 确认 → `MerchantPanel.sell_requested` → `WorldMap.weapon_sell_requested` →
-    `GameRoot._on_weapon_sell_requested()` → `sell_weapon()`：出包 + `Global.coins += 卖价`；
+  · 点背包里的一格 → `BagPanel.item_activated` → `WorldMap._on_bag_item_activated()`：
+    **没开商人 = 穿**（走 `equip_requested`，见下面"六个装备栏"），
+    **开着商人 = 卖**（`_sell_bag_item()`：先按 `GameRoot.item_can_sell()` 判一次，
+    卖不了就只在信息行说原因，不弹框）；
+  · 卖的时候再调用**交易面板**的 `ask_sell()`（复用同一个确认框，措辞换成"卖出「X」？卖价 N 金币 · 卖后共 M 金币"，
+    「确定」按钮也跟着变成**「确定卖出」**，不会出现卖东西时还写着"确定购买"的错位）；
+  · 确认 → `MerchantPanel.sell_requested` → `WorldMap.item_sell_requested` →
+    `GameRoot._on_item_sell_requested()` → `sell_item()`：出包 + `Global.coins += 卖价`；
   · 卖价 = `int(item_cost × 0.75)`（`GameRoot.SELL_REFUND_RATIO`，**与老的 ShopPanel 一致**，截断不是四舍五入：
     12 金币卖 9）；留 25% 折旧，买进卖出会亏，堵住"低买高卖刷钱"；
+  · 想卖**身上穿着**的装备要先脱下来（穿着的在某个角色的 `Global.equipment_by_character` 里，不在背包里）；
   · **单独开背包**（没开商人）时点格子不会弹框，只在信息行回一句"要跟商人交易时才能卖东西"，不会"点了没反应"；
   · 确认框算**模态**：弹出时交易货架与背包格子都临时不可聚焦（`confirm_changed` → `set_slot_focus_enabled(false)`），
-    焦点只在「确定购买 / 取消」两个按钮之间；`Esc` 只关确认框；
+    焦点只在「确定卖出 / 确定购买」与「取消」之间；`Esc` 只关确认框；
   ⚠ 交易面板**故意没有全屏遮罩**（早先那个 `Dim` 已删）：全屏 ColorRect 默认会吃掉鼠标事件、
     还会把并排的背包压暗 —— 那正是"背包看起来点不动"的元凶。世界地图的压暗由背包那一层（0.35）负责；
+  ⚠ 而且交易面板的**根节点**（铺满全屏的 Control）必须 `mouse_filter = IGNORE`：Control 默认是 STOP，
+    一个全屏 STOP 等于"整屏都是交易窗口的地盘"，并排背包的 `mouse_entered` / `pressed` 全被它吞掉
+    （.tscn 里设了 `mouse_filter = 2`，`MerchantPanel._ready()` 里再兜一次）；
+  ⚠ 还有一个更隐蔽的连带故障：`TooltipManager` 是 autoload，它 preload 的
+    `scenes/ui/hover_card/*.tscn` 一旦缺失，整个 autoload 会加载失败 → `BagPanel._make_slot()` 里
+    `TooltipManager.show_for_control(...)` 变成"在 null 上调用"，**GDScript 会中断整个函数** →
+    `slot.pressed.connect(...)` 和 `_slots.append(slot)` 都执行不到，症状就是"背包格子点不动、也不进焦点环"。
+    改这块代码时别把悬停提示那几行挪到 `pressed` 之后再指望它"反正只是提示"；
 - **一屏只看 8 行**：可见区域 = `BagPanel.VISIBLE_ROWS`(8) 行，高度由代码算出来
   （`8×68 + 7×10 = 614`，写进 `ScrollContainer.custom_minimum_size`，.tscn 里手填的数字会被覆盖）——
   所以"能放 120 件"和"一屏看 64 格"是两件事，剩下的行靠**滚轮**或**键盘往下走**看
@@ -325,7 +428,7 @@ func _ready() -> void:
   信息行 + 7 行方格"且不顶出屏幕（面板总高 994，1080 下 y = 70~1064）。屏幕更高时数值不变；
 - **角色区**（用户要求的版面）：中间是**玩家形象**，贴图取 `UnitStats.icon`
   —— 和地图上那个小人用的是同一张（`assets/sprites/Players/Player_1.png`），没选角色时显示占位文字；
-  形象**左右各 3 个装备栏**（`EQUIP_SLOTS_PER_SIDE`，运行时按常量生成）；
+  形象**左右各 3 个装备栏**（`EQUIP_SLOTS_PER_SIDE`，运行时按 `EQUIP_LAYOUT` 生成）；
   **形象下面一行是名字牌**（`名字（i/n）`），再**两边各一个 ◀ / ▶ 箭头**用来切换团队成员：
   - 箭头在**团队名册**里前后翻页（`WorldMap._party` → `GameRoot.party`，只读），
     换的只是这个窗口展示的形象 + 名字；**不会**动 `Global.main_player_selected` /
@@ -335,17 +438,43 @@ func _ready() -> void:
   - 团队只有 1 个人（或空）时箭头**置灰** —— 没得切，也就不占键盘焦点的一站；
   - 箭头是会进焦点环的 `Button`（键盘也能切换），但 `W/S` 的走格只看背包格子（`_slots`），
     不受箭头影响：方向键用 Godot 的几何导航就能走到箭头，`Enter` / 空格 / `E` 按下它；
-  - ⚠ 6 个装备栏现在还是**和选中的角色无关**的空占位：等接上装备系统，
-    它们应该跟着"当前展示的这个人"走（那时候才需要把 `_view_index` 接到 `GameRoot`）；
+- **六个装备栏 = 六种固定类型**（用户要求）：**左一 头盔 / 左二 武器 / 左三 腰带 /
+  右一 项链 / 右二 衣服 / 右三 鞋子**（`BagPanel.EQUIP_LAYOUT`，栏位类型枚举是
+  `ItemBase.EquipType`，中文名在 `ItemBase.equip_type_name()`）：
+  - **空格子**：`disabled`，画一圈暗描边 + 居中写栏位名（"头盔"/"武器"…），
+    悬停有原生 tooltip 说明"这里收什么、怎么穿"；不可点、也不进焦点环；
+  - **有装备**：画图标 + 按稀有度描边 + 底部保留栏位名，悬停/聚焦弹属性卡，
+    **点一下（或焦点上按 E）= 脱下来放回背包**（`BagPanel.unequip_requested` →
+    `WorldMap.unequip_requested` → `GameRoot.unequip_slot()`）；背包满时拒绝脱（东西没地方去）；
+  - **怎么穿**：**平时**（没开商人）点背包里的一格 = 给**当前展示的角色**穿上
+    （`BagPanel.item_activated` → `WorldMap._on_bag_item_activated` → 没开商店就发
+    `equip_requested(character, item)` → `GameRoot.equip_item(character, item)`，
+    穿到 `item.get_equip_type()` 指定的那一栏）；
+    那一栏原来有东西时**自动换下来放回背包**（不需要先脱）；
+  - **每人一套（用户要求）**：穿着的在 `Global.equipment_by_character`
+    （`角色键 → { 栏位类型 → ItemBase }`，角色键 = `UnitStats.resource_path`，见
+    `GameRoot.character_key()`），没穿的在 `Global.equipped_weapons`（**全队共用的背包**）——
+    两者互补，所以"背包里没有 = 队伍里某个人身上穿着"，**卖出前要先脱**；
+    背包界面用 `◀` / `▶` 切到谁，6 个装备栏就显示谁的那一套（`BagPanel.current_character()`），
+    换上/脱下也只动这个人；角色离队时装备留在他名下（重新招募会看到原来的装备）；
+  - **现在有什么**：26 件 `ItemEquipment`（`resources/items/equipment/`，图标在
+    `assets/sprites/equipment/`），六类各 4~5 件、按 `COMMON → LEGENDARY` 分档，
+    属性是随机生成后烘进 .tres 的（攻击/防御/生命/暴击/速度/格挡，口径同 `UnitStats`）；
+  - **以后加新装备类型**：① 在 `ItemBase.EquipType` **末尾**追加成员；
+    ② 在 `equip_type_name()` 补中文名；③ 在 `BagPanel.EQUIP_LAYOUT` 里摆进某格；
+    ④ 新装备继承 `ItemBase` 并把 `equip_type` 设成那个类型（或在子类里重写
+    `get_equip_type()`，自己决定栏位）。
+    背包元素类型已经是 **`ItemBase`**、`BagPanel.show_bag()` / 格子也都是按 `ItemBase` 写的，
+    所以新装备**不用改背包/交易面板的代码**就能进背包、被穿上；
 - **没有「关闭」按钮、也没有按键提示文案**（按要求移除）：关背包只有 `ESC` 和 `B` 两条路。
   `BagPanel.close_requested` 信号保留着，以后想加「整理」/「关闭」按钮可以直接接（WorldMap 已连好）。
 
 - **打开方式**：地图上按 `B`（随时），或 `ESC` →「背包」。两条路的 `ESC` 不同：
   从菜单进来的会退回菜单（逐级返回），按 `B` 直接开的则直接回游戏 —— 靠 `WorldMap._bag_from_menu` 记着；
 - **里面是什么**：`Global.equipped_weapons`。商人买到的东西直接 append 进这个数组
-  （`GameRoot.buy_weapon()`），所以**"买了就进背包"这条链的落点就是这个数组**；
+  （`GameRoot.buy_item()`），所以**"买了就进背包"这条链的落点就是这个数组**；
   格数上限 `GameRoot.BAG_SLOTS = 120`，满了商人那边会置灰并给出理由；
-- **看属性（重点）**：格子上挂了 `mouse_entered` → `TooltipManager.show_for_control(格子, 武器)`，
+- **看属性（重点）**：格子上挂了 `mouse_entered` → `TooltipManager.show_for_control(格子, 道具)`，
   弹出的是工程既有的 `hover_item_card`（图标 + 名字 + 类型 + 伤害/冷却/射程/暴击，按稀有度配色），
   `mouse_exited` 收起；**键盘焦点移上去也弹同一张卡**（`focus_entered`/`focus_exited`），
   所以纯键盘也能看属性 —— TooltipManager 的文档里本来就写着"手柄/键盘导航靠它"。
@@ -356,7 +485,8 @@ func _ready() -> void:
   所以 `WorldMap` 的背包分支**故意不调 `_overlay_nav()`**（调了会把 WASD 先吃掉）；
 - **空格子**：`disabled = true`（画成暗色格位），既不可点也不进焦点环 ——
   方向键会自然跳过它们；
-- ⚠ **还没有的**：合成没做（**卖出已经能用了**，见上面"和商人做买卖"那条）。
+- ⚠ **还没有的**：合成没做；装备的**数值加成**也还没做（穿/脱只改数据与界面，
+  战斗仍读 `UnitStats`，没读 `Global.equipment_by_character`）—— 卖出/穿脱都已经能用了。
   要加的话照招募/商店那套：面板 emit 请求信号 → `WorldMap` 转发 → `GameRoot` 改数据 →
   回调刷新（`_rebuild_bag()` 已经准备好被复用）。
 
@@ -367,10 +497,12 @@ func _ready() -> void:
 
 | 场景 | 是什么 | 信号 → 谁处理 |
 |---|---|---|
-| `scenes/ui/pause_menu/pause_menu.tscn` | 操作菜单：继续游戏 / 队伍管理 / 背包 / 进入战斗 / 返回主菜单 | `resume_requested` → 关菜单；`party_requested` / `bag_requested` → 开对应二级页；`battle_requested` / `title_requested` → 直接接到 `_on_battle_pressed` / `_on_back_pressed`（**与地图上那两个常驻按钮同一条通路**，不存在两份实现） |
+| `scenes/ui/pause_menu/pause_menu.tscn` | 操作菜单：继续游戏 / 队伍管理 / 背包 / 角色属性 / 进入战斗 / 返回主菜单 | `resume_requested` → 关菜单；`party_requested` / `bag_requested` / `stats_requested` → 开对应二级页；`battle_requested` / `title_requested` → 直接接到 `_on_battle_pressed` / `_on_back_pressed`（**与地图上那两个常驻按钮同一条通路**，不存在两份实现） |
 | `scenes/ui/party_panel/party_panel.tscn` | 队伍管理页：每个成员一行（头像 + 属性 + 上阵状态 + 「上阵/下阵」+「移出团队」），标题带「团队 n 人 · 上阵 m/5」 | `deploy_requested` / `undeploy_requested` / `remove_requested` → `WorldMap.party_deploy_requested` / `party_undeploy_requested` / `party_remove_requested` → `GameRoot` 对应的三个 `_on_party_*`；`close_requested` → 退回操作菜单 |
-| `scenes/ui/merchant_panel/merchant_panel.tscn` | 商人货架：顶部**居中显示 NPC 名字** + 结果提示 + **6 列方格**（84px 格子，**总共 6×20 = 120 格、一屏 6×10**，货不足补空格子；窗口 610×1038 ≈ 背包的 662×1044；贴屏幕**最左边**；**没有全屏遮罩**）；每格一个图标 + 价格角标（右下）/「持×n」角标（左上），点一下弹**确认框**（`z_index = 100`，买卖共用）。没有台词/金币/按键提示/「关闭」按钮（都按需求移除了） | `buy_requested` → `WorldMap.weapon_buy_requested`；`sell_requested` → `WorldMap.weapon_sell_requested` → `GameRoot._on_weapon_sell_requested()`；`confirm_changed` → WorldMap 同步背包格子焦点；`close_requested` → 关面板回游戏（并收掉并排的背包）；`cancel_confirm()` 给 WorldMap 判 Esc 层级 |
-| `scenes/ui/bag_panel/bag_panel.tscn` | 背包：右下角窗口，标题「背包 n/120」+ 角色区（「◀ 形象(名字牌) ▶ + 左右各 3 个 96px 装备栏」，形象框 240×308）+ 信息行（**左金币 / 右 MessageLabel**）+ **8 列方格**（120 格，一屏 8×8 可滚动，格子 68px），格子上悬停/聚焦弹属性卡、**点一下 = 请求卖给商人** | `sell_requested` → `WorldMap._on_bag_sell_requested()`（交易时弹卖确认框）；`close_requested` → 关面板（当前没有按钮发它：关闭靠 Esc / B）；`set_slot_focus_enabled()` 供 WorldMap 在「确认框弹出时」临时收焦点；◀ / ▶ 只在面板内部翻团队成员 |
+| `scenes/ui/merchant_panel/merchant_panel.tscn` | 商人货架：顶部**居中显示 NPC 名字** + 结果提示 + **6 列方格**（84px 格子，**总共 6×20 = 120 格、一屏 6×10**，货不足补空格子；窗口 610×1038 ≈ 背包的 662×1044；贴屏幕**最左边**；**没有全屏遮罩**）；每格一个图标 + 价格角标（右下）/「持×n」角标（左上），点一下弹**确认框**（`z_index = 100`，买卖共用）。没有台词/金币/按键提示/「关闭」按钮（都按需求移除了） | `buy_requested` → `WorldMap.item_buy_requested`；`sell_requested` → `WorldMap.item_sell_requested` → `GameRoot._on_item_sell_requested()`；`confirm_changed` → WorldMap 同步背包格子焦点；`close_requested` → 关面板回游戏（并收掉并排的背包）；`cancel_confirm()` 给 WorldMap 判 Esc 层级 |
+| `scenes/ui/bag_panel/bag_panel.tscn` | 背包：右下角窗口，标题「背包 n/120」+ 角色区（「◀ 形象(名字牌) ▶ + 左右各 3 个 **96px 装备栏**（头盔/武器/腰带 · 项链/衣服/鞋子）」，形象框 240×308）+ 信息行（**左金币 / 右 MessageLabel**）+ **8 列方格**（120 格，一屏 8×8 可滚动，格子 68px），格子上悬停/聚焦弹属性卡、**点一下 = 卖（交易中）/ 穿给当前角色（平时）**，装备栏点一下 = 从当前角色身上脱 | `item_activated` → `WorldMap._on_bag_item_activated()`（交易中→弹卖确认框；平时→`equip_requested(current_character, item)`）；`unequip_requested` → `WorldMap.unequip_requested(current_character, slot)` → `GameRoot._on_unequip_requested()`；`close_requested` → 关面板（当前没有按钮发它：关闭靠 Esc / B）；`set_slot_focus_enabled()` 供 WorldMap 在「确认框弹出时」临时收焦点；◀ / ▶ 只在面板内部翻团队成员（并刷新装备栏）；`current_character()` 给 WorldMap 问"现在穿给谁" |
+| `scenes/ui/character_area/character_area.tscn` | **角色形象区**（属性面板上半部分用的复用场景，外观和背包那块**逐像素一致**）：◀ 形象 240×308（名字牌）▶ + 左右各 3 个 **96px 装备栏**（头盔/武器/腰带 · 项链/衣服/鞋子）。装备栏悬停弹属性卡、点已穿的 = 请求脱下（`unequip_requested`，判定仍在 `GameRoot.unequip_slot()`）；装备栏是鼠标专用、不进焦点环（背包同屏时那边已有一份可点的） | `show_party(party)` / `current_character()` / `show_character()` / `step_player(±1)` / `refresh()` / `focus_ring()`（只有 ◀ / ▶）；发 `character_changed` / `unequip_requested` |
+| `scenes/ui/stats_panel/stats_panel.tscn` | 角色属性：和背包**同宽 662**、贴屏幕**左下角**（背包在右下角，天然不重叠）的窗口（**高度跟背包一致**：打开时由 WorldMap 把背包的实际高度传进来；两页内容固定、**完整展示、没有滚动条**）。**上半部分 = 上面那个 `CharacterArea`**（形象 + 六个装备栏，和背包完全一致）；它下面是一排**页签「属性 / 技能」**（ButtonGroup 互斥，换页只重建下半部分，上半部分和暂存加点都保留）。**属性页**：仿"人物属性"的**固定两列表格**：左列 名称 / 种族 / 气血 / 魔法 / 伤害 / 法伤 / 防御 / 速度，右列 等级 / 门派 / 体质 / 力量 / 敏捷 / 魔力 / 耐力 / 自由点数（基础属性带 **＋ / －**，自由点数右边 **确认加点**）；**经验单独占一行**；再隔一段直接展示 输出（暴击率 / 暴击伤害 / 封印命中率 / 治疗量）与抗性（躲避 / 格挡率 / 格挡值 / 抗暴击率 / 爆伤减免 / 抵抗封印）；底部一行门派技能摘要。**技能页**：按分组列出该角色学过的一切 ——「<门派> · 门派技能 Lv.N」下是 2 被动 + 3 主动（名字/等级/说明，主动带**当前目标数**），「角色技能」下是 `UnitStats.skills` 里配的 SkillData。**没有全屏遮罩** | `show_stats(party)` / `current_character()` / `show_character()` / `refresh()` / `focus_ring()`（页签 + ◀ ▶ + ＋ － + 确认加点）/ `set_linked_height()` / `points_spent` / `unequip_requested`；**加减只改面板里的暂存差值**（`_pending`），点「确认加点」才走 `GameRoot.apply_attr_deltas()` 一次性落盘；换人丢弃暂存、保留当前页签；◀ / ▶ 只改"看谁"并发 `character_view_changed`（WorldMap 让背包跟着切）；只读 `UnitStats`、`Global.player_level/player_exp`、`GameRoot.sect_of()` / `sect_skill_level()` / `derived_stats()` / `equipment_in` |
 
 **Esc 的逐级语义**（`WorldMap._unhandled_input()` 里的状态机，顺序即优先级）：
 
@@ -378,16 +510,18 @@ func _ready() -> void:
 没有任何 UI          → Esc 打开操作菜单
 操作菜单开着          → Esc 关掉菜单，回游戏
 背包开着             → Esc（或 B）关掉背包；从菜单进来的退回菜单，按 B 开的直接回游戏
+角色属性面板开着      → Esc / C / B 收摊（**连并排的背包一起收**）；从菜单进来的退回菜单
 商人交易中            → Esc 先关确认框（如果开着），再按才关整个交易（并收掉并排的背包）
 队伍管理页开着        → Esc 退回操作菜单（上一级），面板没开时才会开菜单
 NPC 对话面板开着      → Esc 关掉面板（不会顺手把菜单也打开）
 ```
 
-> ⚠ 顺序即优先级：**交易那一支排在背包前面** —— 交易时两个开关都是 true，交易是"主窗口"、
-> 背包是"配件"，谁在前谁说了算（见 `WorldMap._unhandled_input()` 里的分支顺序）。
-
+> ⚠ 顺序即优先级：**交易 / 属性面板都排在背包前面** —— 它们打开时背包是"配件"（一起开、一起关），
+> 谁在前谁说了算（见 `WorldMap._unhandled_input()` 里的分支顺序与 `_bag_with_shop` / `_bag_with_stats`）。
+>
 > ⚠ 背包那一支**不走 `_overlay_nav()`**：背包的 WASD 归 `BagPanel` 自己管（网格语义），
-> `WorldMap` 只处理 Esc / B。其余浮层则统一由 `WorldMap` 转发 W/S/E。
+> `WorldMap` 只处理 Esc / B。角色属性面板是只读的，只接 Esc / C / B，其余输入忽略；
+> 其余浮层则统一由 `WorldMap` 转发 W/S/E。
 
 **键盘焦点是怎么工作的**（这是"整个游戏都能纯键盘玩"的关键，主菜单也用同一套）：
 

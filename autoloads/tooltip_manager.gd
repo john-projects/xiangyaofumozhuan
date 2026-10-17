@@ -36,10 +36,11 @@ extends CanvasLayer
 ##   · process_mode = PROCESS_MODE_ALWAYS，即使 SceneTree 暂停也照常淡入淡出。
 ##
 ## 谁在用它（谁调用、传什么数据）：
-##   · scenes/ui/selection_panel/selection_panel.gd —— 鼠标进入角色卡 / 初始武器卡时
-##     show_for_control(card, UnitStats 或 ItemWeapon)，离开时 hide_tip()
-##   · scenes/ui/shop_panel/shop_panel.gd —— 鼠标进入 ShopCard / ItemCard 时
+##   · scenes/ui/bag_panel/bag_panel.gd —— 鼠标/焦点进入背包格子、装备栏时
+##     show_for_control(card, ItemBase 或 UnitStats)，离开时 hide_tip()
+##   · scenes/ui/merchant_panel/merchant_panel.gd —— 鼠标/焦点进入货架格子时
 ##     show_for_control(card, 某个 ItemBase 子类)，离开时 hide_tip()
+##   · 角色卡（UnitStats）暂时没有界面在用，但登记表里保留着，随时可以接
 ##   · 需要"跟着鼠标走"的场合可以直接用 show_for(data)（POINT 模式，带 24px 死区）
 ##
 ## 数据怎么流转（本文件不复制、不解释数据）：
@@ -50,8 +51,8 @@ extends CanvasLayer
 ##
 ## 登记表怎么匹配（重要）：
 ##   _registry 的键是**脚本对象**（class_name 本身就是 GDScript 的 Script 资源，可以直接当键）。
-##   匹配时沿 get_base_script() 向上爬 —— 所以只登记 ItemBase 就能同时服务 ItemWeapon /
-##   ItemPassive / ItemUpgrade；UnitStats 将来若有子类也会自动命中。
+##   匹配时沿 get_base_script() 向上爬 —— 所以只登记 ItemBase 就能同时服务 ItemEquipment
+##   以及以后任何新的道具子类；UnitStats 将来若有子类也会自动命中。
 ##
 ## 与其他系统的边界：
 ##   · 不读不写 Global，也不碰 SoundManager —— 它只依赖"数据对象带脚本"这一个前提；

@@ -74,7 +74,15 @@ func _set_item(value: ItemBase) -> void:
 	# 枚举转名字：ItemType 是 WEAPON=0 / UPGRADE=1 / PASSIVE=2，keys() 拿到成员名数组再按下标取，
 	# 所以卡上显示的是 "WEAPON" 这样的英文枚举名，而不是数字。
 	# ⚠ 下标存在 .tres 里，枚举成员顺序一改，所有旧资源都会静默错位显示。
-	item_type.text = ItemBase.ItemType.keys()[value.item_type]
+	# 类型行用中文名（"装备"/"武器"/"被动"…），以前直接显示枚举名，卡片上会出现 "EQUIPMENT"。
+	# ⚠ 下标存在 .tres 里，枚举成员顺序一改，所有旧资源都会静默错位显示。
+	item_type.text = ItemBase.item_type_name(value.item_type)
+	# 能装备的话把栏位也带上（"WEAPON · 武器栏"），玩家才知道这件东西点一下能穿、穿到哪个格子
+	# （见 ItemBase.EquipType）。用短名而不是"可装备到「武器」栏"：这行标签只有 90px 宽，
+	# 长文案会溢出卡片右边缘（.tscn 里也把它的 offset_right 放宽了）。
+	var slot_type: int = value.get_equip_type()
+	if slot_type != ItemBase.EquipType.NONE:
+		item_type.text += " · %s栏" % ItemBase.equip_type_name(slot_type)
 	item_desc.text = value.get_description()
 	
 	# 按稀有度换面板描边（"panel" 是 Panel 控件的主题项名；Button 类要覆盖 "normal"）

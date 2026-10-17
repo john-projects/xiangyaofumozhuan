@@ -5,8 +5,8 @@
 #   main.tscn 是 project.godot 里配置的**唯一主场景**，所以本脚本是整局游戏的"根"。
 #   它自己**不画任何东西**：画面全部由它 add_child 进来的"屏幕"负责。
 #   项目里的屏幕分两类、各有一个容器（都是 main.tscn 里的节点，见下面的 @onready）：
-#     · WorldRoot(Node2D)      —— 世界类屏幕：WorldMap / Battle / Arena
-#     · UIRoot(CanvasLayer)    —— UI 类屏幕：TitleScreen / SelectionPanel
+#     · WorldRoot(Node2D)      —— 世界类屏幕：WorldMap / Battle
+#     · UIRoot(CanvasLayer)    —— UI 类屏幕：TitleScreen
 #     · TransitionLayer(CanvasLayer, layer=200) —— 最上层的黑幕 ColorRect(Fade)，做淡入淡出
 #
 # 它是全项目唯一"持有流程状态"的地方：
@@ -16,31 +16,24 @@
 #
 # 屏幕之间怎么通信（本文件的核心模式）：
 #   屏幕只 emit 信号（battle_requested / travel_requested / back_to_title_requested /
-#   on_selection_completed / battle_ended …），GameRoot 订阅这些信号并决定下一屏是谁。
+#   battle_ended …），GameRoot 订阅这些信号并决定下一屏是谁。
 #   所以"改流程"= 改本文件，屏幕本身不需要知道别的屏幕存在。
 #
 # 一次完整的新游戏流程（照着读一遍就理解本文件了）：
 #   _ready() → fade 全黑 → await show_title()
 #     → 主菜单「新的征程」→ start_new_game()（清空所有局内状态、金币重置）
-#     → start_game_with_defaults()（**跳过选人/选武器界面**：直接取 default_leader / default_weapon）
-#         → _on_selection_completed()
-#             → party（团队）= [队长]、deployed（上阵）= [队长]，初始武器入包，emit map_changed
+#     → start_game_with_defaults()（直接用 default_leader 开局）
+#         → _begin_new_run()
+#             → party（团队）= [队长]、deployed（上阵）= [队长]，emit map_changed
 #     → show_map()（把 WorldMap 挂到 WorldRoot 下）
 #         → 地图里点「进入战斗」→ enter_battle() → _swap(battle, world_root)
 #             → 打完 emit battle_ended → _on_battle_ended()：记通关、发奖励、回地图（原地）
 #         → 地图里点传送 → travel_to(next_id)：记住位置、换 current_map_id、show_map() 到新图
-#   竞技场（TitleScreen 的「经典模式」）走另一条线：enter_arena() → Arena 自成一体的玩法。
-#
-# ⚠ 选人界面（SelectionPanel）现在**不在主流程里**了：主菜单「新的征程」直接用
-#   default_leader + default_weapon 开局。想恢复"选人 → 选武器"的老流程：
-#   把 start_new_game() 末尾的 start_game_with_defaults() 换回 show_character_select() 即可
-#   （面板场景与脚本一直留着，一行都没删）。
 #
 # 数据流（谁写 Global）：
 #   本文件会写 Global.coins（start_new_game 重置 / _on_battle_ended 发奖励）、
-#   Global.equipped_weapons（清空 / 追加初始武器）、Global.main_player_selected 与
-#   main_weapon_selected（start_new_game 里置 null）、Global.player（由
-#   Global.get_selected_player() 在 Arena 那边赋值，本文件不碰）。
+#   Global.equipped_weapons / Global.equipment_by_character（开局清空，之后只由买/卖/穿脱改）、
+#   Global.main_player_selected（start_new_game 里置 null）。
 #
 # 坑（改之前务必看）：
 #   · 本文件大量使用 await（等 tween、等 fade、等信号）—— 每个用到 await 的函数都是**协程**，
@@ -51,7 +44,7 @@
 #     不能写 owner.queue_free()（_clear_screens 里就是这么做的）。
 #   · 换屏不是换 SceneTree 场景（不调 change_scene_to_*）：全局 autoload（Global/SoundManager）
 #     一直都在，而 Global 里的字段**跨屏存活、不会自动重置** —— 新开一局必须像
-#     start_new_game() 那样逐项手动清（注意它并**没有**清 Global.player）。
+#     start_new_game() 那样逐项手动清。
 
 extends Node
 class_name GameRoot
@@ -59,7 +52,7 @@ class_name GameRoot
 ## 游戏总入口（唯一主场景）
 ##
 ## 流程：
-##   主菜单(TitleScreen) → 选人(SelectionPanel) → 世界地图(WorldMap, 走动探索)
+##   主菜单(TitleScreen) → 世界地图(WorldMap, 走动探索)
 ##        → 点地图上的传送点前往下一张图 / 点「进入战斗」打当前地图的敌人
 ##        → 回合制战斗(Battle) → 结算 → 回地图 → …（最后一张图是终点）
 ##
@@ -69,8 +62,8 @@ class_name GameRoot
 ##     复制一个 .tres → 改 id / display_name / texture / next_id → 加进 main.tscn 的 Maps 数组
 ##
 ## 场景里的三个容器：
-##   WorldRoot        Node2D     —— 世界类屏幕（战斗 / 竞技场）
-##   UIRoot           CanvasLayer—— UI 屏幕（主菜单 / 地图 / 选人）
+##   WorldRoot        Node2D     —— 世界类屏幕（地图 / 战斗）
+##   UIRoot           CanvasLayer—— UI 屏幕（主菜单）
 ##   TransitionLayer  CanvasLayer—— 最高层黑幕，淡入淡出
 ##
 ## 扩展点：
@@ -104,19 +97,11 @@ const TITLE_SCENE := preload("res://scenes/main/title_screen.tscn")
 const WORLD_MAP_SCENE := preload("res://scenes/world/world_map.tscn")
 ## 回合制战斗场景（Battle）。
 const BATTLE_SCENE := preload("res://scenes/battle/battle.tscn")
-## 竞技场场景（Arena，经典模式）。
-const ARENA_SCENE := preload("res://scenes/arena/arena.tscn")
-## 选人界面场景（SelectionPanel）。
-const SELECTION_SCENE := preload("res://scenes/ui/selection_panel/selection_panel.tscn")
-## 默认队长：主菜单「新的征程」**跳过选人界面**时直接用的 UnitStats。
+## 默认队长：主菜单「新的征程」直接用的 UnitStats。
 ## 换人只要改这一行（或是在 main.tscn 的检查器里填 default_leader 覆盖它）。
 ## ⚠ 用"敌人"资源当队长也是安全的（想快速测队伍/敌人数量时可以这么干）：
-##   战斗走的是 Battle.start_battle(我方数组, 敌方数组) 显式传参，
-##   UnitStats.type 只影响 Arena 那条老玩法，本项目里没有任何代码读它。
+##   战斗走的是 Battle.start_battle(我方数组, 敌方数组) 显式传参，不读 UnitStats.type。
 const DEFAULT_LEADER := preload("res://resources/units/players/stats_player_well_rounded.tres")
-## 默认初始武器：跳过选武器界面时塞进 Global.equipped_weapons 的那一把。
-## 取的是原来选人界面里的第一把（拳头），保证"直接开局"和"手选最左边那个"效果一致。
-const DEFAULT_START_WEAPON := preload("res://resources/items/weapons/melee/punch/item_punch_1.tres")
 
 # ───────────────────────────────────────────────────────────────────────────
 #  ── 配置（在 main.tscn 的检视面板里填；改这些等于改关卡结构与难度曲线）──
@@ -136,16 +121,78 @@ const DEFAULT_START_WEAPON := preload("res://resources/items/weapons/melee/punch
 @export var coin_reward_per_map := 40          # 通关奖励 = coin_reward_per_map * 地图序号
 ## 新开一局时的初始金币。默认 500（和 Global.coins 的默认值刻意保持一致，避免两处对不上）。
 @export var starting_coins := 500
-## 跳过选人界面时的队长（UnitStats）。**在 main.tscn 的检查器里填**；留空 = 用 DEFAULT_LEADER。
+
+# ── 等级与经验（玩家等级，全队共享；满级 100）──────────────────────────────
+## 满级。到这一级之后经验不再增长（打赢也只给金币）。
+const MAX_LEVEL := 100
+## 经验曲线：**升到下一级所需经验** need(L) = round(EXP_BASE + EXP_LINEAR×L + EXP_QUAD×L²)
+## （L = 当前等级，1..99）。三个系数是这条曲线的全部"旋钮"，改这里就能整体调快/调慢：
+##   · EXP_BASE   —— 低等级的下限（别让前几级"一场战斗直接跳 10 级"）；
+##   · EXP_LINEAR —— 中期的线性增长（每级多要多少）；
+##   · EXP_QUAD   —— 后期的二次项（越往高级越吃经验）。
+## 现值 60 / 20 / 0.42：L1 要 80、L10 要 302、L50 要 2110、L99 要 6156，
+## 1→100 累计 **242,852 经验**（≈ 400~650 场战斗，见 README 的节奏表）。
+## ⚠ 改完记得跑一次 _verify_level 的曲线检查（会核对单调递增与总量）。
+const EXP_BASE := 60.0
+const EXP_LINEAR := 20.0
+const EXP_QUAD := 0.42
+## 每级属性加成（乘算）：**已被"基础属性"系统取代** —— 现在升级靠
+## ATTR_PER_LEVEL / ATTR_FREE_PER_LEVEL 发属性点，不再是全局百分比倍率。
+## 保留这个常量只是为了让旧存档/旧文档有个对照；代码里已经没人读它了。
+const LEVEL_GROWTH_PER_LEVEL := 0.0
+## 每场胜利的经验 = exp_reward_per_map × 地图难度 + exp_per_enemy × 敌人数量。
+## 默认 120 / 20：第 1 图 2 个敌人 = 160、第 4 图 5 个敌人 = 580 —— 越靠后的图越值得刷。
+@export var exp_reward_per_map := 120
+@export var exp_per_enemy := 20
+
+# ── 基础属性（五项；升级自动 +1，另给自由点）──────────────────────────────
+## 五项基础属性的键（顺序 = UI 顺序 = 系数表的顺序）。
+## con 体质 / mag 魔力 / str 力量 / end 耐力 / agi 敏捷。
+const ATTR_KEYS := ["con", "mag", "str", "end", "agi"]
+## 五项基础属性的中文名（和 ATTR_KEYS 一一对应）。
+const ATTR_NAMES := ["体质", "魔力", "力量", "耐力", "敏捷"]
+## 每升 1 级：五项基础属性**各 +本值**（自动，不受操作影响）。
+const ATTR_PER_LEVEL := 1
+## 每升 1 级：额外获得这么多点**自由属性点**，玩家自己加到任意一项上。
+const ATTR_FREE_PER_LEVEL := 5
+## 种族 × 基础属性 → 派生属性的**系数表**（用户给的数值，一字不改）。
+## 结构：种族 → 属性键 → { 派生键: 每点加成 }。
+## 派生键含义：hp=气血、mana=魔法、damage=伤害、defense=防御、speed=速度、dodge=躲避、
+##   spell_damage=法伤（原"灵力"），以及 crit_rate / crit_damage_bonus / seal_hit / healing /
+##   crit_resist / crit_damage_resist / seal_resist / block_value 这些二级属性。
+## 用法：某项基础属性的总点数 × 对应系数，再把五项加总（+ .tres 里的基础值），见 derived_stats()。
+## 为什么要按种族分表：人族均衡、仙族防高法强（耐力/魔力系数高）、魔族血多物理强（体质/力量高）。
+const ATTR_TABLE := {
+	UnitStats.Race.HUMAN: {
+		"con": {"hp": 5.0, "spell_damage": 0.3, "speed": 0.1},
+		"mag": {"mana": 3.0, "spell_damage": 0.7},
+		"str": {"damage": 0.75, "spell_damage": 0.4},
+		"end": {"defense": 1.5, "spell_damage": 0.2, "speed": 0.1},
+		"agi": {"speed": 0.7, "dodge": 1.0},
+	},
+	UnitStats.Race.IMMORTAL: {
+		"con": {"hp": 4.5, "spell_damage": 0.3, "speed": 0.1},
+		"mag": {"mana": 3.5, "spell_damage": 0.7},
+		"str": {"damage": 0.65, "spell_damage": 0.4},
+		"end": {"defense": 1.6, "spell_damage": 0.2, "speed": 0.1},
+		"agi": {"speed": 0.7, "dodge": 1.0},
+	},
+	UnitStats.Race.DEMON: {
+		"con": {"hp": 6.0, "spell_damage": 0.3, "speed": 0.1},
+		"mag": {"mana": 2.5, "spell_damage": 0.7},
+		"str": {"damage": 0.85, "spell_damage": 0.4},
+		"end": {"defense": 1.4, "spell_damage": 0.2, "speed": 0.1},
+		"agi": {"speed": 0.7, "dodge": 1.0},
+	},
+}
+## 开局用的队长（UnitStats）。**在 main.tscn 的检查器里填**；留空 = 用 DEFAULT_LEADER。
 ## 想临时试别的角色/敌人，填这里最省事（不用改代码、也不用改那句 preload）。
 @export var default_leader: UnitStats
-## 跳过选武器界面时的初始武器（ItemWeapon）。留空 = 用 DEFAULT_START_WEAPON。
-@export var default_weapon: ItemWeapon
 
 # ── 场景容器引用（% = main.tscn 里标记为 unique_name_in_owner 的节点）────────
-## 世界类屏幕容器（Node2D）。WorldMap / Battle / Arena 都挂这里（受世界坐标与 y_sort 影响）。
+## 世界类屏幕容器（Node2D）。WorldMap / Battle 都挂这里（受世界坐标与 y_sort 影响）。
 @onready var world_root: Node2D = %WorldRoot
-## UI 类屏幕容器（CanvasLayer）。TitleScreen / SelectionPanel 挂这里（不随相机移动）。
+## UI 类屏幕容器（CanvasLayer）。TitleScreen 挂这里（不随相机移动）。
 @onready var ui_root: CanvasLayer = %UIRoot
 ## 最上层黑幕（TransitionLayer 的 layer=200 之下的 ColorRect）。
 ## 只用它的 modulate.a 做淡入淡出：1.0 = 全黑、0.0 = 全透明。
@@ -192,6 +239,10 @@ var in_battle := false
 
 ## 上一次战斗的结算文案（胜/负 + 奖励）。写：_on_battle_ended()；读：传给地图显示 + 主菜单副标题。
 var _last_result := ""
+## 这一场战斗的敌人数量（enter_battle 生成敌人后记下）。
+## 为什么记：结算是 _on_battle_ended() 里做的，那时敌人队伍早已随 Battle 场景释放，
+##   而经验奖励要按"打了几个"算（exp_per_enemy × 数量），所以进战斗时先存一份。
+var _last_enemy_count := 0
 ## 每张地图"玩家离开时的归一化位置"：map_id -> Vector2。
 ## 写：_remember_position()（进战斗前 / 传送前）；读：show_map(restore_position = true)，
 ## 赋给 WorldMap.spawn_override，从而实现"打完战斗回到原地"。
@@ -265,6 +316,210 @@ func map_index(map_id: String) -> int:
 ##   _make_enemy_team()（**只用来缩放敌人的血量/伤害**；敌人数量现在按我方队伍人数算，与本档无关）。
 func map_difficulty() -> int:
 	return map_index(current_map_id) + 1
+
+
+# ══════════════════════════════════════════════════════════
+#  等级与经验
+# ══════════════════════════════════════════════════════════
+#  数值全在文件顶部：MAX_LEVEL / EXP_BASE / EXP_LINEAR / EXP_QUAD / exp_reward_per_map / exp_per_enemy。
+#  成长全在"基础属性"那一段（ATTR_* / ATTR_TABLE），等级只负责发点。这里只放"怎么算"和"什么时候加"。
+#
+#  设计目标（满级 100）：
+#    · 前 10 级很便宜（1~3 场一场一级），让玩家很快看到"升级"这件事；
+#    · 中期线性增长（每级多 20 左右），节奏稳定；
+#    · 后期二次项接管（每级 +0.42×L²），越练越慢但不失控 —— 1→100 累计 242,842 经验，
+#      按"第 4 张图 3 个敌人"（约 540/场）算 ≈ 450 场，按混合地图打 ≈ 600 场。
+#    · 升级只发属性点（见下面"基础属性"一段），不再有全局百分比倍率。
+
+## 从 level 升到 level+1 需要的经验。
+## 参数 level：当前等级（1..MAX_LEVEL-1）。
+## 返回值：所需经验（整数）；level >= MAX_LEVEL（或 < 1）时返回 0（满级不再需要经验）。
+## 公式：round(EXP_BASE + EXP_LINEAR×L + EXP_QUAD×L²)，三个系数就是整条曲线的旋钮。
+## 为什么用 round 而不是 ceil：让 L1 = 80 这种整数，玩家看得舒服；经验本身是整数，不存在"差一点"。
+static func exp_to_next(level: int) -> int:
+	if level < 1 or level >= MAX_LEVEL:
+		return 0
+	return int(roundf(EXP_BASE + EXP_LINEAR * level + EXP_QUAD * level * level))
+
+
+## 这场战斗该给多少经验（胜利结算用）。
+## 参数 enemy_count：这一场敌人的数量（_last_enemy_count）。
+## 返回值：经验点数，= exp_reward_per_map × 地图难度 + exp_per_enemy × 敌人数量。
+##   例：第 1 图 2 敌 = 120×1 + 20×2 = 160；第 4 图 5 敌 = 480 + 100 = 580。
+## 为什么按"地图难度 + 敌人数量"：难度保证越靠后的图越值得打（和金币一致），
+##   数量保证"以少打多"这种难打的战斗不吃亏。
+func exp_reward(enemy_count: int) -> int:
+	return exp_reward_per_map * map_difficulty() + exp_per_enemy * maxi(0, enemy_count)
+
+
+# ══════════════════════════════════════════════════════════
+#  基础属性（体质 / 魔力 / 力量 / 耐力 / 敏捷）与派生属性
+# ══════════════════════════════════════════════════════════
+#  模型（三句话）：
+#    1. 每项基础属性 = 等级自动给的 (等级-1)×ATTR_PER_LEVEL + 玩家自由分配的点数；
+#    2. 派生属性 = .tres 里的基础值 + Σ(每项基础属性点数 × 种族系数)，系数见 ATTR_TABLE；
+#    3. 战斗用的就是派生后的值（_make_player_team 写进副本），原先"每级 ×1.5%"的倍率已停用。
+#  谁写：add_player_exp() 只改等级（自动成长随之现算）；allocate_attr() 是自由点的唯一写入点。
+
+## 五项基础属性的**总点数**（自动成长 + 自由分配）。
+## 参数 character：角色；返回值：长度 5 的 Array[int]，顺序同 ATTR_KEYS。
+## 为什么自动成长不存字典、而是按"等级 - 1"现算：存了的话每升一级都要遍历全队去加，
+##   还可能出现"某个角色的自动成长没跟上"的脏数据；现算永远和等级一致。
+static func attribute_points(character: UnitStats) -> Array[int]:
+	var out: Array[int] = [0, 0, 0, 0, 0]
+	if character == null:
+		return out
+	var auto_points := maxi(0, Global.player_level - 1) * ATTR_PER_LEVEL
+	var alloc := _attr_alloc(character)
+	for i in ATTR_KEYS.size():
+		out[i] = auto_points + int(alloc[i])
+	return out
+
+
+## 某个角色手上还剩多少**自由属性点**没花。
+## 参数 character：角色。
+## 返回值：剩余点数（等级 1 = 0；每升一级 +ATTR_FREE_PER_LEVEL，花掉就减）。
+static func free_attribute_points(character: UnitStats) -> int:
+	if character == null:
+		return 0
+	var total := maxi(0, Global.player_level - 1) * ATTR_FREE_PER_LEVEL
+	var spent := 0
+	for value in _attr_alloc(character):
+		spent += int(value)
+	return maxi(0, total - spent)
+
+
+## 读取某个角色"已分配的自由点"（长度 5 的**副本**；没有记录就全 0）。
+## 返回副本而不是字典里那个数组：调用方拿到后怎么改都不会绕过 allocate_attr 写脏数据。
+static func _attr_alloc(character: UnitStats) -> Array[int]:
+	var out: Array[int] = [0, 0, 0, 0, 0]
+	if character == null:
+		return out
+	var raw = Global.attr_alloc_by_character.get(character_key(character))
+	if raw == null:
+		return out
+	for i in mini(ATTR_KEYS.size(), (raw as Array).size()):
+		out[i] = int(raw[i])
+	return out
+
+
+## 把自由属性点加到某一项上。
+## 参数 character：角色；index：0..4（顺序同 ATTR_KEYS）；amount：加几点（默认 1）。
+## 返回值：空串 = 成功；否则是不能加的原因（可直接显示）。
+## 副作用：写 Global.attr_alloc_by_character[角色键]（唯一写入点）。
+static func allocate_attr(character: UnitStats, index: int, amount := 1) -> String:
+	if character == null:
+		return "没有选中角色。"
+	if index < 0 or index >= ATTR_KEYS.size():
+		return "没有这项基础属性。"
+	if amount <= 0:
+		return "加点数量必须大于 0。"
+	if free_attribute_points(character) < amount:
+		return "没有足够的自由属性点（还剩 %d 点）。" % free_attribute_points(character)
+	var key := character_key(character)
+	var alloc := _attr_alloc(character)
+	alloc[index] += amount
+	Global.attr_alloc_by_character[key] = alloc
+	return ""
+
+
+## 一次性提交"一组加减"（属性面板的「确认加点」走这里）。
+## 参数 character：角色；deltas：长度 5 的数组，每项是这一项要加/减的点数（可正可负）。
+## 返回值：空串 = 成功；否则是拒绝原因（点不够 / 会减成负数 / 数组长度不对）。
+## 副作用：写 Global.attr_alloc_by_character[角色键]（和 allocate_attr 同一个存储，唯一写入点）。
+## 为什么要有批量接口：面板上玩家先按「＋/－」改一组**暂存**的差值，点「确认」才真正落盘；
+##   逐项调 allocate_attr 做不到"先减后加"（减需要动已有分配），也会在中途出现负数/超额状态。
+## 校验规则：每一项的最终分配不能 < 0；所有差值之和不能超过当前剩余自由点（= 确认后 free 不为负）。
+static func apply_attr_deltas(character: UnitStats, deltas: Array) -> String:
+	if character == null:
+		return "没有选中角色。"
+	if deltas.size() != ATTR_KEYS.size():
+		return "属性点数不对。"
+	var alloc := _attr_alloc(character)
+	var added := 0
+	for i in deltas.size():
+		var delta := int(deltas[i])
+		if alloc[i] + delta < 0:
+			return "%s 不能减到 0 以下。" % ATTR_NAMES[i]
+		added += delta
+	if added > free_attribute_points(character):
+		return "没有足够的自由属性点（还剩 %d 点）。" % free_attribute_points(character)
+	if added == 0:
+		return ""
+	for i in deltas.size():
+		alloc[i] += int(deltas[i])
+	Global.attr_alloc_by_character[character_key(character)] = alloc
+	return ""
+
+
+## 按种族系数把"基础属性"折算成派生属性（这是战斗/面板真正用的数值）。
+## 参数 character：角色。
+## 返回值：Dictionary，键为：
+##   · 由基础属性算出来的：hp / mana / damage / defense / speed / dodge / spell_damage（法伤）；
+##   · 只是"带出来"的二级属性：crit_rate / crit_damage_bonus / seal_hit / healing /
+##     crit_resist / crit_damage_resist / seal_resist / block_value（读 .tres 上的值，暂不受属性影响）。
+##   值 = character 自己的基础值 + Σ(五项基础属性点数 × 该种族的对应系数)。
+## ⚠ 这是**纯函数**：只读 Global 与 character，不写任何状态（面板刷新时随便调）。
+static func derived_stats(character: UnitStats) -> Dictionary:
+	var out := {
+		"hp": 0.0, "mana": 0.0, "damage": 0.0, "defense": 0.0,
+		"speed": 0.0, "dodge": 0.0, "spell_damage": 0.0,
+		"crit_rate": 0.0, "crit_damage_bonus": 0.0, "seal_hit": 0.0, "healing": 0.0,
+		"crit_resist": 0.0, "crit_damage_resist": 0.0, "seal_resist": 0.0, "block_value": 0.0,
+	}
+	if character == null:
+		return out
+	out["hp"] = character.health
+	out["mana"] = character.mana
+	out["damage"] = character.damage
+	out["speed"] = character.speed
+	out["defense"] = character.defense
+	out["dodge"] = character.dodge
+	out["spell_damage"] = character.spell_damage
+	out["crit_rate"] = character.crit_rate
+	out["crit_damage_bonus"] = character.crit_damage_bonus
+	out["seal_hit"] = character.seal_hit
+	out["healing"] = character.healing
+	out["crit_resist"] = character.crit_resist
+	out["crit_damage_resist"] = character.crit_damage_resist
+	out["seal_resist"] = character.seal_resist
+	out["block_value"] = character.block_value
+	var race: int = character.race
+	var table: Dictionary = ATTR_TABLE.get(race, ATTR_TABLE[UnitStats.Race.HUMAN])
+	var points := attribute_points(character)
+	for i in ATTR_KEYS.size():
+		var coef: Dictionary = table.get(ATTR_KEYS[i], {})
+		for key in coef:
+			out[key] += float(coef[key]) * points[i]
+	return out
+
+
+## 加经验（**唯一的经验入口**）：会一路处理"连升多级"，并把溢出经验留到下一级。
+## 参数 amount：这次获得多少经验（<= 0 直接忽略）。
+## 返回值：这次升了几级（0 = 没升；满级后再加也是 0）。
+## 副作用：改 Global.player_exp / player_level；满级时把经验归零（不再累积）。
+## 为什么用 while 而不是 if：一场战斗的经验可能一次顶好几级（尤其前期），
+##   只扣一次 need 会让玩家"卡在 5 级却攒着 3000 经验"，下次再打赢才补一级 —— 看起来像 bug。
+func add_player_exp(amount: int) -> int:
+	if amount <= 0:
+		return 0
+	if Global.player_level >= MAX_LEVEL:
+		return 0
+	Global.player_exp += amount
+	var gained := 0
+	while Global.player_level < MAX_LEVEL:
+		var need := exp_to_next(Global.player_level)
+		if Global.player_exp < need:
+			break
+		Global.player_exp -= need
+		Global.player_level += 1
+		gained += 1
+	if Global.player_level >= MAX_LEVEL:
+		Global.player_exp = 0            # 满级后经验条满格，不再累积（避免"无限经验"的假数字）
+	# 门派技能跟着角色等级一起长（每个已拜师角色 +gained 级，封顶 100）
+	if gained > 0:
+		_bump_sect_skill_levels(gained)
+	return gained
 
 
 # ══════════════════════════════════════════════════════════
@@ -346,8 +601,8 @@ func fade_in(duration := 0.3) -> void:
 ## 副作用：
 ##   · 实例化 TitleScreen 并把 _last_result 写进它的 last_result（**必须在 add_child 之前**，
 ##     因为 TitleScreen._ready() 会立刻读它显示副标题；_swap 内部才 add_child）；
-##   · connect 三条信号：new_game_requested → start_new_game、
-##     arena_requested → enter_arena、quit_requested → 一个直接调 get_tree().quit() 的 lambda；
+##   · connect 两条信号：new_game_requested → start_new_game、
+##     quit_requested → 一个直接调 get_tree().quit() 的 lambda；
 ##   · await _swap(screen)（默认挂到 ui_root）。
 ## 关于那个 lambda：信号是"无参"的，而 get_tree().quit() 需要 scene tree，
 ##   所以用匿名函数包一层（函数引用也能连，但这里要传调用结果所以必须包）。
@@ -356,7 +611,6 @@ func show_title() -> void:
 	var screen := TITLE_SCENE.instantiate() as TitleScreen
 	screen.last_result = _last_result
 	screen.new_game_requested.connect(start_new_game)
-	screen.arena_requested.connect(enter_arena)
 	screen.quit_requested.connect(func() -> void: get_tree().quit())
 	await _swap(screen)
 
@@ -367,12 +621,10 @@ func show_title() -> void:
 ##   · party / cleared_maps / _map_positions / _last_result 清空；
 ##   · current_map_id 回到 _first_map_id()；
 ##   · Global.coins = starting_coins（**唯一的金币重置点**）；
-##   · Global.equipped_weapons.clear()（否则上一局的装备会带进新档）；
-##   · Global.main_player_selected / main_weapon_selected 置 null（清掉上次选人结果）；
-##   · 调用 start_game_with_defaults()（**跳过选人界面**，直接按 default_leader 开局）。
-## ⚠ 注意它**没有清 Global.player**：那个字段仍指向上一次造出来的旧节点
-##   （可能已被回收）。这正是项目里到处写 is_instance_valid(Global.player) 的原因，
-##   以后加"存档/重开"时要把这一项也补上。
+##   · Global.player_level / player_exp 回到 1 / 0（等级也属于"局内进度"，新档从头练）；
+##   · Global.equipped_weapons.clear() / Global.equipment_by_character.clear()（背包与所有人的装备栏回到空）；
+##   · Global.main_player_selected 置 null；
+##   · 调用 start_game_with_defaults()（直接按 default_leader 开局）。
 ## 为什么这些状态由 GameRoot 清而不是 Global 自己清：Global 是 autoload，跨屏存活，
 ##   它只知道"当前值"，不知道"什么时候算新的一局" —— 那个时机只有 GameRoot 懂。
 func start_new_game() -> void:
@@ -383,59 +635,45 @@ func start_new_game() -> void:
 	_last_result = ""
 	current_map_id = _first_map_id()
 	Global.coins = starting_coins
+	Global.player_level = 1
+	Global.player_exp = 0
 	Global.equipped_weapons.clear()
+	Global.equipment_by_character.clear()   # 全队每个人的装备栏都清空，否则新档会带着上一局的头盔/武器
+	Global.sect_by_character.clear()        # 门派也是局内进度：新档所有人回到"无门派"
+	Global.sect_skill_level_by_character.clear()  # 门派技能等级一起清
+	Global.attr_alloc_by_character.clear()  # 属性加点同理：新档从 0 开始练
 	Global.main_player_selected = null
-	Global.main_weapon_selected = null
 	start_game_with_defaults()
 
 
-## 用"默认队长 + 默认武器"直接开局（不经过选人/选武器界面）。
-## 参数：无（读 default_leader / default_weapon，留空则回落到本文件顶部的两个 preload 常量）。
-## 返回值：无（不含 await；末尾 _on_selection_completed() 未被 await）。
-## 副作用：写 Global.main_player_selected / Global.main_weapon_selected，然后复用 _on_selection_completed()
-##   —— 组队、初始武器入包、emit map_changed、进第一张地图这四件事都只写在那一个地方，
-##   所以"跳过选人"和"手选角色"走的是同一段收尾逻辑，不会出现两套行为不一致。
-## 想换回选人界面：把 start_new_game() 末尾的调用换成 show_character_select() 即可。
+## 用默认队长直接开局。
+## 参数：无（读 default_leader，留空则回落到本文件顶部的 DEFAULT_LEADER）。
+## 返回值：无（不含 await；末尾 _begin_new_run() 未被 await）。
+## 副作用：写 Global.main_player_selected，然后交给 _begin_new_run() 组队、进第一张图。
 func start_game_with_defaults() -> void:
 	var leader := default_leader if default_leader != null else DEFAULT_LEADER
 	if leader == null:
 		push_warning("GameRoot: 没有配置默认队长（default_leader / DEFAULT_LEADER），无法直接开局")
 		return
 	Global.main_player_selected = leader
-	Global.main_weapon_selected = default_weapon if default_weapon != null else DEFAULT_START_WEAPON
-	_on_selection_completed()
+	_begin_new_run()
 
 
-## 显示选人界面（SelectionPanel）。
-## ⚠ 当前**不在主流程里**：主菜单「新的征程」走的是 start_game_with_defaults()。
-##   想恢复"选人 → 选武器"的老流程，只要把 start_new_game() 末尾那一行换回本函数即可。
-## 参数：无。返回值：无（协程：await _swap(panel)）。
-## 副作用：实例化 SelectionPanel、把它的 on_selection_completed 连到本文件的
-##   _on_selection_completed、await _swap(panel)（挂到 ui_root），并等过场结束。
-## 说明：连的是"面板自己"的信号（面板内部管玩家/武器的挑选），GameRoot 只关心"选完了"。
-func show_character_select() -> void:
-	var panel := SELECTION_SCENE.instantiate() as SelectionPanel
-	panel.on_selection_completed.connect(_on_selection_completed)
-	await _swap(panel)
-
-
-## 队长/武器确定 → 组成队伍、准备初始武器，进入第一张地图。
-## 谁调它：两条路都汇到这里 ——
-##   · start_game_with_defaults()（**当前主流程**：跳过选人界面，直接用默认队长+默认武器）；
-##   · SelectionPanel 的 on_selection_completed（老流程，面板还留着，见 show_character_select()）。
-## 参数：无（队长与武器在 Global.main_player_selected / main_weapon_selected 里）。
+## 队长确定 → 组成队伍，进入第一张地图。
+## 谁调它：start_game_with_defaults()（**唯一入口**；选人界面已随竞技场一起移除）。
+## 参数：无（队长在 Global.main_player_selected 里）。
 ## 返回值：无（不含 await；末尾 show_map() 未被 await）。
 ## 副作用：
 ##   · Global.main_player_selected 为 null 时警告并**直接 return**（不往下走，避免用 null 组队）；
 ##   · party = [队长]（团队名册，第 0 位永远是队长）、deployed = [队长]（队长默认上阵）；
 ##     招募来的队友会在之后由 add_party_member() 追加，上阵/下阵由队伍管理面板切换；
-##   · Global.equipped_weapons.clear() 后把初始武器 append 进去
-##     （清一次是为了防止"重复开局"导致武器翻倍）；
+##   · Global.equipped_weapons.clear()（背包清空；Global.equipment_by_character 也清空 —— 所有装备栏回到空）；
+##     ⚠ 开局**不送任何装备**，装备全靠商人和战斗奖励；
 ##   · emit map_changed(current_map_id)（当前无人接听，属于预留）；
 ##   · 调 show_map() 进入第一张图。
 ## 注意 party 里放的是**资源引用**（不是节点）：战斗前 _make_player_team() 会 duplicate() 成副本，
 ##   所以战斗中的掉血不会污染 .tres。
-func _on_selection_completed() -> void:
+func _begin_new_run() -> void:
 	if Global.main_player_selected == null:
 		push_warning("GameRoot: 还没选角色")
 		return
@@ -447,8 +685,13 @@ func _on_selection_completed() -> void:
 	deployed.clear()
 	deployed.append(Global.main_player_selected)
 	Global.equipped_weapons.clear()
-	if Global.main_weapon_selected != null:
-		Global.equipped_weapons.append(Global.main_weapon_selected)
+	Global.equipment_by_character.clear()   # 同 start_new_game()：所有人的装备栏都要回到空
+	Global.sect_by_character.clear()        # 门派同理：回到"无门派"
+	Global.sect_skill_level_by_character.clear()  # 门派技能等级一并清空
+	Global.attr_alloc_by_character.clear()  # 属性自由点也清空
+	# 同理：等级/经验也属于"这一局"的进度，重开一局要从 1 级重新练
+	Global.player_level = 1
+	Global.player_exp = 0
 	map_changed.emit(current_map_id)
 	show_map()
 
@@ -465,13 +708,14 @@ func _on_selection_completed() -> void:
 ##   · 给 world.spawn_override 赋值（必须在 add_child 之前 —— WorldMap._ready() 会立刻读它）；
 ##   · 给 world.deployed 赋值（上阵名单，同样是"add_child 之前的注入"，用于队伍管理面板显示状态）；
 ##   · 调 world.setup(...)（同样必须在 add_child 之前，见 WorldMap.setup 的注释）；
-##   · connect 九条信号：battle_requested → enter_battle、travel_requested → travel_to、
+##   · connect 十一条信号：battle_requested → enter_battle、travel_requested → travel_to、
 ##     back_to_title_requested → show_title、recruit_requested → _on_recruit_requested、
 ##     party_remove_requested → _on_party_remove_requested、
 ##     party_deploy_requested → _on_party_deploy_requested、
 ##     party_undeploy_requested → _on_party_undeploy_requested、
-##     weapon_buy_requested → _on_weapon_buy_requested、
-##     weapon_sell_requested → _on_weapon_sell_requested；
+##     item_buy_requested → _on_item_buy_requested、
+##     item_sell_requested → _on_item_sell_requested、
+##     equip_requested → _on_equip_requested、unequip_requested → _on_unequip_requested；
 ##   · await _swap(world, world_root) —— 世界类屏幕挂到 **world_root**（不是 ui_root）。
 ## 细节：
 ##   · 连接在 add_child **之前**完成，这样屏幕一进树（甚至 _ready 里就 emit）也不会漏事件；
@@ -498,8 +742,13 @@ func show_map(result_text := "", from_map_id := "", restore_position := false) -
 	world.recruit_requested.connect(_on_recruit_requested)
 	world.party_deploy_requested.connect(_on_party_deploy_requested)
 	world.party_undeploy_requested.connect(_on_party_undeploy_requested)
-	world.weapon_buy_requested.connect(_on_weapon_buy_requested)
-	world.weapon_sell_requested.connect(_on_weapon_sell_requested)
+	world.item_buy_requested.connect(_on_item_buy_requested)
+	world.item_sell_requested.connect(_on_item_sell_requested)
+	# 装备栏：点背包里的装备 = 穿；点已穿的栏位 = 脱（都在 GameRoot 改数据，见 equip_item）
+	world.equip_requested.connect(_on_equip_requested)
+	world.unequip_requested.connect(_on_unequip_requested)
+	# 门派：拜师面板里点某个队员 = 让他拜入这个 NPC 的门派（种族/已有门派由 can_join_sect 判）
+	world.sect_join_requested.connect(_on_join_sect_requested)
 	world.party_remove_requested.connect(_on_party_remove_requested)
 	await _swap(world, world_root)
 
@@ -546,7 +795,7 @@ func _map_names() -> Dictionary:
 ## 取当前挂在 world_root 下的世界地图节点（用来问它"玩家站在哪"）。
 ## 参数：无。返回值：WorldMap 实例；没有则 null。
 ## 副作用：无（只遍历子节点）。
-## 为什么用 `is WorldMap` 而不是记成员变量：世界类屏幕也可能被换成 Battle/Arena，
+## 为什么用 `is WorldMap` 而不是记成员变量：世界类屏幕也可能被换成 Battle，
 ##   而 GameRoot 不保存世界地图引用（避免野引用）。这里按类型找一次最省心，
 ##   world_root 的子节点最多一个。
 func _current_world_map() -> WorldMap:
@@ -599,6 +848,7 @@ func enter_battle() -> void:
 	if enemies.is_empty():
 		push_warning("GameRoot: 敌人池是空的 —— 给地图资源或 GameRoot.enemy_pool 填敌人")
 		return
+	_last_enemy_count = enemies.size()      # 结算时按"打了几个"给经验（见 exp_reward）
 
 	var battle := BATTLE_SCENE.instantiate() as Battle
 	battle.auto_start_demo = false          # ★ 必须在 add_child 之前
@@ -606,22 +856,6 @@ func enter_battle() -> void:
 	in_battle = true
 	await _swap(battle, world_root)
 	battle.start_battle(_make_player_team(), enemies)
-
-
-## 进入竞技场（主菜单「经典模式」→ arena_requested → 本函数）。
-## 参数：无。返回值：无（协程：await _swap(arena, world_root)）。
-## 副作用：实例化 Arena 并挂到 world_root 下。
-## 说明：
-##   · 竞技场是"自成一体的玩法"（内置 SelectionPanel / 波次 / 商店），
-##     所以这里**不需要**先清 Global 状态、也不需要 party —— 它自己走选人流程
-##     （只有 Arena 会调 Global.get_selected_player() 造玩家）；
-##   · `var arena := ARENA_SCENE.instantiate()` 故意没标类型（原写法）：
-##     它只用来传给 _swap，不需要访问 Arena 的任何成员；
-##   · 注意它**不**重置 Global.coins / equipped_weapons —— 竞技场和地图线共用同一个金币数。
-func enter_arena() -> void:
-	# 保留原来自成一体的竞技场模式（内置选人/波次/商店）
-	var arena := ARENA_SCENE.instantiate()
-	await _swap(arena, world_root)
 
 
 # ══════════════════════════════════════════════════════════
@@ -656,8 +890,16 @@ func _on_battle_ended(player_won: bool) -> void:
 		cleared_maps[map.id if map != null else current_map_id] = true
 		var reward := coin_reward_per_map * map_difficulty()
 		Global.coins += reward
-		_last_result = "%s：战斗胜利！获得 %d 金币" % [map_name, reward]
-		# TODO: 经验 / 掉落 / 战后商店接这里
+		# 经验：和金币同一条公式思路（难度越高越多），另加"按敌人数量"的份（见 exp_reward）
+		var exp := exp_reward(_last_enemy_count)
+		var levels_gained := add_player_exp(exp)
+		var exp_text := "获得 %d 金币、%d 经验" % [reward, exp]
+		if Global.player_level >= MAX_LEVEL:
+			exp_text = "获得 %d 金币（已满级，经验不再增长）" % reward
+		_last_result = "%s：战斗胜利！%s" % [map_name, exp_text]
+		if levels_gained > 0:
+			_last_result += "　★ 升到 %d 级！获得 %d 点自由属性" % [
+					Global.player_level, levels_gained * ATTR_FREE_PER_LEVEL]
 	else:
 		_last_result = "%s：战斗失败…（可以再挑战一次）" % map_name
 	show_map(_last_result, "", true)         # 回到地图上原来的位置
@@ -699,7 +941,7 @@ static func party_count(p_party: Array[UnitStats]) -> int:
 ## 判定顺序：引用 → resource_path → name。
 ##   · 先比引用是最快的路径（同一个 .tres 只会加载出一个实例）；
 ##   · 再比 resource_path，对付"同一份资源被两条路径各加载一次"的情况（例如显式 recruit_pool 与目录扫描）；
-##   · 最后比 name —— 名字是 Global.available_players 的键（名字相同即同一角色），兜底安全。
+##   · 最后比 name —— 同名的 UnitStats 视为同一角色（.tres 被复制/重载过也能认出来），兜底安全。
 static func party_has(p_party: Array[UnitStats], stats: UnitStats) -> bool:
 	if stats == null:
 		return false
@@ -924,12 +1166,16 @@ func _on_party_remove_requested(stats: UnitStats) -> void:
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-#  武器背包（商人 NPC 卖武器用）
+#  装备背包（商人 NPC 卖装备用）+ 装备栏（背包角色区那 6 个格子）
 # ═══════════════════════════════════════════════════════════════════════════
-#  背包就是 Global.equipped_weapons（**数据**列表，不是节点）。这里只做三件事：
-#    · 给出"能不能买"的**统一判定**（面板画按钮和真正购买共用同一份，见 weapon_can_buy）；
-#    · 买下时扣钱 + 记进列表（buy_weapon）；
-#    · 把结果接到界面刷新上（_on_weapon_buy_requested → WorldMap.notify_shop_changed）。
+#  背包就是 Global.equipped_weapons（**数据**列表，不是节点；元素类型是 ItemBase）。
+#  地图线现在装的全是 ItemEquipment（头盔/武器/腰带/项链/衣服/鞋子，见
+#  resources/items/equipment/），老的 ItemWeapon 已经随竞技场一起移除。
+#  这里只做四件事：
+#    · 给出"能不能买"的**统一判定**（面板画按钮和真正购买共用同一份，见 item_can_buy）；
+#    · 买下时扣钱 + 记进列表（buy_item）；
+#    · 把结果接到界面刷新上（_on_item_buy_requested → WorldMap.notify_shop_changed）；
+#    · 穿/脱装备（equip_item / unequip_slot：在背包和 Global.equipment_by_character 之间搬东西）。
 #
 #  ⚠ 与老的竞技场商店（ShopPanel / ShopCard）的关系：
 #    那套是"候选池 → 按波数随机抽 4 件 → 买到手还要 Global.player.add_weapon() 造 Weapon 节点"；
@@ -944,124 +1190,382 @@ func _on_party_remove_requested(stats: UnitStats) -> void:
 const BAG_SLOTS := 120
 
 
-## 背包里同名武器有几把（商人面板用它显示"已持有 ×n"）。
+## 背包里同名道具有几件（商人面板用它显示"已持有 ×n"）。
 ## 判定顺序与 party_has() 一致：引用 → resource_path → item_name。
-static func weapon_owned_count(p_equipped: Array[ItemWeapon], weapon: ItemWeapon) -> int:
-	if weapon == null:
+## 参数 p_equipped：背包内容（Array[ItemBase]）。
+## 参数 item：要比对的那件（装备/武器都行）。
+static func item_owned_count(p_equipped: Array[ItemBase], item: ItemBase) -> int:
+	if item == null:
 		return 0
 	var n := 0
 	for owned in p_equipped:
 		if owned == null:
 			continue
-		if owned == weapon:
+		if owned == item:
 			n += 1
-		elif not owned.resource_path.is_empty() and owned.resource_path == weapon.resource_path:
+		elif not owned.resource_path.is_empty() and owned.resource_path == item.resource_path:
 			n += 1
-		elif owned.item_name == weapon.item_name:
+		elif owned.item_name == item.item_name:
 			n += 1
 	return n
 
 
-## 现在能不能买这把武器：返回**空串** = 能买；否则返回"不能买的原因"（面板直接显示这句话）。
+## 现在能不能买这件东西：返回**空串** = 能买；否则返回"不能买的原因"（面板直接显示这句话）。
 ## 做成静态函数的原因与队伍那套一样：MerchantPanel 要按同样的规则决定按钮灰不灰，
 ## 两边共用一份判定，就不会出现"按钮能点、点下去却什么都没发生"——
 ## 老 ShopCard 正是反例（金币不够 / 背包满时静默 return，玩家只会觉得按钮坏了）。
-static func weapon_can_buy(weapon: ItemWeapon, coins: int, p_equipped: Array[ItemWeapon]) -> String:
-	if weapon == null:
-		return "这件武器不存在。"
-	if weapon.item_cost > 0 and coins < weapon.item_cost:
-		return "金币不够（需要 %d，现在 %d）。" % [weapon.item_cost, coins]
+static func item_can_buy(item: ItemBase, coins: int, p_equipped: Array[ItemBase]) -> String:
+	if item == null:
+		return "这件东西不存在。"
+	if item.item_cost > 0 and coins < item.item_cost:
+		return "金币不够（需要 %d，现在 %d）。" % [item.item_cost, coins]
 	if p_equipped.size() >= BAG_SLOTS:
 		return "背包满了（%d 格都占着），先卖出或合成。" % BAG_SLOTS
 	return ""
 
 
-## 买下一把武器：扣 Global.coins + 记进 Global.equipped_weapons。
-## 参数 weapon：要买的武器（调用方通常已用 weapon_can_buy() 校验过；这里再校验一次更稳）。
+## 买下一件东西：扣 Global.coins + 记进 Global.equipped_weapons。
+## 参数 item：要买的道具（调用方通常已用 item_can_buy() 校验过；这里再校验一次更稳）。
 ## 返回值：true = 买成功；false = 没买（金币不够 / 背包满 / 传了 null）。
 ## 副作用：改 Global.coins、Global.equipped_weapons —— 这里是背包**唯一的写入点**。
-## 刻意**不**发信号：队伍和武器是两回事；界面刷新由调用方走 WorldMap.notify_shop_changed()。
-func buy_weapon(weapon: ItemWeapon) -> bool:
-	if not weapon_can_buy(weapon, Global.coins, Global.equipped_weapons).is_empty():
+## 刻意**不**发信号：数据变化和界面刷新是两件事；界面刷新由调用方走 WorldMap.notify_shop_changed()。
+func buy_item(item: ItemBase) -> bool:
+	if not item_can_buy(item, Global.coins, Global.equipped_weapons).is_empty():
 		return false
-	Global.coins -= weapon.item_cost
-	Global.equipped_weapons.append(weapon)
+	Global.coins -= item.item_cost
+	Global.equipped_weapons.append(item)
 	return true
 
 
-## 商人面板的「购买」回调（WorldMap.weapon_buy_requested → 这里）。
-## 参数 weapon：玩家点了购买的那把武器（ItemWeapon 资源，由 WorldMap 从面板按钮 bind 过来）。
-## 副作用：成功后 buy_weapon()（扣钱 + 入包），再让商人面板按新状态重建 ——
+## 商人面板的「购买」回调（WorldMap.item_buy_requested → 这里）。
+## 参数 item：玩家点了购买的那件东西（由 WorldMap 从面板按钮 bind 过来）。
+## 副作用：成功后 buy_item()（扣钱 + 入包），再让商人面板按新状态重建 ——
 ##   余额、按钮灰不灰、"已持有 ×n" 都会跟着变；失败时只把原因写回面板（不改任何状态）。
-func _on_weapon_buy_requested(weapon: ItemWeapon) -> void:
+func _on_item_buy_requested(item: ItemBase) -> void:
 	var world := _current_world_map()
-	var why := weapon_can_buy(weapon, Global.coins, Global.equipped_weapons)
+	var why := item_can_buy(item, Global.coins, Global.equipped_weapons)
 	if not why.is_empty():
 		if world != null:
 			world.notify_shop_changed(why)
 		return
-	buy_weapon(weapon)
+	buy_item(item)
 	if world != null:
-		world.notify_shop_changed("买下了 %s（-%d 金币）。" % [weapon.item_name, weapon.item_cost])
+		world.notify_shop_changed("买下了 %s（-%d 金币）。" % [item.item_name, item.item_cost])
 
 
-# ── 卖出（交易界面上把背包里的武器卖回给商人）────────────────────────────
+# ── 卖出（交易界面上把背包里的东西卖回给商人）────────────────────────────
 ## 卖出返还比例。**与老的 ShopPanel._on_sell_button_pressed() 保持一致**
 ##   （那边写的是 `int(item_cost * 0.75)`，截断不是四舍五入：21 金币卖 15）。
 ## 留 25% 折旧，买卖来回会亏，避免"低买高卖刷钱"。
 const SELL_REFUND_RATIO := 0.75
 
 
-## 这把武器卖出去能拿多少金币：`int(item_cost × SELL_REFUND_RATIO)`（截断）。
-## 参数 weapon：要卖的武器。返回值：金币数；武器为空 / 非卖品（item_cost ≤ 0）时返回 0。
-static func weapon_sell_price(weapon: ItemWeapon) -> int:
-	if weapon == null or weapon.item_cost <= 0:
+## 这件东西卖出去能拿多少金币：`int(item_cost × SELL_REFUND_RATIO)`（截断）。
+## 参数 item：要卖的道具。返回值：金币数；道具为空 / 非卖品（item_cost ≤ 0）时返回 0。
+static func item_sell_price(item: ItemBase) -> int:
+	if item == null or item.item_cost <= 0:
 		return 0
-	return int(weapon.item_cost * SELL_REFUND_RATIO)
+	return int(item.item_cost * SELL_REFUND_RATIO)
 
 
-## 现在能不能卖这把武器：返回**空串** = 能卖；否则返回不能卖的原因（界面直接显示这句话）。
-## 做成静态函数的原因与 weapon_can_buy 一样：商人面板画"卖"确认框、真正卖的时候，
-##   两边共用同一份判定。目前唯一的规则是"背包里得有这把武器"。
-static func weapon_can_sell(weapon: ItemWeapon, p_equipped: Array[ItemWeapon]) -> String:
-	if weapon == null:
-		return "这件武器不存在。"
-	if weapon_owned_count(p_equipped, weapon) <= 0:
-		return "背包里没有这件武器。"
-	if weapon_sell_price(weapon) <= 0:
-		return "这件武器卖不出价钱（非卖品）。"
+## 现在能不能卖这件东西：返回**空串** = 能卖；否则返回不能卖的原因（界面直接显示这句话）。
+## 做成静态函数的原因与 item_can_buy 一样：商人面板画"卖"确认框、真正卖的时候，
+##   两边共用同一份判定。规则：背包里得有它、并且它得卖得出价钱。
+static func item_can_sell(item: ItemBase, p_equipped: Array[ItemBase]) -> String:
+	if item == null:
+		return "这件东西不存在。"
+	if item_owned_count(p_equipped, item) <= 0:
+		return "背包里没有「%s」。" % item.item_name
+	if item_sell_price(item) <= 0:
+		return "「%s」卖不出价钱（非卖品）。" % item.item_name
 	return ""
 
 
-## 卖掉一把武器：从 Global.equipped_weapons 里移除一件 + 把卖价加进 Global.coins。
-## 参数 weapon：要卖的武器（调用方通常已用 weapon_can_sell() 校验过；这里再校验一次更稳）。
+## 卖掉一件东西：从 Global.equipped_weapons 里移除一件 + 把卖价加进 Global.coins。
+## 参数 item：要卖的道具（调用方通常已用 item_can_sell() 校验过；这里再校验一次更稳）。
 ## 返回值：true = 卖成功；false = 没卖（背包里没有 / 非卖品 / 传了 null）。
-## 副作用：改 Global.coins、Global.equipped_weapons —— 与 buy_weapon 一样，这里是背包的写入点。
-## 注意 erase() 删的是"第一件相等的元素"：同一把武器在背包里有多件（多次购买会 append 同一个
-##   资源实例）时只减一件，符合"卖一把"的语义。
-func sell_weapon(weapon: ItemWeapon) -> bool:
-	if not weapon_can_sell(weapon, Global.equipped_weapons).is_empty():
+## 副作用：改 Global.coins、Global.equipped_weapons —— 与 buy_item 一样，这里是背包的写入点。
+## 注意 erase() 删的是"第一件相等的元素"：同一件东西在背包里有多件（多次购买会 append 同一个
+##   资源实例）时只减一件，符合"卖一件"的语义。
+func sell_item(item: ItemBase) -> bool:
+	if not item_can_sell(item, Global.equipped_weapons).is_empty():
 		return false
-	Global.equipped_weapons.erase(weapon)
-	Global.coins += weapon_sell_price(weapon)
+	Global.equipped_weapons.erase(item)
+	Global.coins += item_sell_price(item)
 	return true
 
 
-## 商人面板的「卖出确认」回调（WorldMap.weapon_sell_requested → 这里）。
-## 参数 weapon：玩家在背包里点着要卖的那件武器。
-## 副作用：成功后 sell_weapon()（出包 + 加钱），再让两个面板按新状态重建
+## 商人面板的「卖出确认」回调（WorldMap.item_sell_requested → 这里）。
+## 参数 item：玩家在背包里点着要卖的那件东西。
+## 副作用：成功后 sell_item()（出包 + 加钱），再让两个面板按新状态重建
 ##   （商人货架的"持×n"、背包的格子与金币都跟着变）；失败时只把原因写回面板。
-func _on_weapon_sell_requested(weapon: ItemWeapon) -> void:
+func _on_item_sell_requested(item: ItemBase) -> void:
 	var world := _current_world_map()
-	var why := weapon_can_sell(weapon, Global.equipped_weapons)
+	var why := item_can_sell(item, Global.equipped_weapons)
 	if not why.is_empty():
 		if world != null:
 			world.notify_shop_changed(why)
 		return
-	var price := weapon_sell_price(weapon)
-	sell_weapon(weapon)
+	var price := item_sell_price(item)
+	sell_item(item)
 	if world != null:
-		world.notify_shop_changed("卖掉了 %s（+%d 金币）。" % [weapon.item_name, price])
+		world.notify_shop_changed("卖掉了 %s（+%d 金币）。" % [item.item_name, price])
+
+
+# ── 装备栏（每个角色 6 个格子：头盔 / 武器 / 腰带 / 项链 / 衣服 / 鞋子）──────────
+#  数据模型：Global.equipment_by_character = { 角色键 → { 栏位类型(ItemBase.EquipType) → ItemBase } }。
+#  角色键见 character_key()；**每个进团队的角色各有一套**，互不影响。
+#  和背包（Global.equipped_weapons，全队共用）互补：
+#    **穿上 = 从背包取出放进这个角色的栏位**，脱下 = 反过来。
+#    所以"背包里没有 = 队伍里某个人身上穿着"这种推断是成立的，卖出前必须先脱。
+#
+#  界面上怎么触发：
+#    · 背包里点一件装备 → BagPanel.item_activated → WorldMap（没开商店时）equip_requested
+#      → 这里，目标角色 = 背包界面当前展示的那个人（◀ / ▶ 切换）；
+#    · 点一个**已穿上**的装备栏 → BagPanel.unequip_requested → WorldMap → 这里。
+#  能不能穿由 item_can_equip() 统一判定（以后加"等级不够 / 职业不符"这类规则只改它）。
+
+
+## 角色 → 装备表的键。
+## 优先用资源路径：同一个角色即使被**重新加载**（新实例）也能对上原来那套装备，
+##   而且两个同名但 .tres 不同的角色不会被混成一个人。
+## 没有路径的资源（运行期 duplicate() 出来的副本，战斗里用的就是这种）退回 name ——
+##   它们只用于战斗结算，不会成为团队成员，所以不必和原角色共享装备。
+## 最后用实例 id 兜底（正常走不到，纯防御）。空角色返回空串。
+static func character_key(character: UnitStats) -> String:
+	if character == null:
+		return ""
+	if not character.resource_path.is_empty():
+		return character.resource_path
+	if not character.name.is_empty():
+		return character.name
+	return "instance_%d" % character.get_instance_id()
+
+
+## 某个角色穿在身上的整套装备（栏位类型 → ItemBase）。
+## 参数 character：团队里的某个 UnitStats。
+## 返回值：字典；没穿任何东西（或角色为空）时返回**空字典**。
+## 副作用：无（纯读）。⚠ 返回的是存储里的那个字典本体，**只读**，要改请走 equip_item/unequip_slot。
+static func equipment_of(character: UnitStats) -> Dictionary:
+	var key := character_key(character)
+	if key.is_empty():
+		return {}
+	return Global.equipment_by_character.get(key, {})
+
+
+## 某个角色的某个装备栏现在穿着什么。
+## 参数 character：角色；slot_type：ItemBase.EquipType 的成员值（NONE 没有意义，返回 null）。
+## 返回值：那件道具；空栏位返回 null。
+## 副作用：无（纯读）。
+static func equipment_in(character: UnitStats, slot_type: int) -> ItemBase:
+	return equipment_of(character).get(slot_type)
+
+
+## 这件道具现在能不能穿到这个角色身上：返回**空串** = 能穿；否则返回原因（界面直接显示）。
+## 规则（以后扩展就加在这里，界面和真正执行共用同一份判定）：
+##   · 没有选中角色 / 空道具 / 不能装备（EquipType.NONE）→ 说清楚原因；
+##   · 不在背包里（可能正被别的角色穿着、或数据不同步）→ 说清楚原因。
+## 参数 character：目标角色；item：要穿的道具。
+static func item_can_equip(character: UnitStats, item: ItemBase) -> String:
+	if character == null:
+		return "现在没有选中角色。"
+	if item == null:
+		return "这件东西不存在。"
+	if item.get_equip_type() == ItemBase.EquipType.NONE:
+		return "「%s」不能装备。" % item.item_name
+	if not Global.equipped_weapons.has(item):
+		return "背包里没有「%s」。" % item.item_name
+	return ""
+
+
+## 把背包里的一件装备穿到这个角色对应的栏位（栏位上原来那件自动回背包）。
+## 参数 character：目标角色；item：要穿的道具（必须已经在背包里，且 get_equip_type() != NONE）。
+## 返回值：空串 = 穿成功；否则是不能穿的原因（原样给界面显示）。
+## 副作用：改 Global.equipped_weapons（移出 item、放回旧装备）与
+##        Global.equipment_by_character[角色的键]（写入/覆盖）。
+## 注意：**交换**而不是"栏位已占用就报错"——玩家换装时最自然的期望是旧的回背包，
+##   而不是先去脱一次。背包满也不会失败：旧装备腾出来的位置正好接住它。
+static func equip_item(character: UnitStats, item: ItemBase) -> String:
+	var why := item_can_equip(character, item)
+	if not why.is_empty():
+		return why
+	var slot_type: int = item.get_equip_type()
+	var key := character_key(character)
+	var slots: Dictionary = Global.equipment_by_character.get(key, {})
+	var old: ItemBase = slots.get(slot_type)
+	Global.equipped_weapons.erase(item)
+	if old != null:
+		Global.equipped_weapons.append(old)
+	slots[slot_type] = item
+	Global.equipment_by_character[key] = slots      # 新角色第一次穿时要把这张表写回外层字典
+	return ""
+
+
+## 把某个角色某个栏位上的装备脱下来放回背包。
+## 参数 character：角色；slot_type：ItemBase.EquipType 的成员值。
+## 返回值：空串 = 脱成功；否则是不能脱的原因（角色为空 / 栏位空 / 背包满）。
+## 副作用：改 Global.equipment_by_character（删栏位；整套空了就把角色键也删掉）与
+##        Global.equipped_weapons（append 回背包）。
+## 背包满时**不**脱：不然这件东西就没地方去了（宁可让玩家先卖一件腾一格）。
+static func unequip_slot(character: UnitStats, slot_type: int) -> String:
+	if character == null:
+		return "现在没有选中角色。"
+	var key := character_key(character)
+	var slots: Dictionary = Global.equipment_by_character.get(key, {})
+	var item: ItemBase = slots.get(slot_type)
+	if item == null:
+		return "%s的%s栏现在是空的。" % [character.name, ItemBase.equip_type_name(slot_type)]
+	if Global.equipped_weapons.size() >= BAG_SLOTS:
+		return "背包满了（%d 格都占着），先腾出一格再脱。" % BAG_SLOTS
+	slots.erase(slot_type)
+	if slots.is_empty():
+		Global.equipment_by_character.erase(key)     # 一点东西都没穿了就别留着空表
+	else:
+		Global.equipment_by_character[key] = slots
+	Global.equipped_weapons.append(item)
+	return ""
+
+
+## 背包里点了某件装备（WorldMap.equip_requested → 这里）：给**当前展示的角色**穿上，然后刷新背包。
+## 参数 character：背包界面当前展示的角色；item：被点的道具。
+## 副作用：成功后 Global.equipment_by_character / equipped_weapons 变化；
+##   失败只把原因写回背包信息行。
+func _on_equip_requested(character: UnitStats, item: ItemBase) -> void:
+	var world := _current_world_map()
+	var why := equip_item(character, item)
+	var message := why
+	if message.is_empty():
+		message = "给%s穿上了「%s」（%s栏）。" % [character.name, item.item_name,
+				ItemBase.equip_type_name(item.get_equip_type())]
+	if world != null:
+		world.notify_bag_changed(message)
+
+
+## 点了已穿上的装备栏（WorldMap.unequip_requested → 这里）：从那个角色身上脱下来放回背包。
+## 参数 character：那个角色；slot_type：ItemBase.EquipType 的成员值。
+## 副作用：同 _on_equip_requested —— 成功后背包多一件、该角色的栏位变空，界面按新状态重建。
+func _on_unequip_requested(character: UnitStats, slot_type: int) -> void:
+	var world := _current_world_map()
+	var item: ItemBase = equipment_in(character, slot_type)
+	var who: String = character.name if character != null else ""
+	var why := unequip_slot(character, slot_type)
+	var message := why
+	if message.is_empty():
+		message = "从%s身上脱下了「%s」，已放回背包。" % [who, item.item_name if item != null else ""]
+	if world != null:
+		world.notify_bag_changed(message)
+
+
+# ══════════════════════════════════════════════════════════
+#  门派（拜师）
+# ══════════════════════════════════════════════════════════
+#  规则只有一份：五个门派的种族限制在 Global.SECTS 里，能不能拜由 can_join_sect() 判；
+#  拜师面板只负责"把队员按能不能拜列出来"，**不自己再判一遍** —— 两处规则分叉是这类系统最常见的 bug。
+
+## 某个角色当前的门派 id（"" = 无门派，默认状态）。
+## 参数 character：角色；返回值：Global.SECTS 的键或空串。
+static func sect_of(character: UnitStats) -> String:
+	if character == null:
+		return ""
+	return String(Global.sect_by_character.get(character_key(character), ""))
+
+
+## 这个角色现在能不能拜入这个门派。
+## 参数 character：角色；sect_id：Global.SECTS 的键。
+## 返回值：**空串 = 可以拜**；否则是不能拜的原因（可直接拿去显示，不用再拼文案）。
+## 判定顺序：角色为空 → 门派不存在 → 已经有门派 → 种族不符。
+## 为什么把"已有门派"排在种族前面：两种情况都拜不了，但"他已经有门派了"对玩家信息量更大
+##   （而且一个角色同时只属于一个门派是硬规则；想改投得先做"叛出师门"，目前没做）。
+static func can_join_sect(character: UnitStats, sect_id: String) -> String:
+	if character == null:
+		return "没有选中角色。"
+	if not Global.is_sect(sect_id):
+		return "没有这个门派。"
+	var current := sect_of(character)
+	if not current.is_empty():
+		return "%s已经拜入%s了，不能改投他派。" % [character.name, Global.sect_name(current)]
+	if not Global.sect_accepts(sect_id, character.race):
+		return "%s是%s，%s只收%s。" % [character.name, character.race_name(),
+				Global.sect_name(sect_id), Global.sect_races_text(sect_id)]
+	return ""
+
+
+## 让某个角色拜入某个门派。
+## 参数/返回值同 can_join_sect（空串 = 成功）。
+## 副作用：成功时写 Global.sect_by_character[character_key(character)] = sect_id，
+##   并**自动学会该门派全部技能（1 级）**：Global.sect_skill_level_by_character[角色键] = 1。
+## ⚠ 这是门派状态（和门派技能等级）的**唯一写入点**；界面只发请求（WorldMap.sect_join_requested）。
+static func join_sect(character: UnitStats, sect_id: String) -> String:
+	var why := can_join_sect(character, sect_id)
+	if not why.is_empty():
+		return why
+	var key := character_key(character)
+	Global.sect_by_character[key] = sect_id
+	# 拜入门派 = 立刻学会本门 2 被动 + 3 主动（都是 1 级），之后随玩家升级一起长
+	Global.sect_skill_level_by_character[key] = 1
+	return ""
+
+
+## 某个角色当前的门派技能等级（0 = 还没学/没门派；1..SECT_SKILL_MAX_LEVEL）。
+## 一个门派的 5 个技能共享这一个等级（同时学会、一起升级）。
+static func sect_skill_level(character: UnitStats) -> int:
+	if character == null:
+		return 0
+	return int(Global.sect_skill_level_by_character.get(character_key(character), 0))
+
+
+## 玩家升级时，把**所有已拜师角色**的门派技能等级 +gained（封顶 SECT_SKILL_MAX_LEVEL）。
+## 参数 gained：这次升了几级。
+## 副作用：改 Global.sect_skill_level_by_character。
+## 为什么遍历整张表而不是只加队里那几个：团队名册会变，但"门派技能"是角色自己的进度，
+##   角色离开团队再回来，技能等级也该跟着涨（和装备/门派一样的归属逻辑）。
+static func _bump_sect_skill_levels(gained: int) -> void:
+	if gained <= 0:
+		return
+	for key in Global.sect_skill_level_by_character.keys():
+		var current := int(Global.sect_skill_level_by_character[key])
+		Global.sect_skill_level_by_character[key] = mini(Global.SECT_SKILL_MAX_LEVEL, current + gained)
+
+
+## 门派技能的一行摘要（属性面板用）："门派技能 Lv.3：太虚剑典 · 剑心通明 · …"。
+## 没拜师时返回提示文字。
+static func sect_skill_summary(character: UnitStats) -> String:
+	var sect_id := sect_of(character)
+	if sect_id.is_empty():
+		return "门派技能：拜入门派后自动学习"
+	var level := sect_skill_level(character)
+	var names := Global.sect_skill_names(sect_id)
+	return "门派技能 Lv.%d：%s" % [level, " · ".join(names)]
+
+
+## 门派技能的完整说明（悬停提示用）：每个技能一行，主动技能带上"当前目标数"。
+static func sect_skill_details(character: UnitStats) -> String:
+	var sect_id := sect_of(character)
+	if sect_id.is_empty():
+		return "还没有门派 —— 去建邺城找五位掌门拜师。"
+	var level := sect_skill_level(character)
+	var lines: Array[String] = []
+	for skill in Global.sect_passives(sect_id):
+		lines.append("【被动】%s Lv.%d\n%s" % [skill["name"], level, skill["desc"]])
+	for skill in Global.sect_actives(sect_id):
+		var extra := ""
+		if skill.has("targets") or bool(skill.get("targets_all", false)):
+			extra = "（当前目标：%s）" % Global.sect_skill_targets_text(skill, level)
+		lines.append("【主动】%s Lv.%d%s\n%s" % [skill["name"], level, extra, skill["desc"]])
+	return "\n\n".join(lines)
+
+
+## 拜师面板点了某个队员（WorldMap.sect_join_requested → 这里）。
+## 参数 character：要点的那位队员；sect_id：那个 NPC 对应的门派。
+## 副作用：成功后门派写入 Global（并学会本门技能）；无论成败都把结果文案交回地图。
+func _on_join_sect_requested(character: UnitStats, sect_id: String) -> void:
+	var world := _current_world_map()
+	var why := join_sect(character, sect_id)
+	var message := why
+	if message.is_empty():
+		message = "%s拜入%s，学会了本门 5 个技能（Lv.1）！" % [character.name, Global.sect_name(sect_id)]
+	if world != null:
+		world.notify_sect_changed(message)
 
 
 ## 把**上阵名单**（deployed）变成一份**可以随便改**的我方队伍，交给 Battle。
@@ -1082,8 +1586,65 @@ func _make_player_team() -> Array[UnitStats]:
 		if stats == null:
 			continue
 		# duplicate：战斗改的是副本，不污染 .tres（以后做"战斗结束回写血量"也方便）
-		out.append(stats.duplicate() as UnitStats)
+		var copy := stats.duplicate() as UnitStats
+		# 等级 + 基础属性 → 派生属性（见 derived_stats）。战斗读的就是这份最终值：
+		#   气血 / 魔法 / 伤害 / 速度 直接覆盖；防御 / 躲避 / 法伤 以及二级属性只带进去（战斗还没用）。
+		# 注意这里**不再**乘"每级 ×1.5%"的旧倍率 —— 成长全部由属性点承担。
+		var d := derived_stats(stats)
+		copy.health = maxf(1.0, float(d["hp"]))
+		copy.damage = maxf(1.0, float(d["damage"]))
+		copy.mana = maxf(1.0, float(d["mana"]))
+		copy.speed = maxf(1.0, float(d["speed"]))
+		copy.defense = float(d["defense"])
+		copy.dodge = float(d["dodge"])
+		copy.spell_damage = float(d["spell_damage"])
+		copy.crit_rate = float(d["crit_rate"])
+		copy.crit_damage_bonus = float(d["crit_damage_bonus"])
+		copy.seal_hit = float(d["seal_hit"])
+		copy.healing = float(d["healing"])
+		copy.crit_resist = float(d["crit_resist"])
+		copy.crit_damage_resist = float(d["crit_damage_resist"])
+		copy.seal_resist = float(d["seal_resist"])
+		copy.block_value = float(d["block_value"])
+		# 门派被动（太虚剑典 +伤害、剑心通明 +暴击 …）按门派技能等级叠上去
+		_apply_sect_passives(copy, stats)
+		out.append(copy)
 	return out
+
+
+## 把门派**被动技能**的加成叠到战斗副本上（按该角色的门派技能等级）。
+## 参数 copy：这一场我方单位的副本；source：原 UnitStats（查门派和技能等级用）。
+## 副作用：改 copy 的 damage/health/crit_rate/speed/defense/spell_damage/healing/seal_hit。
+## 为什么作用在副本上：和等级/属性一样，战斗只该改副本，不能污染 .tres；
+##   而且加成是"这一场才生效"的临时值。
+static func _apply_sect_passives(copy: UnitStats, source: UnitStats) -> void:
+	var sect_id := sect_of(source)
+	if sect_id.is_empty():
+		return
+	var level := sect_skill_level(source)
+	if level <= 0:
+		return
+	for skill in Global.sect_passives(sect_id):
+		var amount := float(skill.get("per_level", 0.0)) * level
+		match String(skill.get("stat", "")):
+			"damage_pct":
+				copy.damage *= 1.0 + amount / 100.0
+			"hp_pct":
+				copy.health *= 1.0 + amount / 100.0
+			"crit_rate":
+				copy.crit_rate += amount
+			"crit_damage_bonus":
+				copy.crit_damage_bonus += amount
+			"speed":
+				copy.speed += amount
+			"defense":
+				copy.defense += amount
+			"spell_damage":
+				copy.spell_damage += amount
+			"healing":
+				copy.healing += amount
+			"seal_hit":
+				copy.seal_hit += amount
 
 
 ## 按"当前地图 + 难度档"生成敌方队伍（每张图一套缩放规则）。

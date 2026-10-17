@@ -1,13 +1,13 @@
 ## ═══════════════════════════════════════════════════════════════════════════
-## HoverUnitCard —— 角色（UnitStats）悬停提示卡：血/攻/速/幸运/格挡一览
+## HoverUnitCard —— 角色（UnitStats）悬停提示卡：血/攻/速/格挡一览
 ## ═══════════════════════════════════════════════════════════════════════════
 ## 系统位置：
 ##   由 autoload TooltipManager 统一托管（autoloads/tooltip_manager.gd）：
 ##     register(UnitStats, hover_unit_card.tscn, &"unit")
-##   目前**唯一的实际使用场景**是选人界面：SelectionPanel.load_players() 里
-##     card.mouse_entered.connect(TooltipManager.show_for_control.bind(card, player))
-##     → TooltipManager 用 `card.set("unit", player)` 调下面这个 setter。
-##   （旧方案是 SelectionPanel 自己实例化本卡并手改位置，相关代码已注释保留。）
+##   ⚠ 现在**没有任何界面在用这张卡**：以前唯一的调用方是选人界面（SelectionPanel，
+##   已随竞技场删除）。TooltipManager 里的登记还留着，所以只要谁调
+##     TooltipManager.show_for_control(某个控件, 某个 UnitStats)
+##   就能直接弹出角色属性卡（队伍管理面板以后想加"点成员看属性"接一行就够）。
 ##
 ## 数据流：
 ##   UnitStats（.tres 资源，只读展示）→ _set_unit(value)
@@ -56,14 +56,13 @@ func _set_unit(value: UnitStats) -> void:
 	# RichTextLabel 吃 BBCode：
 	#   [code]...[/code] 用等宽字体显示（属性表对齐好看）；
 	#   [color=green]...[/color] 给数值上绿色。
-	# 五个 %s 依次吃 health / damage / speed / luck / block_chance（数组顺序必须与占位符一一对应）。
+	# 五个 %s 依次吃 health / damage / speed / block_chance（数组顺序必须与占位符一一对应）。
 	# `%%` 是转义，输出一个字面百分号 —— 所以 block_chance 显示成 "25%" 这种。
-	# 单位口径（见 resources/units/unit_stats.gd）：health/damage/luck 是普通数值，
+	# 单位口径（见 resources/units/unit_stats.gd）：health/damage 是普通数值，
 	#   speed 是每秒像素（默认 300），block_chance 是**百分数语义**（0~100+，直接用，不用 ×100）；
 	#   如果哪天 block_chance 改成 0~1 存法，这里必须跟着改成 `%s%%" % (value.block_chance * 100)`。
 	# ⚠ 从下一行开始的续行在源码里是**顶格**的，缩进会被原样写进字符串，别顺手补 tab。
 	item_desc.text = "[code]Health: [color=green]%s[/color]
 Damage: [color=green]%s[/color]
 Speed: [color=green]%s[/color]
-Luck: [color=green]%s[/color]
-Block Chance: [color=green]%s%%[/color][/code]" % [value.health, value.damage, value.speed, value.luck, value.block_chance]
+Block Chance: [color=green]%s%%[/color][/code]" % [value.health, value.damage, value.speed, value.block_chance]

@@ -212,11 +212,10 @@ func _make_note_row(text: String) -> Control:
 ## 属性文字。用 Global.format_stat() 统一"整数不带小数点"的显示规则 ——
 ## 招募面板（WorldMap）用的是同一个函数，两处显示不会出现 25 与 25.0 这种不一致。
 func _stats_text(stats: UnitStats) -> String:
-	return "HP %s · 伤害 %s · 速度 %s · 幸运 %s · 格挡 %s%%" % [
+	return "HP %s · 伤害 %s · 速度 %s · 格挡 %s%%" % [
 		Global.format_stat(stats.health),
 		Global.format_stat(stats.damage),
 		Global.format_stat(stats.speed),
-		Global.format_stat(stats.luck),
 		Global.format_stat(stats.block_chance),
 	]
 

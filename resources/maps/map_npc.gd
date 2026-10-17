@@ -59,15 +59,22 @@ class_name MapNPC
 ##   TALK          —— 只显示台词，一个按钮都不给（即使误填了 destinations 也不显示传送）。
 ##   TELEPORT      —— 台词 + 每个目的地一个传送按钮（读 destinations）。
 ##   RECRUIT_PARTY —— 台词 + 每个候选队友一个「加入 XX」按钮（读 recruit_pool）。
-##   SELL_WEAPONS  —— 按 E 直接打开**商人面板**卖武器（读 sell_pool，留空 = 现有所有武器）。
+##   SELL_WEAPONS  —— 按 E 直接打开**商人面板**卖装备（读 sell_pool，留空 = 现有全部装备）。
 ##                    注意它和上面几种不一样：不在小对话框里铺按钮，而是直接开一个带滚动列表的
-##                    大面板（44 把武器塞进 600×460 的小面板根本看不了），见 WorldMap._open_panel 的分流。
+##                    大面板（26 件装备塞进 600×460 的小面板根本看不了），见 WorldMap._open_panel 的分流。
+##                    ⚠ 枚举名是历史遗留（叫 SELL_WEAPONS），地图线现在卖的是装备
+##                    （ItemEquipment：头盔/武器/腰带/项链/衣服/鞋子），不再是老的 ItemWeapon。
+##   JOIN_SECT     —— 门派掌门：台词 + 每个队员一个「拜入 XX」按钮（读 sect_id）。
+##                    按钮会按**种族**筛：种族的门派限制来自 Global.SECTS；
+##                    已经有门派的队员、种族不符的队员都会置灰并注明原因。
+##                    ⚠ 只在建邺城放了 5 个（一个门派一个），见 map_jianyecheng.tres。
 enum Action {
 	AUTO,
 	TALK,
 	TELEPORT,
 	RECRUIT_PARTY,
 	SELL_WEAPONS,
+	JOIN_SECT,
 }
 
 ## 交互类型。世界地图的 WorldMap.resolve_action() 负责把 AUTO 解析成具体类型，
@@ -85,12 +92,19 @@ enum Action {
 ## 与 teleport_label 分开是为了语义清楚：招募 NPC 根本不需要填传送措辞。
 @export var recruit_label := "加入"
 
-## SELL_WEAPONS 专用：这个商人卖哪些武器（ItemWeapon 资源）。
-## 留空 = 自动用 Global.get_all_weapons()（扫 res://resources/items/weapons/ 下的全部武器，
-## 当前是 44 把 = 11 种 × 4 阶）—— 于是"往那个目录丢一把新武器"它就自动上架。
-## 想只卖几件（例如限量的新手商人），把这几把逐个拖进来即可（显式列表优先）。
-@export var sell_pool: Array[ItemWeapon] = []
+## SELL_WEAPONS 专用：这个商人卖哪些装备（ItemEquipment / ItemBase 资源）。
+## 留空 = 自动用 Global.get_all_equipment()（扫 res://resources/items/equipment/ 下的全部装备，
+## 当前 26 件 = 6 类 × 4~5 件）—— 于是"往那个目录丢一件新装备"它就自动上架。
+## 想只卖几件（例如限量的新手商人），把这几件逐个拖进来即可（显式列表优先）。
+## ⚠ 类型是 Array[ItemBase]：以后别的道具（丹药、卷轴…）也能塞进货架。
+@export var sell_pool: Array[ItemBase] = []
 
 ## SELL_WEAPONS 专用：购买按钮上的动词前缀，最终文字形如「购买  12 金币」。
 ## 与 teleport_label / recruit_label 一样，抽出来是为了措辞能按 NPC 调（"买下"/"兑换"…）。
 @export var shop_label := "购买"
+
+## JOIN_SECT 专用：这个掌门代表哪个门派（Global.SECTS 的键：taixu / piaomiao / zixiao /
+## wanyao / xingluo）。留空 = 这个 NPC 没有门派可拜（面板会提示"没有这个门派"）。
+## 为什么用字符串 id 而不是直接存"门派对象"：门派是 Global 里的常量表，不是资源，
+##   这样地图 .tres 只依赖一个稳定的键，改门派规则（名字/种族限制）不用动地图。
+@export var sect_id: String = ""

@@ -4,6 +4,7 @@
 [ext_resource type="Script" uid="uid://j6ibt5vlkg3t" path="res://resources/units/unit_stats.gd" id="1_nkte6"]
 [ext_resource type="Texture2D" uid="uid://d3g0a10bux5uf" path="res://assets/map/map_donghaiwan.png" id="2_texture"]
 [ext_resource type="Script" uid="uid://ctu1nt07fqrnc" path="res://resources/maps/map_npc.gd" id="3_npc"]
+[ext_resource type="Script" uid="uid://c60dn4pj1cfw7" path="res://resources/items/item_base.gd" id="3_tn5hm"]
 [ext_resource type="PackedScene" path="res://scenes/world/maps/world_donghaiwan.tscn" id="4_world"]
 
 [sub_resource type="Resource" id="Resource_chuanfu"]

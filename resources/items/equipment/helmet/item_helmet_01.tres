@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="ItemEquipment" format=3]
+
+[ext_resource type="Texture2D" path="res://assets/sprites/equipment/helmet/helmet_01.png" id="1_icon"]
+[ext_resource type="Script" path="res://resources/items/equipment/item_equipment.gd" id="2_script"]
+
+[resource]
+script = ExtResource("2_script")
+item_name = "布巾"
+item_icon = ExtResource("1_icon")
+item_tier = 0
+item_type = 3
+item_cost = 21
+equip_type = 1
+attack = 0
+defense = 3
+health = 12
+crit_chance = 0.0
+speed = 0
+block_chance = 0.0

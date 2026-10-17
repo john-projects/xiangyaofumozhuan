@@ -23,7 +23,10 @@
 # 场景节点构成（%xxx 都是 unique_name_in_owner，见下面的 @onready 段）：
 #   MapSprite(Sprite2D)      地图底图，centered = false（原点在左上角，坐标换算的前提）
 #   Player(Node2D)           玩家容器；下面挂 Shadow / PlayerFallback / PlayerSprite / Camera
+#                            + 运行时加的「队长名字」Label（见 _setup_party_visuals）
 #   UI(CanvasLayer)          所有 HUD：地图名 / 金币 / 提示 / 结算文案 / 两个按钮 / 对话面板
+#   （运行时还会往本节点下加若干个 Companion(Node2D)：上阵队友的跟随小人，
+#     结构 = Shadow + Sprite2D + 名字 Label，见 _rebuild_companions）
 #
 # 坑（改之前务必看）：
 #   · 本脚本用的是**类 Node2D**，不是 Control —— 里面所有 %控件 都位于子 CanvasLayer(UI) 下，
@@ -88,17 +91,35 @@ signal party_deploy_requested(stats: UnitStats)
 ## 规则：至少要留 1 人上阵（详见 GameRoot.deploy_can_remove），违反时 GameRoot 只回一条提示。
 signal party_undeploy_requested(stats: UnitStats)
 
-## 玩家在商人面板里点了某把武器的「购买」。
-## 参数 weapon：要买的 ItemWeapon 资源。
-## 同样是"只请求"：GameRoot._on_weapon_buy_requested() 按规则判定（金币够不够、背包满没满，
-## 见 GameRoot.weapon_can_buy），买成功后再回调本文件的 notify_shop_changed() 让面板重建。
-signal weapon_buy_requested(weapon: ItemWeapon)
-## 玩家在交易时点了背包里的武器、并在确认框里点了「确定」：要**卖**这把武器。
-## 参数 weapon：要卖的 ItemWeapon 资源。
-## 和买一样是"只请求"：GameRoot._on_weapon_sell_requested() 按规则判定
-##   （背包里有没有、卖价多少，见 GameRoot.weapon_can_sell / weapon_sell_price），
+## 玩家在商人面板里点了某件装备的「购买」。
+## 参数 item：要买的道具（ItemBase；地图线货架上是 ItemEquipment）。
+## 同样是"只请求"：GameRoot._on_item_buy_requested() 按规则判定（金币够不够、背包满没满，
+## 见 GameRoot.item_can_buy），买成功后再回调本文件的 notify_shop_changed() 让面板重建。
+signal item_buy_requested(item: ItemBase)
+## 玩家在交易时点了背包里的东西、并在确认框里点了「确定」：要**卖**掉它。
+## 参数 item：要卖的道具。
+## 和买一样是"只请求"：GameRoot._on_item_sell_requested() 按规则判定
+##   （背包里有没有、卖价多少，见 GameRoot.item_can_sell / item_sell_price），
 ## 卖成功后再回调本文件的 notify_shop_changed() 刷新两个面板。
-signal weapon_sell_requested(weapon: ItemWeapon)
+signal item_sell_requested(item: ItemBase)
+## 玩家在**没开商人**时点了背包里的一件装备：要把它**穿到当前展示的角色身上**。
+## 参数 character：背包界面当前展示的团队成员（◀ / ▶ 切换的那个）；
+##   参数 item：要穿的道具（ItemBase）。
+## 同样是"只请求"：GameRoot._on_equip_requested() → item_can_equip() 按规则判定
+##   （能不能装备、对应哪个栏位），成功后回调本文件的 notify_bag_changed() 让背包和装备栏重建。
+signal equip_requested(character: UnitStats, item: ItemBase)
+## 玩家点了**某个角色已穿上**的装备栏：要把那件装备**脱下来放回背包**。
+## 参数 character：这个装备栏属于谁（= 背包界面当前展示的角色）；
+##   参数 slot_type：ItemBase.EquipType 的成员值（头盔 / 武器 / 腰带 / 项链 / 衣服 / 鞋子）。
+## GameRoot._on_unequip_requested() → unequip_slot() 判定（角色为空 / 栏位空 / 背包满会拒绝）。
+signal unequip_requested(character: UnitStats, slot_type: int)
+
+## 玩家在门派掌门的拜师面板里点了某个队员：要让**这个队员**拜入那个门派。
+## 参数 character：点了的队员；sect_id：这个 NPC 代表的门派（Global.SECTS 的键）。
+## 只请求：GameRoot._on_join_sect_requested() → can_join_sect() 判定种族/已有门派，
+## 成功后回调本文件的 notify_sect_changed() 让面板重建（按钮会变成"已有门派：XX"）。
+signal sect_join_requested(character: UnitStats, sect_id: String)
+
 ## 玩家点了「返回主菜单」。GameRoot 收到后调 show_title()。
 signal back_to_title_requested
 
@@ -116,6 +137,8 @@ const PARTY_PANEL_SCENE := preload("res://scenes/ui/party_panel/party_panel.tscn
 const MERCHANT_PANEL_SCENE := preload("res://scenes/ui/merchant_panel/merchant_panel.tscn")
 ## 背包（操作菜单的「背包」或地图上按 B）。见 scenes/ui/bag_panel/。
 const BAG_PANEL_SCENE := preload("res://scenes/ui/bag_panel/bag_panel.tscn")
+## 角色属性面板（操作菜单的「角色属性」或地图上按 C）。见 scenes/ui/stats_panel/。
+const STATS_PANEL_SCENE := preload("res://scenes/ui/stats_panel/stats_panel.tscn")
 ## 玩家离地图边缘的最小留白（像素，世界坐标）。_move_player() 用它做 clamp，
 ## 60.0 大约是一个角色身位，防止贴图放大后角色半个身子走出图片外。
 ## NPC 对话面板的最小高度。**必须和 world_map.tscn 里 TravelPanel 的原始高度一致（460）**，
@@ -123,6 +146,16 @@ const BAG_PANEL_SCENE := preload("res://scenes/ui/bag_panel/bag_panel.tscn")
 const PANEL_MIN_HEIGHT := 460.0
 
 const EDGE_MARGIN := 60.0
+
+# ── 跟随队伍的数值（只影响观感，不影响任何玩法数据）──
+## 队长每移动这么远，往轨迹里记一个点（像素）。越小越平滑，但轨迹数组涨得越快。
+const TRAIL_SPACING := 2.0
+## 轨迹最多保留多少个点（400 × 2px = 800px 的历史路径，够 4 个跟随者排在后面）。
+const TRAIL_MAX := 400
+## 每个跟随者落后多少个轨迹点（20 × 2px = 40px 一个人，5 人一支队伍约 160px）。
+const TRAIL_STEP := 20
+## 跟随者的"追上去"速度：每帧按 1 - exp(-speed × delta) 插值，越大跟得越紧（不至于瞬移）。
+const COMPANION_FOLLOW_SPEED := 12.0
 
 # ───────────────────────────────────────────────────────────────────────────
 #  ── 数值（可在检视面板里逐张地图微调；也可以在专用子场景里覆盖）──
@@ -153,6 +186,17 @@ var _party: Array[UnitStats] = []
 ##   本文件立刻看得到（界面文字靠 notify_party_changed() 刷新）。
 ## 本文件只读它来画"上阵/下阵"按钮的状态，从不修改。
 var deployed: Array[UnitStats] = []
+
+# ── 队伍立绘：队长名字 + 上阵队友跟随（见 _setup_party_visuals / _rebuild_companions）──
+## 队长头顶的名字 Label（运行时加到 Player 下面，跟着一起走）。
+var _leader_name_label: Label = null
+## 场上每个上阵队友的跟随小人（Node2D：Shadow + Sprite2D + 名字 Label）。
+var _companions: Array[Node2D] = []
+## 队长的"面包屑"轨迹：索引 0 = 最新，往后的点越旧。跟随者按固定间隔取点，
+## 于是自然排成一列跟在后面，而不是几个小人叠在同一个坐标上。
+var _trail: Array[Vector2] = []
+## 上一个记录进轨迹的位置（避免原地抖动也一直塞点）。
+var _last_trail_pos := Vector2.INF
 ## 顶部要飘的结算文案（例如"战斗胜利！获得 40 金币"）。空字符串 = 不显示。
 var _result := ""
 ## 本图是否已通关过。只影响地图名后面那句"（已通关）"。
@@ -191,11 +235,18 @@ var _menu_open := false
 var _party_open := false
 var _shop_open := false
 var _bag_open := false
+## 角色属性面板开着吗（和背包一样是"普通二级页"，不跟商人交易共存）。
+var _stats_open := false
 
 ## 这次背包是从操作菜单进来的吗（决定关背包时是回游戏还是退回菜单）。见 _open_bag/_close_bag。
 var _bag_from_menu := false
 ## 这次背包是"商人交易"顺手打开的吗。true 时关交易会把背包一起收掉（见 _close_merchant）。
 var _bag_with_shop := false
+## 这次背包是"角色属性面板"顺手打开的吗。true 时关属性面板会把背包一起收掉（见 _close_stats）。
+var _bag_with_stats := false
+
+## 这次属性面板是从操作菜单进来的吗（关掉时退回菜单，语义同 _bag_from_menu）。
+var _stats_from_menu := false
 
 ## 当前这个商人的配置（开商人面板时记下；买完重建货架要用它）。null = 商人面板没开。
 ## 为什么不像 NPC 对话面板那样复用 _panel_npc：商人**不走**那个面板（见 _open_panel 的分流），
@@ -212,6 +263,7 @@ var _pause_menu: PauseMenu
 var _party_panel: PartyPanel
 var _merchant_panel: MerchantPanel
 var _bag_panel: BagPanel
+var _stats_panel: StatsPanel
 
 # ───────────────────────────────────────────────────────────────────────────
 #  ── 场景节点引用（% = unique_name_in_owner，指向本场景里标记为唯一的节点）──
@@ -314,6 +366,10 @@ func _ready() -> void:
 
 	# ── 相机（挂在玩家下面，自动跟随）────────────────────
 	_setup_camera()
+
+	# ── 队伍立绘：队长名字 + 上阵队友跟随 ────────────────
+	# 必须在 player.position 设好之后：跟随者要靠轨迹排在队长身后。
+	_setup_party_visuals()
 
 	# ── NPC ───────────────────────────────────────────────
 	_spawn_npcs()
@@ -530,6 +586,9 @@ func _process(delta: float) -> void:
 	if _map_size == Vector2.ZERO or _ui_open():
 		return
 	_move_player(delta)
+	# 走动之后：记轨迹 → 队友沿着轨迹跟上（顺序不能反，否则队友永远慢一帧的位置）
+	_update_trail()
+	_update_companions(delta)
 	_update_nearest()
 
 
@@ -556,6 +615,161 @@ func _move_player(delta: float) -> void:
 
 
 # ══════════════════════════════════════════════════════════
+#  队伍立绘：队长名字 + 上阵队友跟随
+# ══════════════════════════════════════════════════════════
+#  为什么这么做：
+#    · 名字直接挂在角色节点下面（Label 是 Control，挂在 Node2D 下会跟着父节点变换），
+#      所以不需要每帧同步位置，也不吃 UI 的输入；
+#    · 跟随用"面包屑轨迹"而不是"固定偏移"：队长拐弯时队友沿着走过的路跟过来，
+#      不会斜穿墙角，也不会几个小人叠在同一个点上。
+#  谁读：deployed（上阵名单，GameRoot 在 add_child 之前注入）、Global.main_player_selected（谁是队长）。
+
+## 建立"队长名字 + 队友小人"。_ready 里调一次；队伍变化时由 _rebuild_companions() 重建。
+## 副作用：给 Player 挂一个名字 Label、往本节点加若干 Companion 节点。
+func _setup_party_visuals() -> void:
+	if _leader_name_label == null:
+		_leader_name_label = _make_name_label(18)
+		player.add_child(_leader_name_label)
+	_update_leader_name()
+	_rebuild_companions()
+
+
+## 刷新队长头顶的名字（队长换人/改名时调；平时只在 _setup_party_visuals 里调一次）。
+func _update_leader_name() -> void:
+	if _leader_name_label == null:
+		return
+	var leader := _leader_stats()
+	_leader_name_label.text = leader.name if leader != null else ""
+	_leader_name_label.visible = leader != null
+
+
+## 当前"队长"（地图上那个能操控的 Player）——就是选人时定下的主角。
+func _leader_stats() -> UnitStats:
+	return Global.main_player_selected
+
+
+## 两个 UnitStats 是不是同一个人（引用或资源路径相同）。
+## 用 GameRoot.character_key() 比较：角色资源可能被重新加载成新实例，光比引用会漏。
+func _same_character(a: UnitStats, b: UnitStats) -> bool:
+	if a == null or b == null:
+		return a == b
+	return GameRoot.character_key(a) == GameRoot.character_key(b)
+
+
+## 按当前上阵名单重建跟随者（队长本人不算）。
+## 副作用：释放旧的小人节点、重置轨迹（预填一条"向后"的直线，让队友一开始就排在身后）。
+## 谁调：_setup_party_visuals()（进地图时）、notify_party_changed()（队伍管理里上阵/下阵后）。
+func _rebuild_companions() -> void:
+	for node in _companions:
+		if is_instance_valid(node):
+			node.queue_free()
+	_companions.clear()
+	# 轨迹预填：从队长脚下向左铺一条直线 —— 跟随者一出生就排在队伍该在的位置，不会叠在队长身上。
+	_trail.clear()
+	for i in TRAIL_MAX:
+		_trail.append(player.position - Vector2(TRAIL_SPACING * i, 0.0))
+	_last_trail_pos = player.position
+	var leader := _leader_stats()
+	var index := 0
+	for stats in deployed:
+		if stats == null or _same_character(stats, leader):
+			continue
+		index += 1
+		var node := _make_companion(stats)
+		node.position = _trail[mini(index * TRAIL_STEP, _trail.size() - 1)]
+		_companions.append(node)
+
+
+## 造一个跟随小人：影子 + 立绘 + 名字（结构和场景里的 Player 一样，只是不带相机）。
+## 参数 stats：这个队友的 UnitStats（立绘取 icon）。
+## 返回值：新建的 Node2D（已经 add_child 到本节点，会受 y_sort 排序）。
+func _make_companion(stats: UnitStats) -> Node2D:
+	var node := Node2D.new()
+	node.name = "Companion"
+	add_child(node)
+	var shadow := Polygon2D.new()
+	shadow.name = "Shadow"
+	shadow.color = Color(0, 0, 0, 0.3)
+	# 和 world_map.tscn 里 Player/Shadow 的椭圆保持一致（场景里那份没法直接复用，这里重写一份）
+	shadow.polygon = PackedVector2Array([Vector2(44, 0), Vector2(38, 8), Vector2(22, 13.9),
+			Vector2(0, 16), Vector2(-22, 13.9), Vector2(-38, 8), Vector2(-44, 0),
+			Vector2(-38, -8), Vector2(-22, -13.9), Vector2(0, -16), Vector2(22, -13.9),
+			Vector2(38, -8)])
+	node.add_child(shadow)
+	var sprite := Sprite2D.new()
+	sprite.name = "Sprite"
+	sprite.texture = stats.icon
+	sprite.scale = Vector2(1.3, 1.3)      # 和 PlayerSprite 的缩放一致
+	node.add_child(sprite)
+	var label := _make_name_label(16)
+	label.text = stats.name
+	node.add_child(label)
+	return node
+
+
+## 造一个"头顶名字"标签（白字 + 黑描边，压在地图上也看得清）。
+## 参数 font_size：字号（队长 18、队友 16）。
+## 返回值：Label（调用方负责 add_child 并设 text）。
+func _make_name_label(font_size: int) -> Label:
+	var label := Label.new()
+	label.name = "NameLabel"
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	label.mouse_filter = Control.MOUSE_FILTER_IGNORE   # 别挡住底下的点击
+	label.add_theme_font_size_override("font_size", font_size)
+	label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
+	label.add_theme_constant_override("outline_size", 5)
+	label.size = Vector2(220, 30)
+	label.position = Vector2(-110, -78)               # 以角色脚下为原点，往上抬到头顶
+	return label
+
+
+## 记录队长的移动轨迹：沿"上一记录点 → 当前位置"这条线段，每隔 TRAIL_SPACING 像素插一个点。
+## 为什么要插点而不是"每帧塞一个"：每帧移动距离随帧率/冲刺变化（普通 6px、冲刺 12px），
+##   每帧塞一个点会让队友间距跟着帧率变；按固定像素间隔记录，间距才是稳定的 40px/人。
+## 副作用：往 _trail 头部插点（越新的点索引越小），超过 TRAIL_MAX 就截断。
+func _update_trail() -> void:
+	if _last_trail_pos == Vector2.INF:
+		_last_trail_pos = player.position
+		return
+	var delta := player.position - _last_trail_pos
+	var dist := delta.length()
+	if dist < TRAIL_SPACING:
+		return
+	var steps := int(dist / TRAIL_SPACING)
+	var step_vec := delta / float(steps)
+	var pos := _last_trail_pos
+	for i in steps:
+		pos += step_vec
+		_trail.push_front(pos)
+	_last_trail_pos = pos          # 不足一个间隔的零头留到下一帧，不丢
+	if _trail.size() > TRAIL_MAX:
+		_trail.resize(TRAIL_MAX)
+
+
+## 每帧把队友朝"轨迹上属于他的那个点"插值挪过去。
+## 参数 delta：帧间隔（秒）。
+## 副作用：改每个小人的 position / 立绘 flip_h。
+## 为什么用插值而不是直接赋值：直接赋值会让队友在拐弯时瞬移；插值让队伍看起来是"跟"上来的。
+func _update_companions(delta: float) -> void:
+	if _companions.is_empty() or _trail.is_empty():
+		return
+	var weight := 1.0 - exp(-COMPANION_FOLLOW_SPEED * delta)
+	for i in _companions.size():
+		var node := _companions[i]
+		if not is_instance_valid(node):
+			continue
+		var target: Vector2 = _trail[mini((i + 1) * TRAIL_STEP, _trail.size() - 1)]
+		var before := node.position
+		node.position = before.lerp(target, weight)
+		var sprite := node.get_node_or_null(^"Sprite") as Sprite2D
+		if sprite != null:
+			var dx := node.position.x - before.x
+			if absf(dx) > 0.05:
+				sprite.flip_h = dx < 0.0
+
+
+# ══════════════════════════════════════════════════════════
 #  交互
 # ══════════════════════════════════════════════════════════
 
@@ -571,10 +785,13 @@ func _move_player(delta: float) -> void:
 ##      E = 按下焦点上的那一格；**WASD 交给面板自己**（货架是方格，语义归 MerchantPanel）；
 ##      交易时背包是"配件"（一起开、一起关），所以这一支排在背包前面；
 ##   3. 背包打开 —— Esc / B = 关背包；**WASD 故意不在这里处理**（见下面"背包"分支的注释）；
-##   4. 队伍管理二级页打开 —— Esc = 退回操作菜单（上一级）；W/S/E 走 _overlay_nav()；其它输入忽略；
-##   5. 操作菜单打开 —— Esc = 关菜单回游戏；W/S/E 走 _overlay_nav()；其它输入忽略；
-##   6. NPC 对话面板打开 —— Esc = 关面板；W/S/E 走 _overlay_nav()（面板按钮也能键盘按了）；其它忽略；
-##   7. 没有任何 UI —— Esc = 打开操作菜单；B = 打开背包；有最近 NPC 且是交互键 → 打开它的面板/商店。
+##   4. 角色属性面板打开 —— Esc / C / B = 收摊（连并排的背包一起收，见 _bag_with_stats）；
+##      属性面板是只读的，W/S 等输入一概忽略（背包的 WASD 由 BagPanel 自己处理）；
+##   5. 队伍管理二级页打开 —— Esc = 退回操作菜单（上一级）；W/S/E 走 _overlay_nav()；其它输入忽略；
+##   6. 操作菜单打开 —— Esc = 关菜单回游戏；W/S/E 走 _overlay_nav()；其它输入忽略；
+##   7. NPC 对话面板打开 —— Esc = 关面板；W/S/E 走 _overlay_nav()（面板按钮也能键盘按了）；其它忽略；
+##   8. 没有任何 UI —— Esc = 打开操作菜单；B = 打开背包；C = 打开角色属性（连背包一起开）；
+##      有最近 NPC 且是交互键 → 打开它的面板/商店。
 ## 为什么用 event.pressed and not event.echo：按住键时操作系统会持续发 echo 事件，
 ##   不做这两项过滤会导致"按住 E 一秒开几十次面板"。
 ## 说明：方向键 / Enter / 空格**不会**走到这里 —— 它们被 Godot 的 GUI 焦点系统在更早的阶段
@@ -602,6 +819,15 @@ func _unhandled_input(event: InputEvent) -> void:
 			_close_merchant()
 			get_viewport().set_input_as_handled()
 		elif _is_interact_event(event) and Global.activate_focused(self):
+			get_viewport().set_input_as_handled()
+		return
+
+	if _stats_open:
+		# ⚠ 这一支必须排在 _bag_open 那支**前面**：属性面板打开时背包是它的"配件"
+		#   （_bag_with_stats），两个开关都是 true —— 属性面板是主窗口，谁在前谁说了算。
+		# 属性面板是只读的（没有可操作的格子），Esc / C / B 都直接收摊，连背包一起收。
+		if event.is_action_pressed("ui_cancel") or _is_stats_key(event) or _is_bag_key(event):
+			_close_stats()
 			get_viewport().set_input_as_handled()
 		return
 
@@ -647,6 +873,11 @@ func _unhandled_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 		return
 
+	if _is_stats_key(event):
+		_open_stats()
+		get_viewport().set_input_as_handled()
+		return
+
 	if _nearest != null and _is_interact_event(event):
 		_open_panel(_nearest)
 		get_viewport().set_input_as_handled()
@@ -664,6 +895,15 @@ func _is_bag_key(event: InputEvent) -> bool:
 		and event.keycode == KEY_B
 
 
+## 这个事件是不是"开/关角色属性"的键（C）。
+## 参数 event：待判定的输入事件。
+## 返回值：true = 按下了 C（不是按住、不是 echo）。
+## 为什么和 _is_bag_key 一样硬编码，而不配 InputMap 动作：见上面那条注释（界面快捷键统一写法）。
+func _is_stats_key(event: InputEvent) -> bool:
+	return event is InputEventKey and event.pressed and not event.echo \
+		and event.keycode == KEY_C
+
+
 ## 支持"项目里配了 interact 动作就用它"，没配则用 E / Enter。
 ## 实现搬到 Global.is_interact_event()（主菜单也用同一份判断）。
 func _is_interact_event(event: InputEvent) -> bool:
@@ -674,16 +914,16 @@ func _is_interact_event(event: InputEvent) -> bool:
 #  UI 浮层：操作菜单 / 队伍管理 / 商人 / 背包 / 键盘焦点
 # ══════════════════════════════════════════════════════════
 
-## 有没有任何"挡住走动"的 UI 开着（NPC 对话面板 / 操作菜单 / 队伍管理 / 商人 / 背包）。
+## 有没有任何"挡住走动"的 UI 开着（NPC 对话面板 / 操作菜单 / 队伍管理 / 商人 / 背包 / 角色属性）。
 ## 用途：
 ##   · _process 判断要不要冻住走动（看面板时玩家不该溜走）；
 ##   · _unhandled_input 判断输入该走"UI 分支"还是"游戏分支"；
 ##   · _sync_world_button_focus() 判断地图上那两个常驻按钮要不要禁用焦点。
 func _ui_open() -> bool:
-	return _panel_open or _menu_open or _party_open or _shop_open or _bag_open
+	return _panel_open or _menu_open or _party_open or _shop_open or _bag_open or _stats_open
 
 
-## 实例化四个 UI 浮层并接好信号（由 _ready 调一次）。
+## 实例化五个 UI 浮层并接好信号（由 _ready 调一次）。
 ## 为什么挂在 UI（CanvasLayer）下：它们是界面，不该跟着相机跑、也不该被 y_sort 排序。
 ## 为什么在代码里接线（而不是 .tscn 的 [connection]）：这些场景是运行时 instantiate 的，
 ##   编辑器里连不了"还没被实例化的父节点"的信号。
@@ -699,6 +939,7 @@ func _setup_overlays() -> void:
 	_pause_menu.resume_requested.connect(_close_pause_menu)
 	_pause_menu.party_requested.connect(_open_party_panel)
 	_pause_menu.bag_requested.connect(_on_menu_bag_requested)
+	_pause_menu.stats_requested.connect(_on_menu_stats_requested)
 	_pause_menu.battle_requested.connect(_on_battle_pressed)
 	_pause_menu.title_requested.connect(_on_back_pressed)
 
@@ -714,15 +955,29 @@ func _setup_overlays() -> void:
 	# 背包当前没有「关闭」按钮（按要求移除了），这条连接是留给以后加按钮用的：
 	# 现在关背包只有 Esc / B 两条路，都走 _close_bag()。
 	_bag_panel.close_requested.connect(_close_bag)
-	# 点背包格子 = 请求卖掉（交易界面开着才真的能卖，见 _on_bag_sell_requested）
-	_bag_panel.sell_requested.connect(_on_bag_sell_requested)
+	# 点背包格子 = "这个格子被点了"：交易界面开着就是卖，否则就是穿（见 _on_bag_item_activated）
+	_bag_panel.item_activated.connect(_on_bag_item_activated)
+	# 点已穿上的装备栏 = 脱下来放回背包
+	_bag_panel.unequip_requested.connect(_on_bag_unequip_requested)
+	# 背包换了"看谁" → 并排的属性面板跟着切（反之亦然，见 _on_stats_character_view_changed）
+	_bag_panel.character_view_changed.connect(_on_bag_character_view_changed)
+
+	# 角色属性面板（和背包一样是"点开就盖在外面"的普通二级页）。
+	# 它贴屏幕**左下角**、背包贴右下角，所以打开属性面板时背包可以同时开着、两边都能点。
+	_stats_panel = STATS_PANEL_SCENE.instantiate() as StatsPanel
+	ui_layer.add_child(_stats_panel)
+	_stats_panel.character_view_changed.connect(_on_stats_character_view_changed)
+	# 点「＋」加属性点：只重设焦点环（点数花完后「＋」置灰、要退出环），不抢焦点
+	_stats_panel.points_spent.connect(_on_stats_points_spent)
+	# 属性面板上半部分点已穿的装备栏 = 脱下。和背包同一个人（两边同步），所以直接复用那条通路。
+	_stats_panel.unequip_requested.connect(_on_bag_unequip_requested)
 
 	_merchant_panel = MERCHANT_PANEL_SCENE.instantiate() as MerchantPanel
 	ui_layer.add_child(_merchant_panel)
 	_merchant_panel.close_requested.connect(_close_merchant)
-	_merchant_panel.buy_requested.connect(_on_weapon_buy_requested)
+	_merchant_panel.buy_requested.connect(_on_item_buy_requested)
 	# 卖出：确认框点「确定」后走到这里
-	_merchant_panel.sell_requested.connect(_on_weapon_sell_requested)
+	_merchant_panel.sell_requested.connect(_on_item_sell_requested)
 	# 确认框开关 → 同步背包格子的键盘焦点（模态期间不让方向键跑到背包上按 E）
 	_merchant_panel.confirm_changed.connect(_on_merchant_confirm_changed)
 
@@ -745,6 +1000,10 @@ func _open_bag(from_menu := false, as_companion := false) -> void:
 		_pause_menu.hide()
 		_menu_open = false        # 菜单确实不显示了，状态位要跟着诚实（关闭时由 _close_bag 再弹回来）
 	_bag_panel.clear_message()
+	# 单独开背包（没跟商人交易）时，点格子是**穿装备**；把这条提示写在信息行，
+	# 免得玩家只知道"交易时点格子能卖"，不知道平时点一下是穿。
+	if not as_companion:
+		_bag_panel.show_message("点背包里的装备即可给当前角色穿上 · ◀/▶ 换人 · 点已穿的装备栏可脱下")
 	_bag_panel.reset_view()       # 重新打开时先看队长（买卖引起的重建不会重置，见 show_bag 说明）
 	_bag_panel.set_slot_focus_enabled(true)
 	_rebuild_bag()
@@ -766,6 +1025,7 @@ func _on_menu_bag_requested() -> void:
 func _close_bag() -> void:
 	_bag_open = false
 	_bag_with_shop = false
+	_bag_with_stats = false
 	TooltipManager.hide_tip()
 	_bag_panel.hide()
 	_focus_ring.clear()
@@ -773,6 +1033,96 @@ func _close_bag() -> void:
 	if _bag_from_menu:
 		_bag_from_menu = false
 		_open_pause_menu()
+
+
+## 打开角色属性面板（操作菜单的「角色属性」、或地图上按 C）。
+## 参数 from_menu：是不是从操作菜单进来的。true = 把菜单藏起来，关掉时退回菜单；
+##   false = 按 C 直接开，关掉就回游戏（和背包的两条路语义完全一致）。
+## 副作用：_stats_open = true；（从菜单来时）藏菜单；**同时把背包也打开**（见下）；
+##        按当前团队名册重建属性内容；把焦点交给背包的格子（玩家要能点着穿装备）。
+## 为什么一起打开背包：属性面板贴**左下角**、背包贴**右下角**，一左一右不重叠，
+##   于是"一边看这个人的属性、一边在背包里点装备穿给他"是最自然的用法（用户要求可以交互）。
+##   关属性面板时会把这份"配件背包"一起收掉（见 _close_stats / _bag_with_stats）。
+## 焦点归谁：背包（它能点、能滚）。属性面板只有两个切换箭头，用鼠标点即可，
+##   键盘要换人可以直接在背包里按 ◀ / ▶ —— 两边是同步的。
+func _open_stats(from_menu := false) -> void:
+	_stats_open = true
+	_stats_from_menu = from_menu
+	if from_menu:
+		_pause_menu.hide()
+		_menu_open = false        # 菜单确实不显示了，状态位要跟着诚实（关闭时由 _close_stats 再弹回来）
+	if not _bag_open:
+		_open_bag(false, true)    # as_companion = true：关属性面板时一起收
+		_bag_with_stats = true
+	# 让属性面板和背包**一样高**（背包先算过尺寸，这里取它的实际高度）
+	_stats_panel.set_linked_height(_bag_panel.panel_height())
+	_stats_panel.show_stats(_party)
+	# 两边先对齐到同一个人（背包刚 reset_view 到队长，属性面板也按队长开）
+	_stats_panel.show_character(_bag_panel.current_character())
+	# 焦点环 = 背包格子 + 属性面板的箭头/「＋」（背包在前：主操作是背包，属性面板是看数值/加点）
+	_set_focus_ring(_combined_ring())
+	_sync_world_button_focus()
+
+
+## 属性面板（和它一起开的背包）当前的焦点环。
+## 为什么要把两个面板的控件拼在一起：它们同屏、都能点/都能用键盘，
+##   只给其中一个设环的话，另一个的按钮就永远走不到（W/S 会跳过它）。
+## 顺序：背包格子在前（点装备是主操作），属性面板的 ◀ ▶ / 「＋」在后。
+func _combined_ring() -> Array[Control]:
+	var out: Array[Control] = []
+	if _bag_open and _bag_panel != null:
+		out.append_array(_bag_panel.focus_ring())
+	if _stats_open and _stats_panel != null:
+		out.append_array(_stats_panel.focus_ring())
+	return out
+
+
+## 操作菜单里点了「角色属性」。
+## 为什么不把 stats_requested 直接接 _open_stats：信号没有参数，直连会让 from_menu 丢成 false。
+func _on_menu_stats_requested() -> void:
+	_open_stats(true)
+
+
+## 关闭角色属性面板，回到游戏（Esc / C / B 都走这里；面板里没有「关闭」按钮）。
+## 副作用：_stats_open = false；收起提示卡、隐藏面板；
+##        如果背包是"跟着属性面板一起开的"（_bag_with_stats），把它也一起收掉；
+##        恢复地图按钮可聚焦；如果这次是从操作菜单进来的，顺手把菜单再弹回来。
+func _close_stats() -> void:
+	_stats_open = false
+	TooltipManager.hide_tip()
+	_stats_panel.hide()
+	if _bag_with_stats:
+		_bag_with_stats = false
+		if _bag_open:
+			_close_bag()          # 里面会清焦点环 / 恢复按钮焦点
+	_focus_ring.clear()
+	_sync_world_button_focus()
+	if _stats_from_menu:
+		_stats_from_menu = false
+		_open_pause_menu()
+
+
+## 背包换了"看谁"（◀ / ▶）→ 属性面板跟着切到同一个人。
+## 参数 character：背包当前展示的角色。
+func _on_bag_character_view_changed(character: UnitStats) -> void:
+	if _stats_open:
+		_stats_panel.show_character(character)
+
+
+## 属性面板换了"看谁" → 背包跟着切（于是"看谁"和"点格子穿给谁"永远是同一个人）。
+## 参数 character：属性面板当前展示的角色。
+func _on_stats_character_view_changed(character: UnitStats) -> void:
+	if _bag_open:
+		_bag_panel.show_character(character)
+
+
+## 属性面板点了一次「＋」：只把焦点环换成新的（不抢焦点）。
+## 为什么不能走 _set_focus_ring()：那个会 grab 第一个控件，玩家用键盘连点时焦点每点一下
+##   就跳回 ◀，根本没法连续加同一条属性；这里只更新数组，让 W/S 的候选列表跟着变。
+## 用 _combined_ring() 而不是只看属性面板：背包还开着，格子也得留在环里。
+func _on_stats_points_spent() -> void:
+	if _stats_open and _stats_panel != null:
+		_focus_ring = _combined_ring()
 
 
 ## 按当前背包内容重建方格（打开时调；以后做"卖出/合成"成功后再调一次即可）。
@@ -852,7 +1202,7 @@ func _on_party_remove_requested(stats: UnitStats) -> void:
 ##        地图上那两个常驻按钮设为不可聚焦。
 ## 位置：交易窗口贴**最左边**、背包贴**最右边**（各自的面板自己算），一左一右不重叠。
 ## ⚠ 交易时背包**保持可交互**（用户要求）：点背包里的格子就是把东西卖给商人
-##   （_bag_panel.sell_requested → _on_bag_sell_requested → 交易面板弹确认框）。
+##   （_bag_panel.item_activated → _on_bag_item_activated → _sell_bag_item → 交易面板弹确认框）。
 ##   所以这里**不再**调用 set_slot_focus_enabled(false)；只在确认框弹出时临时收焦点
 ##   （见 _on_merchant_confirm_changed）。
 ## 注意它**不置 _panel_open**：商人不用那个小对话框面板（方格货架铺不下），
@@ -885,45 +1235,68 @@ func _close_merchant() -> void:
 
 
 ## 按当前数据重建商人面板的货架（打开时、以及每次买完都调）。
-## 货架来源：MapNPC.sell_pool 优先，留空 → Global.get_all_weapons()（现有全部武器，按价格升序）。
-## 传的是**当前**金币与已持有列表：于是"买完一把之后买不起的立刻变灰"是自动的，
+## 货架来源：MapNPC.sell_pool 优先，留空 → Global.get_all_equipment()（现有全部装备，
+##   按"栏位 → 价格"排序）。老武器（ItemWeapon）不再进地图线的货架。
+## 传的是**当前**金币与已持有列表：于是"买完一件之后买不起的立刻变灰"是自动的，
 ##   不需要谁去手动把按钮 disabled 一遍。
 func _rebuild_merchant() -> void:
 	if _merchant_data == null:
 		return
-	var weapons: Array[ItemWeapon] = _merchant_data.sell_pool if not _merchant_data.sell_pool.is_empty() \
-			else Global.get_all_weapons()
+	var items: Array[ItemBase] = _merchant_data.sell_pool if not _merchant_data.sell_pool.is_empty() \
+			else Global.get_all_equipment()
 	# 注意：只传名字（面板顶部居中显示），不再传台词/金币 —— 那两行按需求移除了。
 	# coins 仍然要传：面板要靠它判定"哪些格子买不起"（置灰），只是不显示而已。
-	_merchant_panel.show_shop(_merchant_data.display_name, weapons, Global.coins,
+	_merchant_panel.show_shop(_merchant_data.display_name, items, Global.coins,
 			Global.equipped_weapons)
 
 
 ## 商人面板里的「购买」：只把请求转给 GameRoot（真正扣钱 + 入包的地方）。
-## 参数 weapon：要买的武器。
-func _on_weapon_buy_requested(weapon: ItemWeapon) -> void:
-	weapon_buy_requested.emit(weapon)
+## 参数 item：要买的道具。
+func _on_item_buy_requested(item: ItemBase) -> void:
+	item_buy_requested.emit(item)
 
 
-## 背包里点了某件武器 → 请求卖掉（BagPanel.sell_requested）。
-## 参数 weapon：被点的那件武器。
-## 规则：**只有交易界面开着才能卖**（商人不在，卖不出去）——
-##   这时让交易面板弹确认框（写清卖价），确认后才走 GameRoot.sell_weapon()。
-## 单独开背包时：不弹框，只在背包的信息行回一句，免得"点了没反应"。
-## 已经在等一个确认时直接忽略：不然连着点两件，待确认的那件会被悄悄换掉。
-func _on_bag_sell_requested(weapon: ItemWeapon) -> void:
-	if not _shop_open:
-		_bag_panel.show_message("（要跟商人交易时才能卖东西）")
+## 背包里点了一格（BagPanel.item_activated）—— 同一个点击，按"有没有开商人"分流：
+##   · 交易界面开着 → 卖掉（_sell_bag_item：让交易面板弹"卖出"确认框）；
+##   · 没开商人     → 给**背包界面当前展示的那个角色**穿上
+##     （equip_requested(character, item) → GameRoot.equip_item()）。
+## 为什么分流放在这里而不是背包面板里：面板只该知道"这一格被点了 / 现在展示的是谁"，
+##   "现在是在交易还是在换装"是地图/GameRoot 的业务状态（和买卖一样，界面只发请求）。
+## 参数 item：被点的道具（ItemBase）。
+func _on_bag_item_activated(item: ItemBase) -> void:
+	if _shop_open:
+		_sell_bag_item(item)
 		return
+	equip_requested.emit(_bag_panel.current_character(), item)
+
+
+## 把背包里的一件东西卖给商人（只有交易界面开着时才走这里）。
+## 参数 item：被点的那件道具（装备/以后别的可卖品都走这条）。
+## 规则：先让交易面板弹确认框（写清卖价），确认后才走 GameRoot.sell_item()。
+## 已经在等一个确认时直接忽略：不然连着点两件，待确认的那件会被悄悄换掉。
+## 卖不了（背包里已经没有 / 非卖品）时只在信息行说原因，不弹空框。
+func _sell_bag_item(item: ItemBase) -> void:
 	if _merchant_panel.is_confirm_open():
 		return
-	_merchant_panel.ask_sell(weapon, GameRoot.weapon_sell_price(weapon))
+	var why := GameRoot.item_can_sell(item, Global.equipped_weapons)
+	if not why.is_empty():
+		_bag_panel.show_message("（%s）" % why)
+		return
+	_merchant_panel.ask_sell(item, GameRoot.item_sell_price(item))
+
+
+## 点了某个角色已穿上的装备栏（BagPanel.unequip_requested）：把请求转给 GameRoot。
+## 参数 slot_type：ItemBase.EquipType 的成员值。目标角色 = 背包界面当前展示的那个人
+##   （BagPanel.current_character()）。真正"能不能脱"（角色为空 / 栏位空 / 背包满）由
+##   GameRoot.unequip_slot() 判定，成功后回调 notify_bag_changed() 重建背包和装备栏。
+func _on_bag_unequip_requested(slot_type: int) -> void:
+	unequip_requested.emit(_bag_panel.current_character(), slot_type)
 
 
 ## 交易面板的卖出确认框点了「确定」：转给 GameRoot（真正出包 + 加钱的地方）。
-## 参数 weapon：要卖的武器。
-func _on_weapon_sell_requested(weapon: ItemWeapon) -> void:
-	weapon_sell_requested.emit(weapon)
+## 参数 item：要卖的道具。
+func _on_item_sell_requested(item: ItemBase) -> void:
+	item_sell_requested.emit(item)
 
 
 ## 交易面板的确认框开了/关了：同步背包格子的键盘焦点。
@@ -961,10 +1334,35 @@ func _sync_merchant_focus() -> void:
 		_set_focus_ring(_merchant_panel.focus_ring())
 
 
+## 背包 / 装备变化后刷新界面（GameRoot 穿脱装备后调用；失败时也调用，用来显示原因）。
+## 参数 message：非空时写进**背包信息行**（"穿上了「X」（武器栏）。" / "背包满了…"）。
+## 和 notify_shop_changed 的分工：那条是"和商人有关的刷新"（还会重建货架、写商人提示行）；
+##   这条只管背包 + 装备栏，所以**没开商人**（换装）时也能用。
+## 副作用：刷新余额；背包开着时重建方格与装备栏（延到帧末，理由同 notify_shop_changed）、
+##        并把焦点环同步成新的格子（穿/脱会换掉一批按钮）；
+##        角色属性面板开着时也让它重读一遍（左边那 6 个装备格和"装备加成"要跟着变）。
+func notify_bag_changed(message := "") -> void:
+	refresh_coins()
+	if _stats_open:
+		# 属性面板直接读 GameRoot/UnitStats，数据已经变了，重建一次就能看到新装备
+		_stats_panel.refresh.call_deferred()
+	if not _bag_open:
+		return
+	if not message.is_empty():
+		_bag_panel.show_message(message)
+	_rebuild_bag.call_deferred()
+	if _shop_open:
+		# 交易时也能脱下（脱下来就能卖）：货架的"持×n"要跟着变，所以货架也重建
+		_rebuild_merchant.call_deferred()
+	else:
+		_sync_bag_focus.call_deferred()
+
+
 ## 延迟同步背包的焦点环（理由同上）。
+## 属性面板也开着时用合并环，否则「＋」会从 W/S 的候选里消失。
 func _sync_bag_focus() -> void:
 	if _bag_open and _bag_panel != null:
-		_set_focus_ring(_bag_panel.focus_ring())
+		_set_focus_ring(_combined_ring())
 
 
 ## 用 Global.coins 的当前值刷新界面上的金币显示。
@@ -1094,6 +1492,8 @@ func _rebuild_panel_buttons() -> void:
 	match resolve_action(_panel_npc.data):
 		MapNPC.Action.RECRUIT_PARTY:
 			_build_recruit_buttons(_panel_npc.data)
+		MapNPC.Action.JOIN_SECT:
+			_build_sect_buttons(_panel_npc.data)
 		MapNPC.Action.TELEPORT:
 			_build_teleport_buttons(_panel_npc.data)
 		MapNPC.Action.SELL_WEAPONS:
@@ -1172,9 +1572,9 @@ func _build_recruit_buttons(data: MapNPC) -> void:
 			button.text = "%s（团队已满 %d/%d）" % [stats.name, count, GameRoot.MAX_TEAM_SIZE]
 		else:
 			button.text = "%s %s   %s" % [data.recruit_label, stats.name, _stats_digest(stats)]
-		button.tooltip_text = "%s\nHP %s / 伤害 %s / 速度 %s / 幸运 %s / 格挡 %s%%" % [
-			stats.name, Global.format_stat(stats.health), Global.format_stat(stats.damage),
-			Global.format_stat(stats.speed), Global.format_stat(stats.luck),
+		button.tooltip_text = "%s（%s）\nHP %s / 伤害 %s / 速度 %s / 格挡 %s%%" % [
+			stats.name, stats.race_name(), Global.format_stat(stats.health),
+			Global.format_stat(stats.damage), Global.format_stat(stats.speed),
 			Global.format_stat(stats.block_chance)]
 		button.custom_minimum_size = Vector2(0, 52)
 		button.add_theme_font_size_override("font_size", 20)
@@ -1194,10 +1594,12 @@ func _recruit_candidates(data: MapNPC) -> Array[UnitStats]:
 	return Global.get_recruitable_players()
 
 
-## 一行属性摘要（招募按钮文字用）。只挑最影响选择的 3 项，避免按钮文字过长挤成一团。
+## 一行属性摘要（招募按钮文字用）。只挑最影响选择的 3 项 + 种族（种族决定能拜哪个门派，
+##   所以招募时就该看见），避免按钮文字过长挤成一团。
 ## 数值格式化统一走 Global.format_stat()：队伍管理面板用的是同一个函数，两处显示不会不一致。
 func _stats_digest(stats: UnitStats) -> String:
-	return "HP %s · 攻 %s · 速 %s" % [
+	return "%s · HP %s · 攻 %s · 速 %s" % [
+		stats.race_name(),
 		Global.format_stat(stats.health),
 		Global.format_stat(stats.damage),
 		Global.format_stat(stats.speed),
@@ -1239,6 +1641,72 @@ func _on_recruit_pressed(stats: UnitStats) -> void:
 	recruit_requested.emit(stats)
 
 
+## 铺拜师按钮：团队名册里的每个人一行，按"种族能不能拜"和"是不是已有门派"决定是否可点。
+## 参数 data：掌门的 MapNPC（datasect_id 指向 Global.SECTS 的键）。
+## 副作用：往 panel_buttons 里加"门派说明 + 每个队员一个按钮 + 团队摘要"。
+## 为什么把整支团队都铺出来（而不是只铺能拜的）：玩家需要看见"为什么他不能拜"——
+##   只列能拜的人，玩家会以为那个人不在团队里，或者面板坏了。
+## 委托判定给 GameRoot.can_join_sect()：这里**不自己判种族**，规则只有一份。
+func _build_sect_buttons(data: MapNPC) -> void:
+	var sect_id := data.sect_id
+	if not Global.is_sect(sect_id):
+		_add_panel_note("（这个掌门没配门派：MapNPC.sect_id 要填 Global.SECTS 的键）")
+		return
+	var sect_name := Global.sect_name(sect_id)
+	_add_panel_note("%s（只收%s）：%s" % [sect_name, Global.sect_races_text(sect_id),
+			Global.sect_desc(sect_id)])
+	if _party.is_empty():
+		_add_panel_note("（团队里还没有人，先去招募队友）")
+		return
+	for member in _party:
+		if member == null:
+			continue
+		var current := GameRoot.sect_of(member)
+		var why := GameRoot.can_join_sect(member, sect_id)
+		var button := Button.new()
+		if not current.is_empty():
+			# 已经有门派（含"已经是本门"）：置灰，写明他现在归谁
+			button.text = "%s（%s）· 已入%s" % [member.name, member.race_name(),
+					Global.sect_name(current)]
+		elif not why.is_empty():
+			# 种族不符：置灰，直接写在按钮上（完整理由在 tooltip 里）
+			button.text = "%s（%s）· %s不收%s" % [member.name, member.race_name(),
+					sect_name, member.race_name()]
+		else:
+			button.text = "拜入%s · %s（%s）" % [sect_name, member.name, member.race_name()]
+		button.tooltip_text = why if not why.is_empty() else "%s拜入%s" % [member.name, sect_name]
+		button.custom_minimum_size = Vector2(0, 52)
+		button.add_theme_font_size_override("font_size", 20)
+		button.disabled = not why.is_empty()
+		if not button.disabled:
+			button.pressed.connect(_on_sect_join_pressed.bind(member, sect_id))
+		panel_buttons.add_child(button)
+	_add_panel_note(_party_summary())
+
+
+## 拜师按钮回调。只发请求：能不能拜由 GameRoot.can_join_sect() 判。
+## 参数 character：要拜师的那位队员；sect_id：掌门代表的门派。
+## 副作用：播 UI 音效、emit sect_join_requested(character, sect_id)。不关面板 ——
+##   玩家要能看到按钮变成"已入 XX"，也可能接着给队里另一个人拜同门。
+func _on_sect_join_pressed(character: UnitStats, sect_id: String) -> void:
+	SoundManager.play_sound(SoundManager.Sound.UI)
+	sect_join_requested.emit(character, sect_id)
+
+
+## 门派变化后刷新界面（GameRoot 拜师成功/失败后调用；失败时也调，用来显示原因）。
+## 参数 message：非空时写进 NPC 面板的台词行（"陆孤鸣拜入太虚剑宗！" / "行修是仙族…"）。
+## 副作用：NPC 面板开着 → 换台词、重建按钮区、重设焦点环；角色属性面板开着 → 重读一次
+##   （名字下面那行「种族 · 门派」要跟着变）。
+func notify_sect_changed(message := "") -> void:
+	if _panel_open:
+		if not message.is_empty():
+			panel_dialogue.text = message
+		_rebuild_panel_buttons()
+		_set_focus_ring(_collect_focusable(panel_buttons))
+	if _stats_open:
+		_stats_panel.refresh.call_deferred()
+
+
 ## 队伍变化后刷新界面（GameRoot 招募/移除成功后调用；失败时也调用，用来显示失败原因）。
 ## 参数 message：非空时作为提示文字（例如"Knight 加入了队伍！"/"队伍已经满了（5 人）。"）。
 ## 副作用：
@@ -1261,6 +1729,10 @@ func notify_party_changed(message := "") -> void:
 			_party_panel.show_message(message)
 		_party_panel.show_party.call_deferred(_party, deployed)
 		_sync_party_focus.call_deferred()
+	# 上阵名单变了 → 地图上的跟随队伍跟着变（多一个/少一个人）。
+	# 用 call_deferred：这条链路是从队伍管理面板的按钮回调里发起的，立刻 queue_free 会摘掉
+	# 正在发信号的那个按钮所在的树（和 _party_panel.show_party 同一个理由）。
+	_rebuild_companions.call_deferred()
 
 ## 关闭对话面板。由「再想想」按钮和 Esc 两处调用。
 ## 参数：无。返回值：无。

@@ -8,8 +8,9 @@
 #
 # 职责边界：
 #   本文件**不切场景、不改 Global、不读地图数据**。它只是个"按钮面板"：
-#   按钮按下 → emit 对应的信号 → GameRoot 收到后做真正的事（开始新游戏 / 进竞技场 / 退出）。
+#   按钮按下 → emit 对应的信号 → GameRoot 收到后做真正的事（开始新游戏 / 退出）。
 #   这样菜单不需要知道游戏有几种模式，加模式只加信号 + GameRoot 里加一个处理函数。
+#   注：竞技场（经典模式）已经移除，主菜单现在只有「新的征程 / 继续游戏 / 退出游戏」。
 #
 # 数据流：GameRoot.show_title() 会把上一局的结算文案写进 screen.last_result，
 #         本文件在 _ready() 里把它显示到副标题上（所以必须在 add_child 之前赋值 —— 见下）。
@@ -24,7 +25,6 @@
 # 按钮与信号对应关系：
 #   新的征程 → new_game_requested → GameRoot.start_new_game()
 #   继续游戏 → （暂时禁用，没有存档系统）
-#   经典模式 → arena_requested    → GameRoot.enter_arena()
 #   退出游戏 → quit_requested     → GameRoot 里接的是 get_tree().quit()
 #
 # 坑：
@@ -35,15 +35,13 @@
 extends Control
 class_name TitleScreen
 
-## 主菜单：新的征程 / 继续游戏 / 经典模式 / 退出
+## 主菜单：新的征程 / 继续游戏 / 退出
 
 # ───────────────────────────────────────────────────────────────────────────
 #  ── 对外信号（由 GameRoot 在 show_title() 里 connect）──
 # ───────────────────────────────────────────────────────────────────────────
 ## 点了「新的征程」。无参数 —— 从哪张图开始由 GameRoot 按 maps/start_map_id 决定。
 signal new_game_requested
-## 点了「经典模式」（竞技场：自带选人 / 波次 / 商店的独立玩法）。
-signal arena_requested
 ## 点了「退出游戏」。GameRoot 接的是 get_tree().quit()。
 signal quit_requested
 
@@ -65,8 +63,6 @@ var _focus_ring: Array[Control] = []
 @onready var new_game_button: Button = %NewGameButton
 ## 「继续游戏」按钮。目前恒为 disabled（没有存档系统）。
 @onready var continue_button: Button = %ContinueButton
-## 「经典模式」按钮 → arena_requested。
-@onready var arena_button: Button = %ArenaButton
 ## 「退出游戏」按钮 → quit_requested。
 @onready var quit_button: Button = %QuitButton
 
@@ -74,7 +70,7 @@ var _focus_ring: Array[Control] = []
 ## 生命周期：进树时执行一次，配置副标题与按钮。
 ## 参数：无。返回值：无。
 ## 副作用：改 subtitle_label.text、continue_button.disabled，
-##        并把三个按钮的 pressed 连接到本文件的两个/三个回调。
+##        并把两个可用按钮的 pressed 连接到本文件的回调。
 ## 说明：本屏幕随 GameRoot._clear_screens() 被移除，信号连接随之销毁，
 ##   不需要手动 disconnect；也不会重复连接（每次换屏都是新实例）。
 func _ready() -> void:
@@ -85,9 +81,8 @@ func _ready() -> void:
 	# 现在还没有存档，所以「继续游戏」永远不可点（宁可禁用也不要做个假按钮）。
 	continue_button.disabled = true
 
-	# 只连真正有处理函数的三个按钮；continue_button 没有对应信号，纯摆设。
+	# 只连真正有处理函数的两个按钮；continue_button 没有对应信号，纯摆设。
 	new_game_button.pressed.connect(_on_new_game_pressed)
-	arena_button.pressed.connect(_on_arena_pressed)
 	quit_button.pressed.connect(_on_quit_pressed)
 
 	# ── 键盘操作：先建焦点环，再聚焦第一个可用项 ──
@@ -95,7 +90,7 @@ func _ready() -> void:
 	#   W/S 会在它上面"停住不动"（grab_focus() 对置灰按钮无效，焦点压根不会动）。
 	# ⚠ 没有最后那句 grab_focus() 的话，方向键按下去会"没人可动"（焦点是空的）——
 	#   这正是主菜单以前不支持键盘的原因：按钮本身是可聚焦的，只是没人给它焦点。
-	var buttons: Array[Button] = [new_game_button, continue_button, arena_button, quit_button]
+	var buttons: Array[Button] = [new_game_button, continue_button, quit_button]
 	_focus_ring.clear()
 	for button in buttons:
 		if Global.can_focus(button):
@@ -130,13 +125,6 @@ func _unhandled_input(event: InputEvent) -> void:
 func _on_new_game_pressed() -> void:
 	_click()
 	new_game_requested.emit()
-
-
-## 「经典模式」按钮回调（进竞技场）。
-## 参数：无。返回值：无。副作用：播 UI 音效 + emit arena_requested。
-func _on_arena_pressed() -> void:
-	_click()
-	arena_requested.emit()
 
 
 ## 「退出游戏」按钮回调。

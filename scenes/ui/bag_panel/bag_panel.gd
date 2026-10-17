@@ -12,11 +12,14 @@ class_name BagPanel
 ##   ⚠ 一行 8 格（而不是 6）是用户定的：6 列时窗口宽由角色区决定，方格两侧会空出很大一片边距；
 ##     8 列的宽度（630）超过角色区那一行（584），方格成了宽度主导，两侧只留内边距。
 ##
-## ── 点了格子 = 卖 ──
-##   商人的交易界面**同时打开背包**，那时点背包里的格子就是"把这件武器卖给商人"：
-##   `sell_requested(weapon)` → WorldMap → 交易面板弹确认框（写清卖价）→ GameRoot 真卖。
-##   单独开背包（没开商人）时点格子也会发这个请求，但 WorldMap 会回一句
-##   "要跟商人交易才能卖东西"，所以不会出现"点了没反应"。
+## ── 点了格子 = 卖 / 穿（看有没有开商人）──
+##   同一个点击，WorldMap 按"交易界面开没开"分流（本面板不知道这些业务规则，只发请求）：
+##     · 商人的交易界面**同时打开背包**时：点背包里的格子 = 把这件东西卖给他
+##       （`item_activated` → WorldMap → 交易面板弹确认框（写清卖价）→ GameRoot 真卖）；
+##     · 平时（没开商人）：点同一个格子 = **给当前展示的角色穿上**
+##       （`item_activated` → WorldMap.equip_requested(character, item) → GameRoot.equip_item()，
+##       穿到 `item.get_equip_type()` 指定的那一个装备栏）。
+##   两条路都保证"点了有反应"：穿不上（不能装备 / 背包里没有）时原因会写回信息行。
 ##
 ## ── 两种格子尺寸是分开的（重要）──
 ##   · `EQUIP_SLOT_SIZE = 96`：**装备栏**用的（形象区那 6 个坑位 + 决定形象框高度）；
@@ -30,12 +33,16 @@ class_name BagPanel
 ##
 ## ── 箭头切的是"看谁"，不是"换队长"（重要）──
 ##   ◀ / ▶ 只在**团队名册**（WorldMap._party → GameRoot.party）里前后翻页，
-##   换的只是这个窗口里展示的形象 + 名字（形象下面那行会写「名字（i/n）」）。
+##   换的是这个窗口里展示的形象 + 名字（形象下面那行会写「名字（i/n）」），
+##   **以及 6 个装备栏显示谁的装备** —— 每个进团队的角色各有一套装备（用户要求）。
 ##   它**不会**动 Global.main_player_selected / GameRoot 的队长或上阵名单 ——
 ##   那些是"谁上场打仗"的规则，属于 GameRoot 的数据，界面只读不改（本文件全文不发任何请求信号）。
 ##   团队里只有 1 个人（或一个都没有）时箭头置灰：没得切，也就不会占键盘焦点的一站。
-##   ⚠ 6 个装备栏现在还是**和选中的角色无关**的空占位：等接上装备系统，
-##     它们应该跟着"当前展示的这个人"走（那时候才需要把 _view_index 接到 GameRoot）。
+##   ⚠ 6 个装备栏是**固定类型**的（左一 头盔 / 左二 武器 / 左三 腰带 /
+##     右一 项链 / 右二 衣服 / 右三 鞋子，见 EQUIP_LAYOUT）：空格子写着栏位名，
+##     穿上的东西画图标 + 按稀有度描边，点一下 = 脱下来放回背包。
+##     内容读 Global.equipment_by_character（GameRoot.equip_item / unequip_slot 是唯一写入点），
+##     取的是 **current_character()** 那一套 —— 换角色只 `_refresh_equip_slots()`，不重建节点。
 ##
 ## ── 位置 ──
 ##   屏幕**右下角**（距右边/下边 WINDOW_MARGIN）。
@@ -52,7 +59,7 @@ class_name BagPanel
 ##   （角色区那 6 个装备栏就是留给"装备"的坑位，现在只是空框）。
 ##
 ## ── 谁往里放东西 ──
-##   商人买到的武器（GameRoot.buy_weapon()）会 append 进 Global.equipped_weapons ——
+##   商人买到的装备（GameRoot.buy_item()）会 append 进 Global.equipped_weapons ——
 ##   也就是本面板的格子。所以"买了武器就进背包"这条链的落点就是这里。
 ##   格数上限是 GameRoot.BAG_SLOTS（默认 120 = 6 列 × 20 行）。
 ##
@@ -79,13 +86,23 @@ class_name BagPanel
 ##   W A S D 是工程自己的动作、GUI 不认，所以本文件自己处理：左右 = ±1 格、
 ##   上下 = ±一整行（±GRID_COLUMNS）—— 这也正是背包不能直接用 WorldMap 那套线性
 ##   焦点环的原因（那套上下只走一格，在 6 列网格里会变成"斜着走"）。
-##   Enter / 空格 / E 目前没有动作（格子里还没有"使用"），留给以后的装备/合成。
+##   Enter / 空格 / E 都等于"按下焦点上的那个格子"：背包格子 = 卖 / 穿，装备栏 = 脱。
 
-## 点了背包里某一格（有东西的格子）：请求把这件东西**卖**给商人。
-## 参数 weapon：被点的武器。
-## ⚠ 本文件不判断"现在能不能卖"——那是 WorldMap/GameRoot 的事（只有在交易界面开着时才能卖，
-##   没开商人时 WorldMap 会回一句"要跟商人交易才能卖"）。界面只发请求。
-signal sell_requested(weapon: ItemWeapon)
+## 点了背包里某一格（有东西的格子）。**具体干什么由 WorldMap 决定**：
+##   · 交易界面开着 → 把这件东西卖给商人；
+##   · 平时 → 把它穿到对应的装备栏（见文件头"点了格子 = 卖 / 穿"）。
+## 参数 item：被点的道具（类型是 **ItemBase** —— 以后头盔/项链这类新装备也走同一条路）。
+## ⚠ 本文件不判断"能不能卖 / 能不能穿"——那是 GameRoot 的规则，界面只发请求，
+##   所以不会出现"按钮能点、点下去什么都没发生"。
+signal item_activated(item: ItemBase)
+
+## 点了**已穿上**的装备栏：请求脱下来放回背包。
+## 参数 slot_type：ItemBase.EquipType 的成员值（头盔 / 武器 / 腰带 / 项链 / 衣服 / 鞋子）。
+## 空装备栏是 disabled 的，所以不会发这个信号。
+signal unequip_requested(slot_type: int)
+
+## 背包界面展示的角色变了（◀ / ▶）。并排的属性面板据此切到同一个人（由 WorldMap 转发）。
+signal character_view_changed(character: UnitStats)
 
 ## 关掉面板回到地图。**当前没有任何按钮发它**（「关闭」按钮已按要求移除，关闭靠 Esc / B）——
 ## 保留是为了以后加「整理」「关闭」这类按钮时直接接上，WorldMap 那边也已经连好了。
@@ -112,6 +129,22 @@ const SLOT_ICON_MARGIN := 8
 
 ## 左右各几个装备栏（用户要求：玩家形象左边 3 个、右边 3 个）。
 const EQUIP_SLOTS_PER_SIDE := 3
+## 六个装备栏的**固定顺序**：左列从上到下 → 右列从上到下。
+##   左一 头盔 / 左二 武器 / 左三 腰带 / 右一 项链 / 右二 衣服 / 右三 鞋子。
+## 想换栏位的摆法只改这个数组（两列各取前/后 EQUIP_SLOTS_PER_SIDE 个）；
+## **类型本身**定义在 ItemBase.EquipType，中文名在 ItemBase.equip_type_name()。
+## 注意它必须和 EQUIP_SLOTS_PER_SIDE × 2 一样长，多出来的会被忽略、少的按"装备(NONE)"补。
+const EQUIP_LAYOUT: Array[int] = [
+	ItemBase.EquipType.HELMET,
+	ItemBase.EquipType.WEAPON,
+	ItemBase.EquipType.BELT,
+	ItemBase.EquipType.NECKLACE,
+	ItemBase.EquipType.ARMOR,
+	ItemBase.EquipType.BOOTS,
+]
+## 装备栏里那行栏位名（"头盔"/"武器"…）的高度。图标要画在它上面，
+## 所以装备栏 StyleBox 的 content_margin_bottom 要留出这么多。
+const EQUIP_LABEL_HEIGHT := 20.0
 ## **装备栏**格子边长。比背包格子大：一是形象框要够"竖"（240×308 才像立绘框，压成方形就难看），
 ## 二是梦幻西游里纸娃娃的装备栏本来就比背包格子醒目。
 const EQUIP_SLOT_SIZE := 96.0
@@ -160,9 +193,15 @@ var scroll: ScrollContainer
 
 ## 当前焦点环：只有"有东西的格子"（空格子不可聚焦，方向键会自然跳过它们）。
 var _slots: Array[Control] = []
+## 已穿上装备的那几个装备栏（空栏位是 disabled，不进这里，也就不占焦点）。
+var _equip_slots: Array[Control] = []
+## 当前是否允许格子拿键盘焦点（交易确认框弹出时会被临时关掉，见 set_slot_focus_enabled）。
+## 刷新装备栏内容时要按它决定 FOCUS_ALL / FOCUS_NONE，否则刷新一次就把模态状态冲掉了。
+var _slot_focus_enabled := true
 
 ## 角色区正在展示谁：团队名册（引用 WorldMap._party，只读）与当前下标。
 ## **纯展示**：不会写回 Global / GameRoot（见文件头"箭头切的是看谁"）。
+## ⚠ 但它决定了**装备栏显示谁的装备**、以及"点背包格子穿给谁"（见 current_character）。
 var _party: Array[UnitStats] = []
 var _view_index := 0
 
@@ -186,24 +225,31 @@ func _ready() -> void:
 
 
 ## 按背包内容重建整个方格并显示。
-## 参数 items：背包里的武器（就是 Global.equipped_weapons；只读）。
+## 参数 items：背包里的东西（就是 Global.equipped_weapons；只读）。
+##   ⚠ 类型是 **Array[ItemBase]** 而不是 Array[ItemWeapon]：以后头盔/项链这类新装备
+##     也能直接放进背包，这个函数一行都不用改。
 ## 参数 capacity：格子总数（GameRoot.BAG_SLOTS，默认 120）。多出来的空格也会画出来 ——
 ##   梦幻西游那种"一眼看到还剩几格"的观感就是靠空格的，而不是只画有东西的。
 ##   注意：格子是**全部**画出来的（120 个节点），一屏只看得到 VISIBLE_ROWS 行，其余靠滚动。
 ## 参数 party：团队名册（WorldMap._party，就是 GameRoot.party 那个数组；只读）。
 ##   角色区的 ◀ / ▶ 在这个数组里翻页；默认空数组 = 团队没人，只显示主角或占位文字。
 ##   传引用而不是拷贝：团队随时可能被招募/移出改动，下次打开时现取最新内容即可。
-## 副作用：show()；改信息行（金币 + 格子数）；清空并重建 %Grid（先 remove_child 再 queue_free）；
+## 副作用：show()；改信息行（金币 + 格子数）；**按当前展示的角色刷新 6 个装备栏**
+##        （换人/穿上/脱下之后必须跟着变）；清空并重建 %Grid（先 remove_child 再 queue_free）；
 ##        滚动位置回到顶部；重算窗口尺寸。
 ## ⚠ 这里**不重置**"正在看谁"（_view_index）：买卖时每买一件都会重建一次背包，
 ##   要是每次都跳回队长，玩家刚翻到的那个人就被抢走了。要重置请显式调 reset_view()
 ##   （WorldMap._open_bag() 打开面板时会调一次）。
 ## ⚠ 也刻意**不清空提示文字**（message_label）：以后"卖出成功"这类操作是
 ##   "先 show_message()、再 call_deferred(show_bag)"，清一次就看不到提示了。要清调 clear_message()。
-func show_bag(items: Array[ItemWeapon], capacity: int, party: Array[UnitStats] = []) -> void:
+func show_bag(items: Array[ItemBase], capacity: int, party: Array[UnitStats] = []) -> void:
 	show()
 	_party = party
+	# 名册可能变短（有人被移出团队）：下标越界就退回第一个人，避免展示/穿装备落到空角色上。
+	if _view_index < 0 or _view_index >= _party.size():
+		_view_index = 0
 	_refresh_player_view()
+	_refresh_equip_slots()    # 装备栏显示的是"当前展示的角色"那一套
 	count_label.text = "背包　%d/%d" % [items.size(), capacity]
 	coins_label.text = "金币：%d" % Global.coins
 	_slots.clear()
@@ -211,8 +257,8 @@ func show_bag(items: Array[ItemWeapon], capacity: int, party: Array[UnitStats] =
 		grid.remove_child(child)
 		child.queue_free()
 	for index in capacity:
-		var weapon: ItemWeapon = items[index] if index < items.size() else null
-		grid.add_child(_make_slot(weapon))
+		var item: ItemBase = items[index] if index < items.size() else null
+		grid.add_child(_make_slot(item))
 	scroll.scroll_vertical = 0        # 每次打开都回到顶部（见函数头注释）
 	_apply_window_geometry()
 
@@ -221,6 +267,20 @@ func show_bag(items: Array[ItemWeapon], capacity: int, party: Array[UnitStats] =
 func reset_view() -> void:
 	_view_index = _index_of_leader()
 	_refresh_player_view()
+	_refresh_equip_slots()
+
+
+## 把"正在看谁"切到指定角色（不重建方格、不重置滚动）。
+## 谁调：WorldMap —— 并排的角色属性面板换了人，背包要跟着切（反之亦然）。
+## 角色不在名册里就忽略（例如他刚被移出团队）。
+## 副作用：改 _view_index、刷新形象/名字/装备栏；**不**emit（避免两个面板互相弹来弹去）。
+func show_character(character: UnitStats) -> void:
+	var index := _index_of(character)
+	if index < 0 or index == _view_index:
+		return
+	_view_index = index
+	_refresh_player_view()
+	_refresh_equip_slots()
 
 
 ## 只刷新金币数（买卖之后调这个最省 —— 不用重建 120 个格子）。
@@ -229,18 +289,22 @@ func refresh_coins(coins := -1) -> void:
 	coins_label.text = "金币：%d" % (Global.coins if coins < 0 else coins)
 
 
-## 让背包里的格子能不能被键盘选中。
+## 让背包里的格子（以及**已穿上装备的装备栏**）能不能被键盘选中。
 ## 什么时候会关掉：交易面板的**确认框**弹出来时（WorldMap 收到 MerchantPanel.confirm_changed
 ##   后调这里）—— 那时是一次模态询问，焦点只该在"确定/取消"两个按钮之间。
 ## 平时（包括交易中）**都是开的**：用户要求"交易时背包也要能交互"，
 ##   所以交易时方向键可以从货架走到背包、按 E 就是"卖这一件"。
 ## 参数 enabled：true = 正常（格子可聚焦）；false = 全部设成 FOCUS_NONE（鼠标悬停看属性不受影响）。
 func set_slot_focus_enabled(enabled: bool) -> void:
+	_slot_focus_enabled = enabled
+	var mode := Control.FOCUS_ALL if enabled else Control.FOCUS_NONE
 	for slot in _slots:
-		(slot as Control).focus_mode = Control.FOCUS_ALL if enabled else Control.FOCUS_NONE
+		(slot as Control).focus_mode = mode
+	for slot in _equip_slots:
+		(slot as Control).focus_mode = mode
 	for button in [prev_button, next_button]:
 		if button != null and not button.disabled:
-			button.focus_mode = Control.FOCUS_ALL if enabled else Control.FOCUS_NONE
+			button.focus_mode = mode
 
 
 ## 在面板上显示一句提示（留给以后的"卖出/合成"用；现在没地方写）。
@@ -254,11 +318,13 @@ func clear_message() -> void:
 
 
 ## 当前可以聚焦的格子（WorldMap 用它设焦点环；空格子不在里面）。
-## 顺序：先背包里"有东西"的格子（第一个自动拿到焦点，于是开背包就能看到第一件武器的属性卡），
-## 最后是两边的切换箭头（有得切时才有）—— W/S 的走格只看 _slots，不含箭头（见 _unhandled_input），
-## 箭头靠方向键的几何导航过去，或直接用鼠标点。
+## 顺序：先背包里"有东西"的格子（第一个自动拿到焦点，于是开背包就能看到第一件东西的属性卡），
+## 接着是**已穿上装备的装备栏**（键盘也能脱），最后是两边的切换箭头（有得切时才有）。
+## W/S 的走格只看 _slots，不含箭头和装备栏（见 _unhandled_input）；
+## 装备栏靠方向键的几何导航过去，或直接用鼠标点。
 func focus_ring() -> Array[Control]:
 	var out: Array[Control] = _slots.duplicate()
+	out.append_array(_equip_slots)
 	for button in [prev_button, next_button]:
 		if button != null and not button.disabled:
 			out.append(button)
@@ -266,55 +332,184 @@ func focus_ring() -> Array[Control]:
 
 
 # ══════════════════════════════════════════════════════════
-#  角色区（玩家形象 + 左右各三个装备栏）
+#  角色区（玩家形象 + 左右各三个装备栏，**每个角色各一套**）
 # ══════════════════════════════════════════════════════════
 
-## 造左右两排装备栏（各 EQUIP_SLOTS_PER_SIDE 个空格子）。
-## 调用时机：_ready() 一次。**不随背包内容重建** —— 它们是固定坑位（以后放"已装备"的东西），
-##   和"背包里有什么"无关。
-## 为什么在代码里造而不是在 .tscn 里摆：格数由常量决定，改 EQUIP_SLOTS_PER_SIDE 就自动生效，
+## 造左右两排装备栏（各 EQUIP_SLOTS_PER_SIDE 个）—— **只造一次**（_ready 时）。
+## 每个格子的类型由 EQUIP_LAYOUT 决定：左一 头盔 / 左二 武器 / 左三 腰带 /
+## 右一 项链 / 右二 衣服 / 右三 鞋子。
+## 格子的**内容**（当前展示的角色穿着什么）不在这里定：穿上/脱下、以及 ◀ / ▶ 换角色时
+##   只调 _refresh_equip_slots() **就地刷新**这句话的意思 —— 按钮节点不变，键盘焦点和
+##   WorldMap 记住的焦点环都不会指到已经被释放的旧按钮上。
+## 为什么在代码里造而不是在 .tscn 里摆：格数和类型都由常量决定，改一处就自动生效，
 ##   不用再去场景里复制粘贴节点（和背包格子同一个理由）。
-## 副作用：往里填 Panel，并 push_warning（场景缺容器时）。
+## 副作用：重建两个 VBox 的子节点，然后刷新一次内容；场景缺容器时 push_warning 并整块跳过（不崩）。
 func _build_equip_slots() -> void:
 	if left_slots == null or right_slots == null:
 		push_warning("BagPanel：场景里找不到 %LeftSlots / %RightSlots —— 已跳过装备栏那一块。"
 				+ "请重新打开 scenes/ui/bag_panel/bag_panel.tscn")
 		return
-	for container in [left_slots, right_slots]:
+	var columns: Array[VBoxContainer] = [left_slots, right_slots]
+	for col in columns.size():
+		var container: VBoxContainer = columns[col]
 		for child in container.get_children():
 			container.remove_child(child)
 			child.queue_free()
 		for i in EQUIP_SLOTS_PER_SIDE:
-			container.add_child(_make_equip_slot())
+			var layout_index := col * EQUIP_SLOTS_PER_SIDE + i
+			var slot_type: int = EQUIP_LAYOUT[layout_index] if layout_index < EQUIP_LAYOUT.size() \
+					else ItemBase.EquipType.NONE
+			container.add_child(_make_equip_slot(slot_type))
+	_refresh_equip_slots()
 
 
-## 造一个装备栏空格子。
-## 用 Panel 而不是 Button：现在没有"装备/卸下"的动作，做成按钮只会让玩家点了没反应，
-##   还会混进键盘焦点环白占一站。等以后接上装备系统，再按需要换成 Button + 信号。
-## 返回值：Panel（带描边、正方形、悬停有原生提示说明它是干嘛的）。
-func _make_equip_slot() -> Panel:
-	var slot := Panel.new()
+## 造一个装备栏格子的**固定部分**：尺寸、栏位名标签、事件接线。
+## 参数 slot_type：这个格子收哪种装备（ItemBase.EquipType）。它被写进按钮的 meta，
+##   之后 _refresh_equip_slot() 靠 meta 认出"这是哪一栏"。
+## 返回值：Button（内容由 _refresh_equip_slot 填）。
+## 事件只接一次（按下 = 请求脱下；悬停/聚焦 = 弹属性卡），内容变了不用重连 ——
+##   这正是"换角色不重建按钮"的关键。
+func _make_equip_slot(slot_type: int) -> Button:
+	var slot := Button.new()
 	slot.name = "EquipSlot"
+	slot.set_meta("slot_type", slot_type)
 	slot.custom_minimum_size = Vector2(EQUIP_SLOT_SIZE, EQUIP_SLOT_SIZE)
-	slot.mouse_filter = Control.MOUSE_FILTER_STOP
-	slot.tooltip_text = "装备栏（未开放）"
-	slot.add_theme_stylebox_override("panel", _slot_style(Color(1, 1, 1, 0.16), Color(1, 1, 1, 0.04)))
+	slot.expand_icon = true
+	slot.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	# 栏位名（永远显示，玩家一眼知道这格收什么）
+	var tag := Label.new()
+	tag.name = "SlotTypeLabel"
+	tag.text = ItemBase.equip_type_name(slot_type)
+	tag.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	tag.add_theme_font_size_override("font_size", 13)
+	tag.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	tag.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_set_tag_bottom(tag)
+	slot.add_child(tag)
+	# 点一下 = 请求脱下（能不能脱、脱到哪由 GameRoot.unequip_slot() 判定）
+	slot.pressed.connect(func() -> void: unequip_requested.emit(slot_type))
+	# 悬停 / 键盘焦点弹属性卡。⚠ 这里**不能**把 item 绑定进去：换角色/换装备后 item 会变，
+	# 而事件只连一次 —— 所以用函数调用，在弹出那一刻现取。
+	slot.mouse_entered.connect(func() -> void: _show_equip_tip(slot, slot_type))
+	slot.mouse_exited.connect(TooltipManager.hide_tip)
+	slot.focus_entered.connect(func() -> void: _show_equip_tip(slot, slot_type))
+	slot.focus_exited.connect(TooltipManager.hide_tip)
 	return slot
 
 
+## 按"当前展示的角色"刷新 6 个装备栏的内容 —— 换角色、穿、脱都走这里。
+## 参数：无（读 current_character() 与 Global.equipment_by_character）。
+## 副作用：改每个按钮的图标 / 描边 / 可用状态 / tooltip；重建 _equip_slots
+##        （有装备的那几格才会进键盘焦点环）。
+func _refresh_equip_slots() -> void:
+	_equip_slots.clear()
+	for container in [left_slots, right_slots]:
+		if container == null:
+			continue
+		for child in container.get_children():
+			var slot := child as Button
+			if slot == null:
+				continue
+			_refresh_equip_slot(slot, int(slot.get_meta("slot_type", ItemBase.EquipType.NONE)))
+
+
+## 刷新单个装备栏：这个角色这一栏穿着什么，就画成什么样。
+## 参数 slot：格子按钮；slot_type：它收哪种装备。
+## 返回值：无。
+## 副作用：
+##   · **空栏位** → 图标清空、disabled（不可点、不进焦点环）、栏位名居中、原生 tooltip 说明怎么穿；
+##   · **有装备** → 图标 + 按稀有度描边 + 栏位名缩到底部、可点（点 = 脱）、悬停弹属性卡。
+func _refresh_equip_slot(slot: Button, slot_type: int) -> void:
+	var tag := slot.get_node_or_null("SlotTypeLabel") as Label
+	var bottom_margin := int(EQUIP_LABEL_HEIGHT) + 4
+	var character := current_character()
+	var item: ItemBase = GameRoot.equipment_in(character, slot_type)
+
+	if item == null:
+		slot.icon = null
+		slot.disabled = true
+		slot.focus_mode = Control.FOCUS_NONE
+		slot.add_theme_stylebox_override("disabled",
+				_slot_style(Color(1, 1, 1, 0.14), Color(1, 1, 1, 0.03), bottom_margin))
+		if tag != null:
+			_set_tag_center(tag)
+			tag.modulate = Color(1, 1, 1, 0.42)
+		# 空栏位没有属性卡，用原生 tooltip 说明这个坑位怎么用（提到当前是谁的栏位）
+		var who: String = character.name if character != null else "角色"
+		slot.tooltip_text = "%s栏：把%s从背包里点一下就能给「%s」穿上" % [
+			ItemBase.equip_type_name(slot_type), ItemBase.equip_type_name(slot_type), who]
+		return
+
+	# 有装备：图标 + 稀有度描边（和背包格子、提示卡一套配色）
+	slot.icon = item.item_icon
+	slot.disabled = false
+	slot.focus_mode = Control.FOCUS_ALL if _slot_focus_enabled else Control.FOCUS_NONE
+	slot.tooltip_text = ""      # 有属性卡就不再设原生 tooltip，免得两个框叠一起
+	var tier_color: Color = Global.TIER_COLORS.get(item.item_tier, Color(1, 1, 1, 0.4))
+	slot.add_theme_stylebox_override("normal", _slot_style(tier_color, Color(1, 1, 1, 0.07), bottom_margin))
+	slot.add_theme_stylebox_override("hover", _slot_style(tier_color, Color(1, 1, 1, 0.18), bottom_margin))
+	slot.add_theme_stylebox_override("focus", _slot_style(Color(1, 0.9, 0.5, 1.0), Color(1, 1, 1, 0.18), bottom_margin))
+	slot.add_theme_stylebox_override("pressed", _slot_style(Color(1, 0.9, 0.5, 1.0), Color(1, 1, 1, 0.24), bottom_margin))
+	if tag != null:
+		_set_tag_bottom(tag)
+		tag.modulate = Color(1, 1, 1, 0.85)
+	_equip_slots.append(slot)
+
+
+## 悬停 / 聚焦某个装备栏时弹属性卡。**现取**当前角色这一栏的装备 —— 不能提前绑定 item，
+## 因为换角色/换装备后 item 会变，而事件只连了一次。
+## 参数 slot：格子按钮；slot_type：它收哪种装备。
+## 副作用：调 TooltipManager 显示卡片；空栏位什么都不做（交给原生 tooltip）。
+func _show_equip_tip(slot: Control, slot_type: int) -> void:
+	var item: ItemBase = GameRoot.equipment_in(current_character(), slot_type)
+	if item != null:
+		TooltipManager.show_for_control(slot, item)
+
+
+## 栏位名标签：缩到格子**底部**那一行（有装备时用，图标画在它上面）。
+func _set_tag_bottom(tag: Label) -> void:
+	tag.anchor_left = 0.0
+	tag.anchor_right = 1.0
+	tag.anchor_top = 1.0
+	tag.anchor_bottom = 1.0
+	tag.offset_left = 2.0
+	tag.offset_right = -2.0
+	tag.offset_top = -(EQUIP_LABEL_HEIGHT + 2.0)
+	tag.offset_bottom = -2.0
+
+
+## 栏位名标签：**居中**铺满格子（空栏位用，像"坑位"）。
+func _set_tag_center(tag: Label) -> void:
+	tag.anchor_left = 0.0
+	tag.anchor_right = 1.0
+	tag.anchor_top = 0.0
+	tag.anchor_bottom = 1.0
+	tag.offset_left = 2.0
+	tag.offset_right = -2.0
+	tag.offset_top = 0.0
+	tag.offset_bottom = 0.0
+
+
+## 背包界面当前展示的是谁（◀ / ▶ 切换的那个团队成员；团队为空时退回当前主角）。
+## 谁"当前展示"，就显示谁的装备栏、点背包格子也穿给谁 —— 这是"每人一套装备"的入口。
+## 返回值：UnitStats；实在没有角色时返回 null（装备栏会全空，穿装备会被 GameRoot 拒绝）。
+## 副作用：无（纯读）。
+func current_character() -> UnitStats:
+	if _view_index >= 0 and _view_index < _party.size():
+		var member: UnitStats = _party[_view_index]
+		if member != null:
+			return member
+	return Global.main_player_selected
+
+
 ## 把玩家形象刷成"当前展示的团队成员"。
-## 数据来源：_party（团队名册）+ _view_index（◀ / ▶ 翻到第几个）；名册为空时退回
-##   Global.main_player_selected（当前主角），再没有就显示占位文字。
+## 数据来源：current_character()（团队名册 + ◀ / ▶ 的下标；名册为空时退回当前主角）。
 ## 贴图就是地图上那个小人用的同一张（UnitStats.icon）—— 所以背包里的形象和场上一致。
 ## 副作用：改 player_view.texture / 两个箭头的 disabled / 名字标签的文字；不读写游戏数据。
 func _refresh_player_view() -> void:
 	if player_view == null or player_fallback == null:
 		return
-	var stats: UnitStats = null
-	if _view_index >= 0 and _view_index < _party.size():
-		stats = _party[_view_index]
-	if stats == null:
-		stats = Global.main_player_selected
+	var stats := current_character()
 	var icon: Texture2D = stats.icon if stats != null else null
 	player_view.texture = icon
 	player_view.visible = icon != null
@@ -336,30 +531,40 @@ func _refresh_player_view() -> void:
 
 ## ◀ / ▶ 的回调：在团队名册里前后翻一个（越界就回卷）。
 ## 参数 step：-1 = 上一个，+1 = 下一个。
-## 副作用：改 _view_index、播 UI 音效、刷新形象/名字；**不改任何游戏数据**（见文件头）。
+## 副作用：改 _view_index、播 UI 音效、刷新形象/名字，并**把 6 个装备栏刷成新角色的那一套**
+##   （每个角色各穿各的）；不改任何游戏数据（只改"看谁"）。
 func _step_player(step: int) -> void:
 	if _party.size() <= 1:
 		return
 	_view_index = wrapi(_view_index + step, 0, _party.size())
 	SoundManager.play_sound(SoundManager.Sound.UI)
 	_refresh_player_view()
+	_refresh_equip_slots()
+	TooltipManager.hide_tip()      # 换人了，上一位角色的属性卡不该留在屏幕上
+	# 通知 WorldMap：让并排的角色属性面板也切到同一个人
+	character_view_changed.emit(current_character())
 
 
 ## 团队里"当前主角"排第几（用来决定打开背包时先展示谁）。
 ## 返回：下标；主角不在团队里（或团队为空）时返回 0 —— 于是展示团队第一个人。
 func _index_of_leader() -> int:
-	var leader: UnitStats = Global.main_player_selected
-	if leader == null or _party.is_empty():
-		return 0
+	var index := _index_of(Global.main_player_selected)
+	return maxi(0, index)
+
+
+## 某个角色在名册里的下标（引用或 resource_path 相同都算同一个人）；找不到返回 -1。
+func _index_of(character: UnitStats) -> int:
+	if character == null:
+		return -1
 	for i in _party.size():
 		var member: UnitStats = _party[i]
-		if member == leader:
+		if member == character:
 			return i
 		# 资源可能被复制过（战斗里就是 duplicate 后再用的），所以再比一次路径
 		if member != null and not member.resource_path.is_empty() \
-				and member.resource_path == leader.resource_path:
+				and member.resource_path == character.resource_path:
 			return i
-	return 0
+	return -1
 
 
 # ══════════════════════════════════════════════════════════
@@ -411,6 +616,13 @@ func _apply_window_geometry() -> void:
 #  格子
 # ══════════════════════════════════════════════════════════
 
+## 当前窗口高度（像素）。给"和背包并排"的面板用：它们要看起来一样高（见 StatsPanel.set_linked_height）。
+## 返回值：Panel 的 size.y；还没算过几何时返回 0（调用方按 0 处理即可）。
+func panel_height() -> float:
+	var node := get_node_or_null(^"Panel") as Panel
+	return node.size.y if node != null else 0.0
+
+
 ## 拿（必要时补）滚动层，并把它配成"一屏 VISIBLE_ROWS 行、超出就滚"。
 ## 参数：无。返回值：无（结果写进成员 scroll）。
 ## 副作用：
@@ -437,57 +649,61 @@ func _ensure_scroll() -> void:
 
 
 ## 造一个背包格子。
-## 参数 weapon：这一格放什么；null = 空格子（画成暗色、不可点、不可聚焦）。
+## 参数 item：这一格放什么；null = 空格子（画成暗色、不可点、不可聚焦）。
+##   类型是 **ItemBase**：武器、以及以后的头盔/项链等新装备都走这里，
+##   因为格子只用到 item_icon / item_tier 这两个基类字段。
 ## 有东西的格子：
 ##   · 用 Button.icon + expand_icon 直接显示图标（比嵌 TextureRect 简单，且自带按下/悬停反馈）；
 ##   · 按稀有度换描边颜色（Global.TIER_COLORS），和商店/提示卡一套配色；
 ##   · mouse_entered / focus_entered 弹 hover_item_card，离开时收起；
-##   · **点一下 = 请求卖出**（emit sell_requested；能不能卖由 WorldMap/GameRoot 判）。
-func _make_slot(weapon: ItemWeapon) -> Button:
+##   · **点一下 = emit item_activated**：交易时是"卖"，平时是"穿"（由 WorldMap 分流）。
+func _make_slot(item: ItemBase) -> Button:
 	var slot := Button.new()
 	slot.name = "Slot"
 	slot.custom_minimum_size = Vector2(SLOT_SIZE, SLOT_SIZE)
 	slot.focus_mode = Control.FOCUS_ALL
 	# 空格子：不可点、不可聚焦，只留一个暗描边当"格位"
-	if weapon == null:
+	if item == null:
 		slot.disabled = true
 		slot.add_theme_stylebox_override("disabled", _slot_style(Color(1, 1, 1, 0.10), Color(1, 1, 1, 0.03)))
 		return slot
 
-	slot.icon = weapon.item_icon
+	slot.icon = item.item_icon
 	slot.expand_icon = true
 	slot.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	# 描边颜色跟稀有度走（TIER_COLORS 是 Global 上的共享常量，只读不改）
-	var tier_color: Color = Global.TIER_COLORS.get(weapon.item_tier, Color(1, 1, 1, 0.4))
+	var tier_color: Color = Global.TIER_COLORS.get(item.item_tier, Color(1, 1, 1, 0.4))
 	slot.add_theme_stylebox_override("normal", _slot_style(tier_color, Color(1, 1, 1, 0.05)))
 	slot.add_theme_stylebox_override("hover", _slot_style(tier_color, Color(1, 1, 1, 0.16)))
 	slot.add_theme_stylebox_override("focus", _slot_style(Color(1, 0.9, 0.5, 1.0), Color(1, 1, 1, 0.18)))
 	slot.add_theme_stylebox_override("pressed", _slot_style(Color(1, 0.9, 0.5, 1.0), Color(1, 1, 1, 0.24)))
 
 	# 悬停 / 键盘焦点都弹同一张属性卡（TooltipManager 会把卡片锚到这个格子的右上角）
-	slot.mouse_entered.connect(TooltipManager.show_for_control.bind(slot, weapon))
+	slot.mouse_entered.connect(TooltipManager.show_for_control.bind(slot, item))
 	slot.mouse_exited.connect(TooltipManager.hide_tip)
-	slot.focus_entered.connect(TooltipManager.show_for_control.bind(slot, weapon))
+	slot.focus_entered.connect(TooltipManager.show_for_control.bind(slot, item))
 	slot.focus_exited.connect(TooltipManager.hide_tip)
-	# 点一下 = 请求卖出（商人收不收、现在能不能卖，都由 WorldMap/GameRoot 决定）
-	slot.pressed.connect(_on_slot_pressed.bind(weapon))
+	# 点一下 = 发"这个格子被点了"（卖还是穿，由 WorldMap 按交易界面开没开决定）
+	slot.pressed.connect(_on_slot_pressed.bind(item))
 	_slots.append(slot)
 	return slot
 
 
-## 背包格子被点：发"卖出请求"（见文件头"点了格子 = 卖"）。
-## 参数 weapon：这一格的武器。副作用：播 UI 音效 + emit sell_requested。
-func _on_slot_pressed(weapon: ItemWeapon) -> void:
+## 背包格子被点：发"这个格子被点了"（见文件头"点了格子 = 卖 / 穿"）。
+## 参数 item：这一格的道具。副作用：播 UI 音效 + emit item_activated。
+func _on_slot_pressed(item: ItemBase) -> void:
 	SoundManager.play_sound(SoundManager.Sound.UI)
-	sell_requested.emit(weapon)
+	item_activated.emit(item)
 
 
 ## 格子的方形描边样式（梦幻西游那种一格一格的感觉）。
 ## 参数 border：描边颜色（有东西时按稀有度、空格子是半透明白）。
 ## 参数 bg：底色（半透明，压在面板的深色背景上）。
+## 参数 bottom_margin：底部留白。背包格子用默认值；**装备栏**要传 EQUIP_LABEL_HEIGHT+4 ——
+##   它下面还有一行栏位名，图标不能压上去。
 ## 说明：expand_icon 会把图标撑满按钮，所以内边距靠 StyleBox 的 content_margin 留出来 ——
 ##   这是 Button 唯一"正规"的留白开关（按钮没有单独的 padding 属性）。
-func _slot_style(border: Color, bg: Color) -> StyleBoxFlat:
+func _slot_style(border: Color, bg: Color, bottom_margin := SLOT_ICON_MARGIN) -> StyleBoxFlat:
 	var style := StyleBoxFlat.new()
 	style.bg_color = bg
 	style.border_color = border
@@ -496,7 +712,7 @@ func _slot_style(border: Color, bg: Color) -> StyleBoxFlat:
 	style.content_margin_left = SLOT_ICON_MARGIN
 	style.content_margin_right = SLOT_ICON_MARGIN
 	style.content_margin_top = SLOT_ICON_MARGIN
-	style.content_margin_bottom = SLOT_ICON_MARGIN
+	style.content_margin_bottom = bottom_margin
 	return style
 
 

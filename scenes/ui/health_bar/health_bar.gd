@@ -3,23 +3,16 @@
 ## ═══════════════════════════════════════════════════════════════════════════
 ## 系统位置：
 ##   同一个脚本服务两种条：血条和蓝条 —— 行为完全一样，只靠 @export 的颜色区分。
-##   两个使用方（**实例数量不同，别记混**）：
-##     · scenes/unit/unit.tscn（局内生存玩法）：只放了 **1 个** HealthBar 实例
-##       （没有 ManaBar），位置在头顶；它由编辑器连线接收 HealthComponent 的
-##       on_health_changed，且**没有覆盖颜色** → 直接用 health_bar.tscn 里的默认深红底/亮粉条。
-##     · scenes/battle/battle_unit.tscn（回合制战斗玩法）：放了 **2 个**（%HealthBar 与 %ManaBar），
-##       两个都在场景里显式填了 back_color / fill_color；由 battle_unit.gd 的
-##       _refresh_visuals() / _refresh_hp() / _refresh_mana() 主动调 update_bar() 刷新。
+##   唯一的使用方：scenes/battle/battle_unit.tscn（回合制战斗）放了 **2 个**
+##   （%HealthBar 与 %ManaBar），两个都在场景里显式填了 back_color / fill_color；
+##   由 battle_unit.gd 的 _refresh_visuals() / _refresh_hp() / _refresh_mana() 主动调 update_bar() 刷新。
+##   （竞技场时代在 scenes/unit/unit.tscn 里还挂过一个走 HealthComponent 信号的实例，已随竞技场移除。）
 ##   两种玩法共用一个控件，但**数据入口不同**（一个靠信号、一个靠直接调用），改动时两边都要顾及。
 ##
 ## 数据流：
-##   1) 信号入口（推荐路径，连线写在 .tscn 里）：
-##      HealthComponent.on_health_changed(current, max)
-##        → 本文件的 _on_health_component_on_health_changed()
-##        → update_bar(current / max, current)
-##      ⚠ 这条连接是**编辑器连线**（unit.tscn 最后一行 [connection]），
-##        函数一改名就会静默断线（不报错），表现是血条永远停在场景里的初始值。
-##   2) 主动调用入口：battle_unit.gd 直接 update_bar(hp / max_hp, hp)，比例由调用方自己算。
+##   主动调用入口：battle_unit.gd 直接 update_bar(hp / max_hp, hp)，比例由调用方自己算。
+##   （竞技场时代还有一条"HealthComponent.on_health_changed → 本文件"的编辑器连线，
+##     那条链随竞技场一起删掉了；下面 _on_health_component_on_health_changed 保留成通用入口。）
 ##
 ## 数值约定（最容易踩的一点）：
 ##   health_bar.tscn 里 ProgressBar 的 max_value 被固定成 1.0、show_percentage = false，
@@ -35,8 +28,7 @@
 ##   · 两个 @export 颜色**没有写默认值**（Color 的默认值是 Color(0,0,0,1) 黑色），
 ##     而 _ready() 会无条件把它写进覆盖样式 —— 所以 .tscn 里**没填**这两个颜色的实例
 ##     运行时会变成一条全黑的条。
-##     实际填了颜色的只有：battle_unit.tscn（血条一套 + 蓝条一套）、player_well_rounded.tscn、
-##     enemy_chaser_slow.tscn；其余玩家/敌人场景都没填。
+##     现在唯一的实例是 battle_unit.tscn（血条一套 + 蓝条一套，都填了颜色）。
 ##     （health_bar.tscn 里那套"深红底 + 亮粉条"的 StyleBoxFlat 只是编辑器里的默认外观，
 ##      一进 _ready() 就被 @export 的黑色覆盖掉了 —— 这是本文件最容易看走眼的一点。）
 ##   · 本类直接继承 Control，没有需要自己初始化的父脚本，所以 _ready() 不需要 super._ready()。

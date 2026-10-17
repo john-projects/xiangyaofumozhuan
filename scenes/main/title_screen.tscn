@@ -67,13 +67,6 @@ theme_override_font_sizes/font_size = 26
 disabled = true
 text = "继续游戏"
 
-[node name="ArenaButton" type="Button" parent="Center"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 56)
-layout_mode = 2
-theme_override_font_sizes/font_size = 26
-text = "经典模式（竞技场）"
-
 [node name="QuitButton" type="Button" parent="Center"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 56)

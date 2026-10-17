@@ -40,7 +40,7 @@ class_name BattleUnit
 
 ## 战斗单位：血量/蓝量状态 + 表现。战斗流程（谁出手、打谁、什么时候结束）由 Battle 驱动。
 ##
-## 数据来源：UnitStats（name / icon / health / mana / damage / speed / luck / block_chance / skills）
+## 数据来源：UnitStats（name / icon / health / mana / damage / speed / block_chance / skills）
 ## 扩展点：
 ##   · 伤害公式        → roll_damage() / roll_crit() / try_block()
 ##   · 技能数值        → skill_damage() / skill_crit()（火球术在 resources/skills/skill_fireball.tres）
@@ -299,11 +299,12 @@ func roll_damage() -> float:
 ## 参数 crit_bonus：额外暴击率（技能用 SkillData.crit_bonus 传进来，普攻用默认值 0.0）。
 ## 返回值：bool。
 ## 副作用：**推进全局随机数序列**（内部调 Global.get_chance_success）。
-## 公式：基础 10% + 技能加成。注意单位是**小数**（0.10 = 10%）而不是百分数 ——
-##   get_chance_success 要求的也是 0~1，两边口径一致，别在这里再除 100。
+## 公式：基础 10% + **角色自己的暴击率**（stats.crit_rate，百分数 /100）+ 技能加成。
+##   crit_rate 主要来自门派被动（例如太虚剑宗的「剑心通明」），敌人默认 0 所以行为不变。
+##   注意单位是**小数**（0.10 = 10%）而不是百分数 —— get_chance_success 要的也是 0~1。
 ## 默认参数 0.0 让普攻可以直接 `attacker.roll_crit()` 调用。
 func roll_crit(crit_bonus := 0.0) -> bool:
-	return Global.get_chance_success(0.10 + crit_bonus)
+	return Global.get_chance_success(0.10 + stats.crit_rate / 100.0 + crit_bonus)
 
 
 ## 判定目标是否格挡成功（格挡 = 本次攻击完全免伤，只飘 "Blocked!"）。
@@ -312,7 +313,7 @@ func roll_crit(crit_bonus := 0.0) -> bool:
 ## 公式：stats.block_chance / 100.0 —— **注意这里要除 100**：
 ##   UnitStats.block_chance 在资源里是按百分数填的（例如 15 表示 15%），
 ##   而 get_chance_success 要的是 0~1，所以必须除。这是本项目里最容易搞错的口径之一
-##   （scenes/unit/unit.gd 里也是同样的 `stats.block_chance / 100`，保持一致）。
+##   （装备属性 ItemEquipment.block_chance 也是同一套百分数口径，以后接加成时别重复除 100）。
 ## 坑：资源没填这个字段时默认 0.0 → 永远不格挡（不是 100%）。
 func try_block() -> bool:
 	return Global.get_chance_success(stats.block_chance / 100.0)

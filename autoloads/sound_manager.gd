@@ -13,8 +13,7 @@
 ##   这里每次 play_sound() 都挑一个**当前没在播**的播放器，从而实现音效自然叠加。
 ##
 ## 数据流：
-##   调用方（scenes/component/hitbox_component.gd 命中时、scenes/weapons/range/range_behavior.gd
-##   开火时、各种 UI 按钮按下时）→ SoundManager.play_sound(Sound.XXX)
+##   调用方（回合制战斗里的命中/施法、以及各种 UI 按钮按下时）→ SoundManager.play_sound(Sound.XXX)
 ##     → get_free_stream_player() 从池里取一个空闲播放器
 ##     → 把 sound_dictionary 里对应的 AudioStream 贴上去 → 随机音高 → play()
 ##   全程没有返回值、没有信号，属于"即发即忘"。
