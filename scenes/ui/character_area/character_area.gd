@@ -55,14 +55,21 @@ func _ready() -> void:
 
 
 ## 绑定团队名册并展示（默认展示队长）。
-## 参数 party：团队名册（引用语义，只读）；index：要展示的下标（<0 = 自动找队长）。
-func show_party(party: Array[UnitStats], index := -1) -> void:
-	_party = party
+## 参数 members：团队名册（引用语义，只读；**不要叫 party**，会和下面的 party() 撞名）；
+##   index：要展示的下标（<0 = 自动找队长）。
+func show_party(members: Array[UnitStats], index := -1) -> void:
+	_party = members
 	if index >= 0:
 		_view_index = clampi(index, 0, maxi(0, _party.size() - 1))
 	else:
 		_view_index = _index_of_leader()
 	refresh()
+
+
+## 当前绑定到的团队名册（只读；◀ / ▶ 在这个数组里翻）。
+## 给同屏的面板用：例如属性面板在"这个人还没拜师"时，要提示"队里谁已经拜师了、用 ▶ 切过去"。
+func party() -> Array[UnitStats]:
+	return _party
 
 
 ## 当前展示的角色（◀ / ▶ 切换的那个）。团队为空时退回主角。

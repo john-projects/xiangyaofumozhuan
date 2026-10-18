@@ -54,20 +54,6 @@ offset_bottom = 76.0
 theme_override_font_sizes/font_size = 40
 text = "地图"
 
-[node name="ResultLabel" type="Label" parent="UI"]
-unique_name_in_owner = true
-anchors_preset = 5
-anchor_left = 0.5
-anchor_right = 0.5
-offset_left = -450.0
-offset_top = 92.0
-offset_right = 450.0
-offset_bottom = 132.0
-grow_horizontal = 2
-theme_override_font_sizes/font_size = 30
-text = ""
-horizontal_alignment = 1
-
 [node name="HintLabel" type="Label" parent="UI"]
 unique_name_in_owner = true
 anchors_preset = 7
@@ -117,17 +103,14 @@ text = "返回主菜单"
 [node name="TravelPanel" type="Panel" parent="UI"]
 unique_name_in_owner = true
 visible = false
-anchors_preset = 8
-anchor_left = 0.5
-anchor_top = 0.5
-anchor_right = 0.5
-anchor_bottom = 0.5
-offset_left = -300.0
-offset_top = -230.0
-offset_right = 300.0
-offset_bottom = 230.0
+anchor_left = 0.125
+anchor_top = 1.0
+anchor_right = 0.875
+anchor_bottom = 1.0
+offset_top = -224.0
+offset_bottom = -24.0
 grow_horizontal = 2
-grow_vertical = 2
+grow_vertical = 0
 theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
 
 [node name="Margin" type="MarginContainer" parent="UI/TravelPanel"]
@@ -144,34 +127,59 @@ theme_override_constants/margin_bottom = 24
 
 [node name="VBox" type="VBoxContainer" parent="UI/TravelPanel/Margin"]
 layout_mode = 2
-theme_override_constants/separation = 16
+theme_override_constants/separation = 6
 
-[node name="PanelName" type="Label" parent="UI/TravelPanel/Margin/VBox"]
+[node name="PanelLine" type="HBoxContainer" parent="UI/TravelPanel/Margin/VBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 64)
+layout_mode = 2
+theme_override_constants/separation = 6
+alignment = 1
+
+[node name="PanelName" type="Label" parent="UI/TravelPanel/Margin/VBox/PanelLine"]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_font_sizes/font_size = 30
-text = "NPC"
-horizontal_alignment = 1
+size_flags_vertical = 0
+theme_override_font_sizes/font_size = 26
+modulate = Color(1, 0.79, 0.42, 1)
+text = "NPC："
 
-[node name="PanelDialogue" type="Label" parent="UI/TravelPanel/Margin/VBox"]
+[node name="PanelDialogue" type="Label" parent="UI/TravelPanel/Margin/VBox/PanelLine"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 90)
+custom_minimum_size = Vector2(0, 64)
 layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 0
 theme_override_font_sizes/font_size = 22
 text = "……"
-horizontal_alignment = 1
 autowrap_mode = 3
 
 [node name="PanelButtons" type="VBoxContainer" parent="UI/TravelPanel/Margin/VBox"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_vertical = 3
-theme_override_constants/separation = 12
+theme_override_constants/separation = 2
 alignment = 1
 
 [node name="CloseButton" type="Button" parent="UI/TravelPanel/Margin/VBox"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 52)
+custom_minimum_size = Vector2(0, 40)
 layout_mode = 2
-theme_override_font_sizes/font_size = 24
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 22
 text = "再想想"
+alignment = 0
+
+[node name="ToastStack" type="VBoxContainer" parent="UI"]
+unique_name_in_owner = true
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -360.0
+offset_right = 360.0
+grow_horizontal = 2
+grow_vertical = 1
+mouse_filter = 2
+theme_override_constants/separation = 6

@@ -111,6 +111,21 @@ _cast_aoe()（爆裂火球走的路径）
 
 冷却按**回合**递减（`_next_round()` 对全体单位 `tick_cooldowns()`），所以冷却 3 = 放完隔两个回合能再用。
 
+**防御**：`take_damage()` 里 `defending` 时伤害 ×0.5（下限 1）；这个姿态只持续到**该单位自己的下一个回合开始**
+（`Battle._begin_turn()` 调 `BattleUnit.begin_turn()` 取消），不是永久半伤。
+
+**门派技能**：`SkillData` 里有一组「门派技能」字段（`max_targets` / `hits` / `fixed_damage` / `seal_chance` /
+`silence_*` / `heal_power` / `hot_*` / `buff_*`），资源在 `resources/skills/sect_skills/`。
+多目标技能的 `max_targets > 1` 时，玩家点主目标后由 `_expand_targets()` 自动补齐最近的 N-1 个敌人；
+`hits > 1` 在同一目标上连结算 N 次；`fixed_damage` 的技能伤害取 `flat_damage`（不吃攻击力）；
+辅助技能（`SELF` / `ALLY_SINGLE`）走 `_perform_support()`：治疗、持续回血、增益状态。
+
+**状态**：`BattleUnit.statuses` 是 `{stat, value, turns, per_turn}` 的数组，同种状态合并（数值相加、回合取长）。
+`begin_turn()` 里结算：被 `seal` 封印 → 返回 true（`Battle._begin_turn()` 跳过这次行动）；
+`hot` 按 `per_turn` 回血；其余状态回合 -1、到期移除。`silence` 会让 `can_use_skill()` 返回 false。
+数值加成参与战斗：`damage_pct` / `damage_spell`（百分比）、`spell_damage`（点数）、`crit_rate`（暴击率）、
+`crit_damage_bonus`（暴击倍率，见 `BattleUnit.crit_multiplier()`）。
+
 ## 加技能 / 换素材
 
 **加一个新技能**：复制一个 `.tres` → 改 `id` / `display_name` / 数值 / `target_mode` → 拖进 `battle.tscn` 上

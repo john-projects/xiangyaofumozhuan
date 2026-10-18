@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="SkillData" format=3]
+
+[ext_resource type="Script" path="res://resources/skills/skill_data.gd" id="1_knp7q"]
+
+[resource]
+script = ExtResource("1_knp7q")
+id = "yaowu_miman"
+display_name = "药雾弥漫"
+description = "药雾化毒，造成固定伤害；攻击 2 个目标，30 级 3 个、60 级 4 个。"
+mana_cost = 12.0
+cooldown = 2
+power = 0.0
+crit_bonus = 0.0
+sect_id = "wanyao"
+sect_skill_key = "yaowu_miman"
+max_targets = 2
+fixed_damage = true
+flat_damage = 35.0
+tint = Color(0.6, 1, 0.7, 1)

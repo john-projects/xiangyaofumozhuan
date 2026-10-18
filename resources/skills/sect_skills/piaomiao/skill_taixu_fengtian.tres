@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="SkillData" format=3]
+
+[ext_resource type="Script" path="res://resources/skills/skill_data.gd" id="1_2iahc"]
+
+[resource]
+script = ExtResource("1_2iahc")
+id = "taixu_fengtian"
+display_name = "太虚封天"
+description = "封天诀：对全体敌人各判定一次封印。"
+mana_cost = 20.0
+cooldown = 4
+power = 0.0
+crit_bonus = 0.0
+target_mode = 1
+sect_id = "piaomiao"
+sect_skill_key = "taixu_fengtian"
+seal_chance = 0.6
+tint = Color(0.8, 0.75, 1, 1)

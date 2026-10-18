@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="SkillData" format=3]
+
+[ext_resource type="Script" path="res://resources/skills/skill_data.gd" id="1_8hg4r"]
+
+[resource]
+script = ExtResource("1_8hg4r")
+id = "fengling_jue"
+display_name = "封灵诀"
+description = "封住单个目标的法术 2 回合，使其无法施法。"
+mana_cost = 14.0
+cooldown = 3
+power = 0.0
+crit_bonus = 0.0
+sect_id = "piaomiao"
+sect_skill_key = "fengling_jue"
+silence_chance = 0.75
+silence_turns = 2
+tint = Color(0.78, 0.72, 1, 1)

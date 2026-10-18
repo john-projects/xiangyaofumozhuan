@@ -10,7 +10,8 @@
 | 加速走 | `空格`（复用 `dash` 动作），世界地图里它只是加速，不是冲刺技能 |
 | 与 NPC 交谈 | `E` 或 `Enter`（靠近后底部会出现"按 E 与 XX 交谈"提示） |
 | 打开背包 | `B`（随时，不用先开菜单；再按一次 `B` 或 `ESC` 关掉。背包里没有关闭按钮） |
-| 打开角色属性 | `C`（随时，不用先开菜单；会**同时打开背包**，左属性右背包都能点。再按 `C` / `ESC` / `B` 收摊） |
+| 打开角色属性 | `C`（随时，不用先开菜单；**只开属性面板，不连带背包**。再按 `C` / `ESC` 收掉属性面板） |
+| 属性面板里开背包 | 属性面板开着时按 `B` = **单独**开关背包（左属性右背包，两个都能点、都能用键盘）；再按 `B` 只收背包 |
 | 角色属性里换人 | 点属性面板**或背包**两边的 `◀` / `▶`（两边同步）：属性、装备和"点格子穿给谁"一起换 |
 | 打开操作菜单 | `ESC`（没有任何面板开着时 = 打开菜单） |
 | 菜单 / 面板里选择 | `↑↓` 或 `W S`（也可以直接用鼠标点） |
@@ -203,6 +204,34 @@ func _ready() -> void:
 在 `.tres` 里 `action` 是整数（`AUTO=0 / TALK=1 / TELEPORT=2 / RECRUIT_PARTY=3 / SELL_WEAPONS=4 / JOIN_SECT=5`），
 因为枚举整数值会落盘，**不要调整 `MapNPC.Action` 的成员顺序**。
 
+### 对话面板（`TravelPanel`）
+
+- 位置：**屏幕底部居中**，底边离屏幕 24px（`PANEL_BOTTOM_MARGIN`）；
+- 宽度：**屏幕宽度的 3/4**（tscn 里左右锚点 0.125 / 0.875，窗口拉伸时自动跟着变，居中不变）；
+- **名字和台词同一行**：`PanelLine`（HBox）= 金色的「名字：」+ 台词 Label（自动换行），
+  不再有单独的名字行 —— 面板因此矮了一截（原来名字行 ~56px）；
+- **拜师 / 招募这类"一句话回执"不写进台词行**：走 `WorldMap.show_toast()` ——
+  屏幕**中央居中**的一条小弹窗（**较实的黑底 alpha 0.88** + 金色圆角描边，压在花纹地图上也看得清），停留 `TOAST_TIME = 1.5s` 后淡出；
+  **战斗结算**也走同一个弹窗栈（停留 `result_toast_time = 3s`），而且 GameRoot 给的文案本身就是**多行**：
+  「地图：战斗胜利！」/「获得 N 金币 · 上阵每人经验 +M」/ 每个升级了的队员一行 —— 于是会显示成一叠多条。
+- **可以一次推多条**：`show_toast()` 会把 `\n` 拆成多条，**第一条以屏幕中心为基准，后续依次往下排**
+  （栈是"从中心往下长"的，宽度固定 720、水平居中，每条到时各自淡出消失）；
+  弹窗节点在 `UI` 里被移到最上层，开着对话框/背包时也不会被挡住。
+- 高度：默认 200（`PANEL_MIN_HEIGHT`），按钮多时 `_fit_panel_height()` 会**向上长高**
+  （锚点在底边，只改 `offset_top`；公式 = 按钮总高 + 164），上限视口高度的 85%，
+  所以永远贴底、不会顶出屏幕；
+- 选项按钮**高 34、字号 20**（`PANEL_OPTION_HEIGHT` / `PANEL_OPTION_FONT`，统一在 `_rebuild_panel_buttons()` 里设）：
+  52 高的按钮里文字只占一行，行与行之间会空得很开；`_indent_button()` 同时把上下内边距压到 2px，
+  否则默认主题的 4px 会把按钮最小高度顶到 35+，行距又被字号偷偷撑大；
+- 面板里的按钮**铺满整行**（从对话框左边一直排到右边，文字仍然居左），
+  说明文字/台词也占满整行；
+- **选项文字居左、铺满整行**（从对话框左边开始，`button.alignment = LEFT` + 16px 左内边距 `PANEL_BUTTON_INDENT`；
+  `_indent_button()` 会把 normal/hover/pressed/disabled/focus 五种样式的左边距一起改，鼠标悬停时文字不会跳）；
+  **可点**的选项文字是**金色**（`PANEL_OPTION_COLOR`），置灰的（已入门派/种族不符）保持灰色；
+  「再想想」也是同一套样式；
+- 间距：选项之间 **2px**（`PanelButtons.separation`），台词/选项/关闭按钮之间 **6px**（外层 `VBox.separation`，
+  原来是 16 —— 之前看着"行距没变"其实是这几道 16px 的外层间距，不是选项之间的间距）。
+
 ### 门派（拜师）
 
 - **五个门派**写在 `Global.SECTS`（常量表：名字 / 收哪些种族 / 一句介绍），
@@ -223,7 +252,11 @@ func _ready() -> void:
 - **拜师流程**：跟掌门按 E → 面板列出**整支团队**，每人一行：
   能拜的写「拜入太虚剑宗 · 陆孤鸣（人族）」，种族不符写「行修（仙族）· 太虚剑宗不收仙族」并置灰，
   已经拜过的写「已入星罗教」并置灰 → 点能点的那个 → `sect_join_requested` →
-  `GameRoot.join_sect()` 再判一次（规则仍只有一份）→ 成功后台词换成「陆孤鸣拜入太虚剑宗！」。
+  `GameRoot.join_sect()` 再判一次（规则仍只有一份）→ 成功后**中央弹出一串提示**：
+  第一行「陆孤鸣拜入太虚剑宗！」，接着每学会一个门派技能各一行「学会 太虚剑典（Lv.1）」（1.5s 淡出，见 `WorldMap.show_toast()`），
+  **NPC 台词行不动**。
+  ⚠ 掌门面板里**不再显示**「（只收人族）：门派介绍」那句说明、也不再显示「团队 X 人」那一行，
+  只保留台词 + 队员按钮（按钮间距 6px，比原来的 12px 更紧凑）。
 - **建邺城**的 5 个掌门：`taixu_zhangmen` / `piaomiao_zhangmen` / `zixiao_zhangmen` /
   `wanyao_guzhu` / `xingluo_jiaozhu`（`map_jianyecheng.tres`，位置分散在城四周）。
 
@@ -231,18 +264,52 @@ func _ready() -> void:
 
 每个门派 **2 个被动 + 3 个主动**，表在 `Global.SECT_SKILLS`（一个门派一项，字段见文件注释）。
 
-- **拜入即学会**：`GameRoot.join_sect()` 成功后把 `Global.sect_skill_level_by_character[角色键]` 设为 **1**
-  —— 也就是本门 5 个技能全部 1 级；没拜师 = 0（没学）。
-- **等级**：**一个门派的 5 个技能共享一个等级**（同时学会、一起升级），最高
-  `Global.SECT_SKILL_MAX_LEVEL = 100`；玩家每升 1 级，所有已拜师角色的门派技能等级 +1
-  （`add_player_exp()` 里调 `_bump_sect_skill_levels()`）。
-- **被动真的生效**：`_make_player_team()` 里 `_apply_sect_passives()` 按等级把加成叠到战斗副本上。
+- **拜入即学会**：`GameRoot.join_sect()` 成功后写
+  `Global.sect_skill_levels_by_character[角色键] = { 技能 id: 1, … }` —— 本门 5 个技能**各 1 级**。
+- **等级是每个技能各自的**（`{技能 id: 等级}`），最高 `Global.SECT_SKILL_MAX_LEVEL = 100`；
+  **不再随玩家升级自动涨**，只能在属性面板的「技能」页花**经验 + 金币**升（见下）。
+- **被动真的生效**：`_make_player_team()` 里 `_apply_sect_passives()` **按每个被动自己的等级**把加成叠到战斗副本上。
   目前支持的加成类型：`damage_pct / hp_pct / crit_rate / crit_damage_bonus / speed / defense /
   spell_damage / healing / seal_hit`（对应 `UnitStats` 的字段；暴击率这一项 `BattleUnit.roll_crit()`
   已经会读 `stats.crit_rate`）。
 - **主动技能目前只有数据与说明**（目标数阈值、连击数、封印/封法术、治疗/持续回血、状态参数都写在表里），
-  战斗里还不会自动释放 —— 等技能栏/状态系统接好后再执行。属性面板底部有一行「门派技能 Lv.N：…」，
-  悬停能看到每个技能的效果和**当前等级下的目标数**（`Global.sect_skill_targets()`）。
+  战斗里还不会自动释放 —— 等技能栏/状态系统接好后再执行。
+
+### 技能升级（属性面板 · 门派技能页）
+
+属性面板现在有**三个页签：属性 / 门派技能 / 其他技能**。
+
+**门派技能页**是一张表（仿参考图）：表头 `名称 / 等级 / 类型 / 目标 / 消耗`，
+每个门派技能一行（`太虚剑典　1/100　被动　—　14经验 5金`）。**点某一行 = 选中它**（该行高亮），
+下面出现这个技能的详情块：
+
+```
+【描述】太虚剑意淬体：每级提升 1% 伤害。
+【条件】经验 14 · 金币 5          ← 不够时会写"（经验不足（需要 157））"并变红
+【拥有】经验 5,000 · 金币 1,000
+                              [升级] [升级10次]
+```
+
+**其他技能页**放角色自身的 `UnitStats.skills`（SkillData，没有等级/升级），和门派技能彻底分开。
+
+点「升级」走 `GameRoot.upgrade_sect_skill(character, skill_id, times)`：
+**扣这个角色自己的经验**（`GameRoot.exp_of(character)`，按角色存）+ `Global.coins`，等级 +1（`升级10次` 会一直升到钱/经验不够或满级为止），
+成功后整页重建并显示一行回执（`升级成功：太虚剑典 → Lv.4`）。按钮在经验/金币不够或满级时置灰。
+
+花费曲线（`GameRoot.sect_skill_upgrade_cost(level)`，改系数就能整体调贵/调便宜）：
+
+| 等级 | 升到下一级：经验 | 金币 |
+|---|---|---|
+| Lv.1 | 14 | 5 |
+| Lv.10 | 53 | 15 |
+| Lv.30 | 157 | 43 |
+| Lv.50 | 285 | 79 |
+| Lv.70 | 437 | 123 |
+| Lv.99 | 700 | 201 |
+
+公式：`exp = round(10 + 4L + 0.03L²)`、`coins = round(4 + L + 0.01L²)`。
+**把一个技能从 1 练满 ≈ 30,650 经验 / 8,630 金币**（≈ 玩家等级曲线总经验的 1/8），5 个技能全满 ≈ 15 万经验。　
+⚠ 升级扣的是**这个角色当前等级里存着的经验**（`Global.exp_by_character`），所以冲技能会拖慢**他自己**的升级 —— 这是刻意的取舍。
 
 五个门派的技能（`Global.SECT_SKILLS`，改表即可，不用动代码）：
 
@@ -273,7 +340,7 @@ func _ready() -> void:
 - **点击「加入」之后**：`WorldMap.recruit_requested(stats)` → `GameRoot._on_recruit_requested()`
   → `GameRoot.add_party_member()`：**进团队**；如果上阵位还有空位就**顺手一起上阵**
   （招募的直觉就是"这人来一起打"），上阵位满了就先坐板凳，面板里显示 `[待上阵]`；
-  然后回调 `WorldMap.notify_party_changed()` 把台词换成"XXX 加入了团队！"并重建按钮
+  然后回调 `WorldMap.notify_party_changed()` 在顶部弹一行"XXX 加入了团队！"（1.5s 淡出）并重建按钮
   （那个人随即变成灰的"已在团队中"）；
 - **上阵 / 下阵**：队伍管理页每行的按钮 → `WorldMap.party_deploy_requested` /
   `party_undeploy_requested` → `GameRoot.deploy_member()` / `undeploy_member()`。
@@ -312,7 +379,7 @@ func _ready() -> void:
   （固定种子生成，同一件每次打开都一样；主属性保证随品质递增，不会出现"传说不如史诗"）；
   ⚠ 这些数值目前**只展示、还没参与战斗结算**（战斗读 `UnitStats`），接加成时按同一口径直接加即可；
 - **交互方式**：按 `E` **直接打开商人面板**（`scenes/ui/merchant_panel/`），不经过那个
-  600×460 的小对话框（方格货架铺不下）。所以 `WorldMap._open_panel()` 在最开头就把
+  **底部对话面板**（方格货架铺不下）。所以 `WorldMap._open_panel()` 在最开头就把
   `SELL_WEAPONS` 分流到 `_open_merchant()`，并且**不置 `_panel_open`**；
   ⚠ 开交易会**同时打开背包**（`_open_bag(false, true)`，as_companion = true），
   交易窗口贴**最左边**、背包贴**最右边** —— 关了交易，配件背包一起收（Esc / B / 「关闭」都走 `_close_merchant()`）；
@@ -502,22 +569,24 @@ func _ready() -> void:
 | `scenes/ui/merchant_panel/merchant_panel.tscn` | 商人货架：顶部**居中显示 NPC 名字** + 结果提示 + **6 列方格**（84px 格子，**总共 6×20 = 120 格、一屏 6×10**，货不足补空格子；窗口 610×1038 ≈ 背包的 662×1044；贴屏幕**最左边**；**没有全屏遮罩**）；每格一个图标 + 价格角标（右下）/「持×n」角标（左上），点一下弹**确认框**（`z_index = 100`，买卖共用）。没有台词/金币/按键提示/「关闭」按钮（都按需求移除了） | `buy_requested` → `WorldMap.item_buy_requested`；`sell_requested` → `WorldMap.item_sell_requested` → `GameRoot._on_item_sell_requested()`；`confirm_changed` → WorldMap 同步背包格子焦点；`close_requested` → 关面板回游戏（并收掉并排的背包）；`cancel_confirm()` 给 WorldMap 判 Esc 层级 |
 | `scenes/ui/bag_panel/bag_panel.tscn` | 背包：右下角窗口，标题「背包 n/120」+ 角色区（「◀ 形象(名字牌) ▶ + 左右各 3 个 **96px 装备栏**（头盔/武器/腰带 · 项链/衣服/鞋子）」，形象框 240×308）+ 信息行（**左金币 / 右 MessageLabel**）+ **8 列方格**（120 格，一屏 8×8 可滚动，格子 68px），格子上悬停/聚焦弹属性卡、**点一下 = 卖（交易中）/ 穿给当前角色（平时）**，装备栏点一下 = 从当前角色身上脱 | `item_activated` → `WorldMap._on_bag_item_activated()`（交易中→弹卖确认框；平时→`equip_requested(current_character, item)`）；`unequip_requested` → `WorldMap.unequip_requested(current_character, slot)` → `GameRoot._on_unequip_requested()`；`close_requested` → 关面板（当前没有按钮发它：关闭靠 Esc / B）；`set_slot_focus_enabled()` 供 WorldMap 在「确认框弹出时」临时收焦点；◀ / ▶ 只在面板内部翻团队成员（并刷新装备栏）；`current_character()` 给 WorldMap 问"现在穿给谁" |
 | `scenes/ui/character_area/character_area.tscn` | **角色形象区**（属性面板上半部分用的复用场景，外观和背包那块**逐像素一致**）：◀ 形象 240×308（名字牌）▶ + 左右各 3 个 **96px 装备栏**（头盔/武器/腰带 · 项链/衣服/鞋子）。装备栏悬停弹属性卡、点已穿的 = 请求脱下（`unequip_requested`，判定仍在 `GameRoot.unequip_slot()`）；装备栏是鼠标专用、不进焦点环（背包同屏时那边已有一份可点的） | `show_party(party)` / `current_character()` / `show_character()` / `step_player(±1)` / `refresh()` / `focus_ring()`（只有 ◀ / ▶）；发 `character_changed` / `unequip_requested` |
-| `scenes/ui/stats_panel/stats_panel.tscn` | 角色属性：和背包**同宽 662**、贴屏幕**左下角**（背包在右下角，天然不重叠）的窗口（**高度跟背包一致**：打开时由 WorldMap 把背包的实际高度传进来；两页内容固定、**完整展示、没有滚动条**）。**上半部分 = 上面那个 `CharacterArea`**（形象 + 六个装备栏，和背包完全一致）；它下面是一排**页签「属性 / 技能」**（ButtonGroup 互斥，换页只重建下半部分，上半部分和暂存加点都保留）。**属性页**：仿"人物属性"的**固定两列表格**：左列 名称 / 种族 / 气血 / 魔法 / 伤害 / 法伤 / 防御 / 速度，右列 等级 / 门派 / 体质 / 力量 / 敏捷 / 魔力 / 耐力 / 自由点数（基础属性带 **＋ / －**，自由点数右边 **确认加点**）；**经验单独占一行**；再隔一段直接展示 输出（暴击率 / 暴击伤害 / 封印命中率 / 治疗量）与抗性（躲避 / 格挡率 / 格挡值 / 抗暴击率 / 爆伤减免 / 抵抗封印）；底部一行门派技能摘要。**技能页**：按分组列出该角色学过的一切 ——「<门派> · 门派技能 Lv.N」下是 2 被动 + 3 主动（名字/等级/说明，主动带**当前目标数**），「角色技能」下是 `UnitStats.skills` 里配的 SkillData。**没有全屏遮罩** | `show_stats(party)` / `current_character()` / `show_character()` / `refresh()` / `focus_ring()`（页签 + ◀ ▶ + ＋ － + 确认加点）/ `set_linked_height()` / `points_spent` / `unequip_requested`；**加减只改面板里的暂存差值**（`_pending`），点「确认加点」才走 `GameRoot.apply_attr_deltas()` 一次性落盘；换人丢弃暂存、保留当前页签；◀ / ▶ 只改"看谁"并发 `character_view_changed`（WorldMap 让背包跟着切）；只读 `UnitStats`、`Global.player_level/player_exp`、`GameRoot.sect_of()` / `sect_skill_level()` / `derived_stats()` / `equipment_in` |
+| `scenes/ui/stats_panel/stats_panel.tscn` | 角色属性：和背包**同宽 662**、贴屏幕**左下角**（背包在右下角，天然不重叠）的窗口。**高度始终等于背包的高度**：WorldMap 打开时调 `BagPanel.refresh_panel_height()`（背包没显示也能先算出"该有多高"），所以**单开属性面板和背着背包时一样高**；高度**只按属性页算一次并缓存** —— 切到技能页不会变。下半部分是**滚动层**，只有技能页内容放不下时才出现滚动条（属性页永远不滚；算高度时留了 `CONTENT_SLACK = 8px` 余量，避免取整导致 1px 溢出的假滚动条）。**上半部分 = 上面那个 `CharacterArea`**（形象 + 六个装备栏，和背包完全一致）；它下面是一排**页签「属性 / 门派技能 / 其他技能」**（ButtonGroup 互斥，换页只重建下半部分，上半部分和暂存加点都保留；每次打开默认回到属性页）。**属性页**：仿"人物属性"的**固定两列表格**：左列 名称 / 种族 / 气血 / 魔法 / 伤害 / 法伤 / 防御 / 速度，右列 等级 / 门派 / 体质 / 力量 / 敏捷 / 魔力 / 耐力 / 自由点数（基础属性带 **＋ / －**，自由点数右边 **确认加点**）；**经验单独占一行、右边是「升级」按钮**（10 级起手动升级：扣经验升一级，成功后弹一条提示）；再隔一段直接展示 输出（暴击率 / 暴击伤害 / 封印命中率 / 治疗量）与抗性（躲避 / 格挡率 / 格挡值 / 抗暴击率 / 爆伤减免 / 抵抗封印）。**门派技能页**：一张技能表（`名称 / 等级 / 类型 / 目标 / 消耗`，每行可点），点中某行 → 下面显示该技能的「描述 / 条件（升级花费）/ 拥有」+「升级 / 升级10次」按钮。**其他技能页**：`UnitStats.skills` 里配的 SkillData（和门派技能分开）。**没有全屏遮罩** | `show_stats(party)` / `current_character()` / `show_character()` / `refresh()` / `focus_ring()`（页签 + ◀ ▶ + ＋ － + 确认加点）/ `set_linked_height()` / `points_spent` / `unequip_requested`；**加减只改面板里的暂存差值**（`_pending`），点「确认加点」才走 `GameRoot.apply_attr_deltas()` 一次性落盘；换人丢弃暂存、保留当前页签；◀ / ▶ 只改"看谁"并发 `character_view_changed`（WorldMap 让背包跟着切）；只读 `UnitStats`、`GameRoot.level_of()/exp_of()`、`GameRoot.sect_of()` / `sect_skill_level()` / `derived_stats()` / `equipment_in` |
 
 **Esc 的逐级语义**（`WorldMap._unhandled_input()` 里的状态机，顺序即优先级）：
 
 ```
 没有任何 UI          → Esc 打开操作菜单
 操作菜单开着          → Esc 关掉菜单，回游戏
-背包开着             → Esc（或 B）关掉背包；从菜单进来的退回菜单，按 B 开的直接回游戏
-角色属性面板开着      → Esc / C / B 收摊（**连并排的背包一起收**）；从菜单进来的退回菜单
+背包开着             → Esc（或 B）关掉背包；从菜单进来的退回菜单，按 B 开的直接回游戏；
+                       C 会在旁边再打开角色属性（对齐到背包当前看的人）
+角色属性面板开着      → Esc / C 只收属性面板（**背包若开着就留着**）；B 单独开关背包
 商人交易中            → Esc 先关确认框（如果开着），再按才关整个交易（并收掉并排的背包）
 队伍管理页开着        → Esc 退回操作菜单（上一级），面板没开时才会开菜单
 NPC 对话面板开着      → Esc 关掉面板（不会顺手把菜单也打开）
 ```
 
-> ⚠ 顺序即优先级：**交易 / 属性面板都排在背包前面** —— 它们打开时背包是"配件"（一起开、一起关），
-> 谁在前谁说了算（见 `WorldMap._unhandled_input()` 里的分支顺序与 `_bag_with_shop` / `_bag_with_stats`）。
+> ⚠ 顺序即优先级：**交易 / 属性面板都排在背包前面** —— 交易打开时背包是"配件"（一起开、一起关）；
+> 属性面板则和背包**完全独立**（各自开关，同时开着时共用一份焦点环）。
+> 谁在前谁说了算（见 `WorldMap._unhandled_input()` 里的分支顺序与 `_bag_with_shop`）。
 >
 > ⚠ 背包那一支**不走 `_overlay_nav()`**：背包的 WASD 归 `BagPanel` 自己管（网格语义），
 > `WorldMap` 只处理 Esc / B。角色属性面板是只读的，只接 Esc / C / B，其余输入忽略；

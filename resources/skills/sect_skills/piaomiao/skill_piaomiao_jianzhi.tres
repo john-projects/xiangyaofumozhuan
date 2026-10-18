@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="SkillData" format=3]
+
+[ext_resource type="Script" path="res://resources/skills/skill_data.gd" id="1_o0a36"]
+
+[resource]
+script = ExtResource("1_o0a36")
+id = "piaomiao_jianzhi"
+display_name = "缥缈剑指"
+description = "剑指连点，造成固定伤害；攻击 2 个目标，30 级后 3 个。"
+mana_cost = 12.0
+cooldown = 2
+power = 0.0
+crit_bonus = 0.05
+sect_id = "piaomiao"
+sect_skill_key = "piaomiao_jianzhi"
+max_targets = 2
+fixed_damage = true
+flat_damage = 40.0
+tint = Color(0.85, 0.8, 1, 1)

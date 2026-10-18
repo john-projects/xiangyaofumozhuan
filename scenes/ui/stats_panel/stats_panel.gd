@@ -44,6 +44,9 @@ signal unequip_requested(slot_type: int)
 ## （点数花完/暂存清空时按钮的可用状态变了）。
 signal points_spent
 
+## 手动升级的结果（成功/失败）→ WorldMap 用它弹一条「一行弹窗」。
+signal level_up_reported(message: String)
+
 ## 面板宽度：和背包（BagPanel 的 662）一致。
 const PANEL_WIDTH := 662.0
 ## 离屏幕右边/下边的留白（和背包/商人一致）。
@@ -57,6 +60,15 @@ const VALUE_HEIGHT := 26.0
 const GRID_V_SEPARATION := 4
 const LABEL_WIDTH := 62.0
 const ACTION_WIDTH := 70.0
+## 按内容算高度时多留的余量。
+## 为什么需要：容器/字体取整会让实际排布比最小尺寸多出 1~2px，
+## 不留余量的话属性页会莫名其妙冒出 1px 的滚动条（之前就踩过）。
+const CONTENT_SLACK := 8.0
+## 门派技能表的列宽（名称列用 0 = 占满剩余宽度；其余是固定宽）。
+const SKILL_COL_LEVEL := 72.0
+const SKILL_COL_TYPE := 52.0
+const SKILL_COL_TARGET := 64.0
+const SKILL_COL_COST := 118.0
 ## 格子种类：没有按钮 / 某个基础属性（0..4）/ 确认加点按钮。
 const CELL_NONE := -1
 const CELL_CONFIRM := -2
@@ -67,12 +79,19 @@ const CELL_CONFIRM := -2
 @onready var content: VBoxContainer = %Content
 @onready var attr_tab: Button = %AttrTab
 @onready var skill_tab: Button = %SkillTab
+@onready var other_tab: Button = %OtherTab
+## 下半部分放在这个滚动容器里：页签内容比面板高时才出现滚动条（正常情况看不到）。
+@onready var scroll: ScrollContainer = %Scroll
 @onready var stats_box: VBoxContainer = %StatsBox
 
-## 当前页：0 = 属性（默认），1 = 技能。
-## 两个页共用同一块下半部分区域（stats_box），切页就是清空重建；
-## 上半部分（形象/装备栏）两页都保留 —— 换装备时不用切回属性页。
+## 当前页：0 = 属性，1 = 门派技能，2 = 其他技能。
+## 三页共用同一块下半部分区域（stats_box），切页就是清空重建；
+## 上半部分（形象/装备栏）三页都保留 —— 换装备时不用切回属性页。
 var _page := 0
+## 「属性页」需要多高（标题 + 形象区 + 页签 + 属性内容 + 上下留白）。
+## 打开时量一次并缓存：之后无论在属性页还是技能页，**面板高度都用这个值**，
+## 所以切页签时窗口不会忽高忽低；技能页内容若超了，就在下半部分里滚动。
+var _attributes_height := 0.0
 
 ## 网格里留下的引用（都按 ATTR_KEYS 下标索引，加点后就地刷新，不重建节点）。
 var _attr_value_labels: Array[Label] = []
@@ -90,30 +109,39 @@ var _pending_character: UnitStats = null
 ## 0 = 没指定，按内容自身需要的高度。
 var _linked_height := 0.0
 
+## 技能页的升级回执（"升级成功：太虚剑典 → Lv.2" / 失败原因）；切页/换人时清掉。
+var _skill_message := ""
+## 门派技能页里**当前选中**的那一行（0 起）：下半部分显示它的描述/花费/升级按钮。
+var _selected_skill := 0
+
 func _ready() -> void:
 	hide()
 	# 换人 / 脱下装备的事件都来自上半部分，这里只负责转发给 WorldMap
 	character_area.character_changed.connect(_on_area_character_changed)
 	character_area.unequip_requested.connect(func(slot_type: int) -> void: unequip_requested.emit(slot_type))
-	# 两个页签互斥：ButtonGroup 保证同一时刻只有一个处于按下状态（视觉上就是"当前页"）
+	# 三个页签互斥：ButtonGroup 保证同一时刻只有一个处于按下状态（视觉上就是"当前页"）
 	var group := ButtonGroup.new()
 	attr_tab.button_group = group
 	skill_tab.button_group = group
+	other_tab.button_group = group
 	attr_tab.pressed.connect(func() -> void: _switch_page(0))
 	skill_tab.pressed.connect(func() -> void: _switch_page(1))
+	other_tab.pressed.connect(func() -> void: _switch_page(2))
 	_apply_geometry()
 	get_viewport().size_changed.connect(_apply_geometry)
 
 
-## 切页：0 = 属性，1 = 技能。
+## 切页：0 = 属性，1 = 门派技能，2 = 其他技能。
 ## 参数 page：目标页。
-## 副作用：改 _page、同步两个页签的按下状态、重建下半部分、重算高度（两页内容高度不同）。
+## 副作用：改 _page、同步三个页签的按下状态、重建下半部分、重算高度（各页内容高度不同）。
 func _switch_page(page: int) -> void:
 	if page == _page:
 		return
 	_page = page
+	_skill_message = ""       # 换页就把上一条升级回执清掉，免得串到别的页/别人身上
 	attr_tab.button_pressed = page == 0
 	skill_tab.button_pressed = page == 1
+	other_tab.button_pressed = page == 2
 	SoundManager.play_sound(SoundManager.Sound.UI)
 	_rebuild()
 	_apply_geometry()
@@ -128,9 +156,15 @@ func set_linked_height(value: float) -> void:
 
 
 ## 打开面板并展示团队里"当前主角"的属性。
-func show_stats(party: Array[UnitStats]) -> void:
+## 参数 members：团队名册（只读；**别叫 party**，模板里那类警告就是这么来的）。
+## ⚠ 每次打开都回到「属性」页：面板高度是按属性页算的，先量到它再切页就不会跳高度。
+func show_stats(members: Array[UnitStats]) -> void:
 	show()
-	character_area.show_party(party)
+	_page = 0
+	attr_tab.button_pressed = true
+	skill_tab.button_pressed = false
+	other_tab.button_pressed = false
+	character_area.show_party(members)
 	_rebuild()
 	_apply_geometry()
 
@@ -140,11 +174,11 @@ func current_character() -> UnitStats:
 	return character_area.current_character()
 
 
-## 当前可以聚焦的控件：两个页签 + ◀ / ▶ + （＋ / －）× 5 + 确认加点（后两者只在属性页有）。
+## 当前可以聚焦的控件：三个页签 + ◀ / ▶ + （＋ / －）× 5 + 确认加点（后两者只在属性页有）。
 ## 装备栏**不进环**：背包同屏，那边已经有一份可点的装备栏。
 func focus_ring() -> Array[Control]:
 	var out: Array[Control] = []
-	for button in [attr_tab, skill_tab]:
+	for button in [attr_tab, skill_tab, other_tab]:
 		if button != null and is_instance_valid(button):
 			out.append(button)
 	out.append_array(character_area.focus_ring())
@@ -198,6 +232,7 @@ func _rebuild() -> void:
 	if character != _pending_character:
 		_pending = [0, 0, 0, 0, 0]
 		_pending_character = character
+		_skill_message = ""
 
 	_clear(stats_box)
 	_attr_value_labels.clear()
@@ -218,15 +253,17 @@ func _rebuild() -> void:
 		stats_box.add_child(note)
 		return
 
-	# 技能页：同一块区域换成"已学技能"列表（上半部分形象/装备栏保留）
+	# 门派技能页 / 其他技能页：同一块区域换成技能列表（上半部分形象/装备栏保留）
 	if _page == 1:
 		_build_skills_page(character)
+		return
+	if _page == 2:
+		_build_other_skills_page(character)
 		return
 
 	var derived := GameRoot.derived_stats(character)
 	_build_stats_grid(character, derived)
 	_build_sections(character, derived)
-	_add_sect_skills_line(character)
 	_refresh_attr_values()
 
 
@@ -242,17 +279,27 @@ func _build_stats_grid(character: UnitStats, derived: Dictionary) -> void:
 	grid.add_theme_constant_override("v_separation", GRID_V_SEPARATION)
 	stats_box.add_child(grid)
 
+	# 等级/经验都是**这个角色自己的**（团队模式下按人练级，见 GameRoot.add_exp）
+	var level := GameRoot.level_of(character)
+	var cur_exp := GameRoot.exp_of(character)
 	var exp_text := "已满级"
-	if Global.player_level < GameRoot.MAX_LEVEL:
-		var need := GameRoot.exp_to_next(Global.player_level)
-		var pct := int(roundf(100.0 * Global.player_exp / maxf(1.0, need)))
-		exp_text = "%d / %d（%d%%）" % [Global.player_exp, need, pct]
+	if level >= GameRoot.MAX_LEVEL:
+		# 满级后经验照样能攒（用来升门派技能），所以把数字显示出来而不是只写"已满级"
+		exp_text = "%s 经验（已满级，可用于升技能）" % Global.format_stat(cur_exp)
+	else:
+		var need := GameRoot.exp_to_next(level)
+		if cur_exp >= need:
+			# 10 级起不再自动升级：经验够了就提示玩家去点右边的「升级」
+			exp_text = "%s / %s（可升级）" % [Global.format_stat(cur_exp), Global.format_stat(need)]
+		else:
+			var pct := int(roundf(100.0 * cur_exp / maxf(1.0, need)))
+			exp_text = "%s / %s（%d%%）" % [Global.format_stat(cur_exp), Global.format_stat(need), pct]
 	var sect_id := GameRoot.sect_of(character)
 	var sect_text := Global.sect_name(sect_id) if not sect_id.is_empty() else "无门派"
 
 	# 第 1 行：名称 / 等级
 	_add_grid_row(grid, "名称", character.name, CELL_NONE,
-			"等级", "%d / %d" % [Global.player_level, GameRoot.MAX_LEVEL], CELL_NONE)
+			"等级", "%d / %d" % [level, GameRoot.MAX_LEVEL], CELL_NONE)
 	# 第 2 行：种族 / 门派
 	_add_grid_row(grid, "种族", character.race_name(), CELL_NONE, "门派", sect_text, CELL_NONE)
 	# 第 3 行：气血 / 体质（＋－）
@@ -275,7 +322,7 @@ func _build_stats_grid(character: UnitStats, derived: Dictionary) -> void:
 			"自由点数", "%d 点" % _free_display(), CELL_CONFIRM, "speed")
 	_free_label = last_row[1]
 
-	# 经验：单独占一行（放表格里会挤掉法伤/自由点数的位置）
+	# 经验：单独占一行（放表格里会挤掉法伤/自由点数的位置）；右边是**手动升级按钮**
 	var exp_row := HBoxContainer.new()
 	exp_row.name = "ExpRow"
 	exp_row.add_theme_constant_override("separation", 8)
@@ -283,7 +330,39 @@ func _build_stats_grid(character: UnitStats, derived: Dictionary) -> void:
 	var exp_box := _make_grid_value(exp_text)
 	exp_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	exp_row.add_child(exp_box)
+	exp_row.add_child(_make_level_up_button(character))
 	stats_box.add_child(exp_row)
+
+
+## 经验条右侧的「升级」按钮：经验够（且没满级）才能点，点一下扣经验升一级。
+## 参数 character：当前展示的角色（升级只升他）。
+func _make_level_up_button(character: UnitStats) -> Button:
+	var button := Button.new()
+	button.name = "LevelUpButton"
+	button.text = "升级"
+	button.custom_minimum_size = Vector2(96, VALUE_HEIGHT)
+	button.add_theme_font_size_override("font_size", 14)
+	var why := GameRoot.upgrade_level_why(character)
+	button.disabled = not why.is_empty()
+	button.tooltip_text = why if not why.is_empty() else "消耗 %d 经验升一级" % GameRoot.exp_to_next(GameRoot.level_of(character))
+	button.pressed.connect(_on_level_up_pressed)
+	return button
+
+
+## 点了「升级」：走 GameRoot.upgrade_level()（唯一写入口），成功后弹一条提示并重建面板。
+func _on_level_up_pressed() -> void:
+	var character := current_character()
+	if character == null:
+		return
+	var result := GameRoot.upgrade_level(character)
+	if bool(result["ok"]):
+		SoundManager.play_sound(SoundManager.Sound.UI)
+		level_up_reported.emit("%s 升到 Lv.%d（获得 %d 点自由属性）" % [
+				character.name, int(result["level"]), GameRoot.ATTR_FREE_PER_LEVEL])
+	else:
+		level_up_reported.emit("升级失败：%s" % String(result["why"]))
+	_rebuild()
+	_apply_geometry()
 
 
 ## 加一行表格。左右各一个"名字 + 格子"；格子 = 值框 + 按钮区（kind 决定按钮）。
@@ -443,52 +522,283 @@ func _build_sections(character: UnitStats, derived: Dictionary) -> void:
 	row.add_child(defense_col)
 
 
-## 门派技能一行摘要（5 个技能名 + 共享的等级），悬停看每个技能的说明。## 为什么只做一行：面板已经排满，5 个技能各占一行会把它撑高、破坏"不滚动"的布局；
-##   技能名本身就能看出是哪个门派，完整效果放在 tooltip 里。
-func _add_sect_skills_line(character: UnitStats) -> void:
-	var label := Label.new()
-	label.name = "SectSkillsLabel"
-	label.text = GameRoot.sect_skill_summary(character)
-	label.tooltip_text = GameRoot.sect_skill_details(character)
-	label.add_theme_font_size_override("font_size", 14)
-	label.modulate = Color(1, 0.92, 0.7, 0.9)
-	label.clip_text = true
-	label.mouse_filter = Control.MOUSE_FILTER_STOP   # 默认 IGNORE，设 STOP 才能触发 tooltip
-	stats_box.add_child(label)
+# ── 门派技能页（表格 + 选中后看描述/升级，仿"技能列表"面板）──────────────
 
-
-# ── 技能页 ────────────────────────────────────────────────────────────────
-
-## 造"技能"页：列出当前角色学过的所有技能（和"属性"页共用下半部分）。
-## 来源两块：
-##   · 门派技能：拜师时学到的 2 被动 + 3 主动（共享一个等级），数据在 Global.SECT_SKILLS；
-##   · 角色技能：UnitStats.skills 里配置的 SkillData。
-## 每个技能占两行：标题（【被动】名字 Lv.N）+ 说明（截断，悬停看全）。
+## 造「门派技能」页：上面是一张技能表（名称 / 等级 / 类型 / 目标 / 消耗），
+## 点某一行就在下面显示它的**描述 + 升级条件 + 拥有**，以及「升级 / 升级10次」按钮。
+## 参数 character：当前展示的角色。
 func _build_skills_page(character: UnitStats) -> void:
 	var sect_id := GameRoot.sect_of(character)
 	if sect_id.is_empty():
 		_add_skills_header("门派技能")
 		_add_skills_note("还没有拜入门派 —— 去建邺城找五位掌门拜师，入门即学会本门 5 个技能。")
-	else:
-		var level := GameRoot.sect_skill_level(character)
-		_add_skills_header("%s · 门派技能 Lv.%d" % [Global.sect_name(sect_id), level])
-		for skill in Global.sect_passives(sect_id):
-			_add_skill_row("被动", String(skill["name"]), level, String(skill["desc"]))
-		for skill in Global.sect_actives(sect_id):
-			var targets := ""
-			if skill.has("targets") or bool(skill.get("targets_all", false)):
-				targets = "（当前目标：%s）" % Global.sect_skill_targets_text(skill, level)
-			_add_skill_row("主动", String(skill["name"]), level, String(skill["desc"]) + targets)
+		# 面板默认看队长；队长没拜师时，提示"队里谁拜了师、用 ▶ 切过去"，否则玩家会以为没有升级入口
+		var hint := _party_member_with_sect()
+		if not hint.is_empty():
+			_add_skills_note(hint)
+		return
 
+	var skills: Array = Global.sect_passives(sect_id) + Global.sect_actives(sect_id)
+	_selected_skill = clampi(_selected_skill, 0, maxi(0, skills.size() - 1))
+	_add_skills_header("%s · 门派技能" % Global.sect_name(sect_id))
+	stats_box.add_child(_make_skill_table_header())
+	for i in skills.size():
+		stats_box.add_child(_make_skill_table_row(i, skills[i], character, i == _selected_skill))
+	_add_skill_detail(skills[_selected_skill], character)
+	if not _skill_message.is_empty():
+		_add_skills_note(_skill_message)
+
+
+## 造「其他技能」页：`UnitStats.skills` 里配置的 SkillData（不属于门派技能）。
+## 参数 character：当前展示的角色。
+func _build_other_skills_page(character: UnitStats) -> void:
+	_add_skills_header("其他技能")
+	_add_skills_note("这些是角色自身配置的技能（UnitStats.skills），不随门派变化，也没有升级。")
 	if character.skills.is_empty():
-		_add_skills_header("角色技能")
 		_add_skills_note("暂无（这个角色的 UnitStats.skills 里没有配技能）。")
+		return
+	for skill in character.skills:
+		if skill == null:
+			continue
+		_add_plain_skill_row("技能", skill.display_name, skill.description)
+
+
+## 技能表的表头：名称 / 等级 / 类型 / 目标 / 消耗。
+func _make_skill_table_header() -> Control:
+	var row := HBoxContainer.new()
+	row.name = "SkillTableHeader"
+	row.add_theme_constant_override("separation", 6)
+	row.add_child(_make_table_cell("名称", 0, 15, Color(1, 0.86, 0.55, 0.9)))
+	row.add_child(_make_table_cell("等级", SKILL_COL_LEVEL, 15, Color(1, 0.86, 0.55, 0.9)))
+	row.add_child(_make_table_cell("类型", SKILL_COL_TYPE, 15, Color(1, 0.86, 0.55, 0.9)))
+	row.add_child(_make_table_cell("目标", SKILL_COL_TARGET, 15, Color(1, 0.86, 0.55, 0.9)))
+	row.add_child(_make_table_cell("消耗", SKILL_COL_COST, 15, Color(1, 0.86, 0.55, 0.9)))
+	return row
+
+
+## 技能表的一行。整行可点：点了就选中它，下面显示它的描述/升级按钮。
+## 参数 index：第几行；skill：技能字典；character：当前角色；selected：是不是当前选中行。
+func _make_skill_table_row(index: int, skill: Dictionary, character: UnitStats, selected: bool) -> Control:
+	var skill_id := String(skill["id"])
+	var level := GameRoot.sect_skill_level(character, skill_id)
+	var box := PanelContainer.new()
+	box.name = "SkillRow_%s" % skill_id
+	box.mouse_filter = Control.MOUSE_FILTER_STOP
+	box.add_theme_stylebox_override("panel", _skill_row_style(selected))
+	box.gui_input.connect(_on_skill_row_input.bind(index))
+	box.tooltip_text = "点一下选中这个技能"
+
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 6)
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var name_color := Color(0.95, 0.82, 0.45) if selected else Color(1, 1, 1, 0.92)
+	row.add_child(_make_table_cell(String(skill["name"]), 0, 16, name_color))
+	row.add_child(_make_table_cell("%d/%d" % [level, Global.SECT_SKILL_MAX_LEVEL], SKILL_COL_LEVEL, 14))
+	row.add_child(_make_table_cell("主动" if skill.has("targets") or bool(skill.get("targets_all", false)) else "被动",
+			SKILL_COL_TYPE, 14))
+	row.add_child(_make_table_cell(_skill_target_text(skill, level), SKILL_COL_TARGET, 14))
+	row.add_child(_make_table_cell(_skill_cost_text(level), SKILL_COL_COST, 13))
+	box.add_child(row)
+	return box
+
+
+## 表格里的一格：固定宽度的 Label（width = 0 表示占满剩余宽度）。
+func _make_table_cell(text: String, width: float, font_size: int, color := Color(1, 1, 1, 0.85)) -> Label:
+	var label := Label.new()
+	label.text = text
+	label.add_theme_font_size_override("font_size", font_size)
+	label.modulate = color
+	label.clip_text = true
+	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	if width <= 0.0:
+		label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	else:
-		_add_skills_header("角色技能")
-		for skill in character.skills:
-			if skill == null:
-				continue
-			_add_skill_row("技能", skill.display_name, 0, skill.description)
+		label.custom_minimum_size = Vector2(width, 0)
+	return label
+
+
+## 技能行的底板样式：选中行金色边框 + 浅底，未选中行透明底（只靠 hover 提示可点）。
+func _skill_row_style(selected: bool) -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.18, 0.16, 0.12, 0.9) if selected else Color(0.10, 0.10, 0.12, 0.55)
+	style.border_color = Color(0.95, 0.80, 0.42, 0.95) if selected else Color(0.30, 0.27, 0.22, 0.8)
+	style.set_border_width_all(1)
+	style.set_corner_radius_all(4)
+	style.content_margin_left = 8
+	style.content_margin_right = 8
+	style.content_margin_top = 4
+	style.content_margin_bottom = 4
+	return style
+
+
+## 点了技能表的某一行：切换选中项并重建（下面那块描述/按钮跟着换）。
+func _on_skill_row_input(event: InputEvent, index: int) -> void:
+	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		_select_skill(index)
+
+
+## 选中第 index 个门派技能。
+func _select_skill(index: int) -> void:
+	if index == _selected_skill:
+		return
+	_selected_skill = index
+	_skill_message = ""
+	_rebuild()
+	_apply_geometry()
+
+
+## 表格"目标"列的文字：被动写「—」，群体写「全体」，其它写「N 个」。
+func _skill_target_text(skill: Dictionary, level: int) -> String:
+	if not (skill.has("targets") or bool(skill.get("targets_all", false))):
+		return "—"
+	return Global.sect_skill_targets_text(skill, level)
+
+
+## 表格"消耗"列的文字（经验 + 金币 / 满级）。只跟等级有关，所以只收 level。
+func _skill_cost_text(level: int) -> String:
+	if level >= Global.SECT_SKILL_MAX_LEVEL:
+		return "满级"
+	var cost := GameRoot.sect_skill_upgrade_cost(level)
+	return "%d经验 %d金" % [int(cost["exp"]), int(cost["coins"])]
+
+
+## 选中技能后，下面那一块：描述 + 升级条件 + 拥有 + 「升级 / 升级10次」。
+## 参数 skill：选中的技能字典；character：当前角色。
+func _add_skill_detail(skill: Dictionary, character: UnitStats) -> void:
+	var skill_id := String(skill["id"])
+	var level := GameRoot.sect_skill_level(character, skill_id)
+	var box := PanelContainer.new()
+	box.name = "SkillDetail"
+	box.add_theme_stylebox_override("panel", _skill_row_style(true))
+	var box_content := VBoxContainer.new()
+	box_content.add_theme_constant_override("separation", 4)
+	box.add_child(box_content)
+
+	var title := Label.new()
+	title.text = "%s　Lv.%d/%d　%s" % [skill["name"], level, Global.SECT_SKILL_MAX_LEVEL,
+			"主动" if skill.has("targets") or bool(skill.get("targets_all", false)) else "被动"]
+	title.add_theme_font_size_override("font_size", 16)
+	title.modulate = Color(0.95, 0.82, 0.45)
+	box_content.add_child(title)
+
+	var desc := Label.new()
+	desc.text = "【描述】" + String(skill["desc"])
+	desc.add_theme_font_size_override("font_size", 14)
+	desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	box_content.add_child(desc)
+
+	var why := GameRoot.sect_skill_upgrade_why(character, skill_id)
+	var cond := Label.new()
+	if level >= Global.SECT_SKILL_MAX_LEVEL:
+		cond.text = "【条件】已满级"
+		cond.modulate = Color(1, 0.86, 0.55, 0.9)
+	else:
+		var cost := GameRoot.sect_skill_upgrade_cost(level)
+		cond.text = "【条件】经验 %d · 金币 %d%s" % [int(cost["exp"]), int(cost["coins"]),
+				"" if why.is_empty() else "　（%s）" % why]
+		cond.modulate = Color(1, 1, 1, 0.75) if why.is_empty() else Color(1, 0.6, 0.5, 0.9)
+	cond.add_theme_font_size_override("font_size", 13)
+	box_content.add_child(cond)
+
+	var owned := Label.new()
+	owned.text = "【拥有】经验 %s · 金币 %s" % [
+			Global.format_stat(GameRoot.exp_of(character)), Global.format_stat(Global.coins)]
+	owned.add_theme_font_size_override("font_size", 13)
+	owned.modulate = Color(1, 1, 1, 0.6)
+	box_content.add_child(owned)
+
+	var buttons := HBoxContainer.new()
+	buttons.alignment = BoxContainer.ALIGNMENT_END
+	buttons.add_theme_constant_override("separation", 8)
+	var up := _make_upgrade_button("升级", skill_id, String(skill["name"]), 1, character)
+	var up10 := _make_upgrade_button("升级10次", skill_id, String(skill["name"]), 10, character)
+	up.custom_minimum_size = Vector2(96, 30)
+	up10.custom_minimum_size = Vector2(96, 30)
+	buttons.add_child(up)
+	buttons.add_child(up10)
+	box_content.add_child(buttons)
+
+	stats_box.add_child(box)
+
+
+
+
+
+## 当前角色没拜师时，找队里**已经拜师**的那个人，拼一句提示（"队里的陆孤鸣已拜入太虚剑宗，用 ▶ 切过去"）。
+## 返回空串 = 队里也没人拜师。
+func _party_member_with_sect() -> String:
+	var current := current_character()
+	for member in character_area.party():
+		if member == null or member == current:
+			continue
+		var sect_id := GameRoot.sect_of(member)
+		if not sect_id.is_empty():
+			return "（队里的 %s 已拜入%s —— 用 ◀ / ▶ 切到他那个人，就能在这里升级他的技能）" % [
+					member.name, Global.sect_name(sect_id)]
+	return ""
+
+
+## 技能页里的一条**角色技能**（UnitStats.skills 里的 SkillData，没有等级/升级）。
+## 参数 skill_name：技能名（**不要叫 name** —— 那会遮蔽 Node.name，编辑器会警告）。
+func _add_plain_skill_row(tag: String, skill_name: String, desc: String) -> void:
+	var row := VBoxContainer.new()
+	row.add_theme_constant_override("separation", 2)
+	var head := HBoxContainer.new()
+	head.add_theme_constant_override("separation", 8)
+	head.add_child(_make_tag_label(tag))
+	var name_label := Label.new()
+	name_label.text = skill_name
+	name_label.add_theme_font_size_override("font_size", 16)
+	name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	head.add_child(name_label)
+	row.add_child(head)
+	var desc_label := Label.new()
+	desc_label.text = desc
+	desc_label.add_theme_font_size_override("font_size", 12)
+	desc_label.modulate = Color(1, 1, 1, 0.68)
+	desc_label.clip_text = true
+	desc_label.tooltip_text = desc
+	desc_label.mouse_filter = Control.MOUSE_FILTER_STOP
+	row.add_child(desc_label)
+	stats_box.add_child(row)
+
+
+## 技能行左侧的【被动】/【主动】标签。
+func _make_tag_label(tag: String) -> Label:
+	var label := Label.new()
+	label.text = "【%s】" % tag
+	label.add_theme_font_size_override("font_size", 13)
+	label.modulate = Color(1, 0.78, 0.45, 0.95)
+	return label
+
+
+## 技能行右侧的升级按钮（「升级」= 1 次，可连点；「升级10次」= 一次升到没钱/满级为止）。
+func _make_upgrade_button(text: String, skill_id: String, skill_name: String,
+		times: int, character: UnitStats) -> Button:
+	var button := Button.new()
+	button.text = text
+	button.custom_minimum_size = Vector2(76, 26)
+	button.add_theme_font_size_override("font_size", 14)
+	button.disabled = not GameRoot.sect_skill_upgrade_why(character, skill_id).is_empty()
+	button.tooltip_text = button.text + skill_name
+	button.pressed.connect(_on_skill_upgrade_pressed.bind(skill_id, skill_name, times))
+	return button
+
+
+## 点了「升级 / 升级10次」：走 GameRoot.upgrade_sect_skill()（唯一写入口），然后整页重建。
+## 参数 skill_id：技能 id；skill_name：技能名（只用于提示文案）；times：连升几次。
+func _on_skill_upgrade_pressed(skill_id: String, skill_name: String, times: int) -> void:
+	var character := current_character()
+	if character == null:
+		return
+	var result := GameRoot.upgrade_sect_skill(character, skill_id, times)
+	if bool(result["ok"]):
+		_skill_message = "升级成功：%s → Lv.%d（本次 %d 级）" % [skill_name, int(result["level"]), int(result["count"])]
+		SoundManager.play_sound(SoundManager.Sound.UI)
+	else:
+		_skill_message = "升级失败：%s" % String(result["why"])
+	_rebuild()
+	_apply_geometry()
 
 
 ## 技能页的分组标题（"太虚剑宗 · 门派技能 Lv.3" / "角色技能"）。
@@ -508,36 +818,6 @@ func _add_skills_note(text: String) -> void:
 	label.modulate = Color(1, 1, 1, 0.55)
 	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	stats_box.add_child(label)
-
-
-## 技能页里的一条技能：第一行【类型】名字 Lv.N，第二行说明（截断 + tooltip）。
-## 参数 tag：被动 / 主动 / 技能；name：技能名；level：等级（<=0 表示没有等级，不显示 Lv）；
-##   desc：说明文字。
-func _add_skill_row(tag: String, name: String, level: int, desc: String) -> void:
-	var row := VBoxContainer.new()
-	row.add_theme_constant_override("separation", 2)
-	var head := HBoxContainer.new()
-	head.add_theme_constant_override("separation", 8)
-	var tag_label := Label.new()
-	tag_label.text = "【%s】" % tag
-	tag_label.add_theme_font_size_override("font_size", 13)
-	tag_label.modulate = Color(1, 0.78, 0.45, 0.95)
-	head.add_child(tag_label)
-	var name_label := Label.new()
-	name_label.text = ("%s Lv.%d" % [name, level]) if level > 0 else name
-	name_label.add_theme_font_size_override("font_size", 16)
-	name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	head.add_child(name_label)
-	row.add_child(head)
-	var desc_label := Label.new()
-	desc_label.text = desc
-	desc_label.add_theme_font_size_override("font_size", 12)
-	desc_label.modulate = Color(1, 1, 1, 0.68)
-	desc_label.clip_text = true
-	desc_label.tooltip_text = desc
-	desc_label.mouse_filter = Control.MOUSE_FILTER_STOP
-	row.add_child(desc_label)
-	stats_box.add_child(row)
 
 
 ## 一栏"输出"或"抗性"：小标题 + 若干行（值框）。
@@ -677,16 +957,20 @@ func _stat_text(value: float) -> String:
 # ══════════════════════════════════════════════════════════
 
 ## 把面板摆到屏幕**左下角**（背包在右下角，两个窗口并排不重叠）。
-## 高度：取"背包高度"和"内容需要的高度"里大的那个（背包高度由 WorldMap 打开时传进来），
-##   再夹进屏幕可用高度 —— 于是窗口拉大时和右边背包差不多高，内容也永远完整显示。
+## 高度 = max(「属性页需要的高度」,「背包高度」)，再夹进屏幕可用高度 —— 于是窗口拉大时和背包差不多高。
+## ⚠ 高度**只按属性页算**（`_attributes_height` 缓存）：切到技能页高度不变；
+##   技能页内容太多时，由下半部分的 `Scroll` 滚动展示。
 func _apply_geometry() -> void:
 	if panel == null:
 		return
 	var view := get_viewport_rect().size
 	var available := view.y - WINDOW_MARGIN * 2.0
-	var needed := 0.0
-	if content != null:
-		needed = content.get_combined_minimum_size().y + WINDOW_PADDING_V * 2.0
+	# 属性页：把"这一页要多高"量一次并缓存（标题 / 形象区 / 页签 / 表格 / 留白 + 一点余量）
+	if _page == 0 and stats_box != null:
+		_attributes_height = _chrome_height() + stats_box.get_combined_minimum_size().y + CONTENT_SLACK
+	var needed := _attributes_height
+	if needed <= 0.0:
+		needed = _chrome_height()
 	var height := maxf(MIN_HEIGHT, maxf(_linked_height, needed))
 	height = minf(height, available)
 	panel.anchor_left = 0.0
@@ -699,16 +983,23 @@ func _apply_geometry() -> void:
 	panel.offset_right = WINDOW_MARGIN + PANEL_WIDTH
 	panel.offset_top = -(height + WINDOW_MARGIN)
 	panel.offset_bottom = -WINDOW_MARGIN
-	panel.anchor_left = 0.0
-	panel.anchor_top = 1.0
-	panel.anchor_right = 0.0
-	panel.anchor_bottom = 1.0
-	panel.grow_horizontal = Control.GROW_DIRECTION_END
-	panel.grow_vertical = Control.GROW_DIRECTION_BEGIN
-	panel.offset_left = WINDOW_MARGIN
-	panel.offset_right = WINDOW_MARGIN + PANEL_WIDTH
-	panel.offset_top = -(height + WINDOW_MARGIN)
-	panel.offset_bottom = -WINDOW_MARGIN
+
+
+## 面板里"除下半部分之外"的固定高度：标题 + 形象区 + 页签 + 行距 + 上下留白。
+## 为什么单独算：下半部分被 ScrollContainer 包着，它的最小高度不可靠（会被压扁），
+##   所以总高度 = 这段固定高度 + 当前页内容的最小高度。
+func _chrome_height() -> float:
+	if content == null:
+		return 0.0
+	var total := WINDOW_PADDING_V * 2.0
+	var separation := float(content.get_theme_constant("separation"))
+	for child in content.get_children():
+		var control := child as Control
+		if control == null or control is ScrollContainer:
+			continue
+		total += control.get_combined_minimum_size().y
+	total += separation * maxf(0.0, float(content.get_child_count() - 1))
+	return total
 
 
 ## 清空一个容器（先 remove_child 再 queue_free，避免"正在发信号的控件被立刻摘掉"）。

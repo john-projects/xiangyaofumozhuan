@@ -1,109 +1,52 @@
 extends Control
 class_name MerchantPanel
 
-## 商人面板：把**装备**（ItemBase / ItemEquipment）摆成方格卖（MapNPC.Action.SELL_WEAPONS 用）。
+## 商人面板：把装备（ItemBase / ItemEquipment）摆成方格卖（MapNPC.Action.SELL_WEAPONS 用）。
 ##
-## ── 版面（从上到下）──
-##   ① 名字（**居中**，例如"商人"）
-##   ② 结果提示（"买下了 X（-12 金币）。" / "卖掉了 X（+9 金币）。" / "金币不够…"；没消息时是空行）
-##   ③ **6 列方格货架**（总共 6×20 = 120 格，一屏 6×10 = 60 格，其余靠滚动；
-##      现有 26 件装备只占前 26 格，剩下的是空格子）
-##   没有台词行、没有金币行、没有按键提示、也没有「关闭」按钮（按要求都移除了）：
-##   关交易用 Esc / B（见 WorldMap 的输入状态机），余额看**并排的背包**那一行信息。
-##   货架的格子跟**背包**是同一种格子：同样按稀有度描边、悬停/焦点同样弹那张属性卡
-##   （hover_item_card，走 TooltipManager）。区别只有两点：
-##     · 格子上多了价格角标（右下）和"已持有 ×n"角标（左上）；
-##     · 点一下**先弹确认框**（价格/买后余额），确认了才真的买。
-##
-## ── 买卖都走这里 ──
-##   买：点货架格子 → 确认框 → `buy_requested`。
-##   卖：点**背包**里的格子 → WorldMap 调 `ask_sell()` → 同一个确认框（换措辞）→ `sell_requested`。
-##   两个方向共用 `%ConfirmBox`，靠 `_pending_is_sell` 分流；确认框开着时货架不可聚焦，
-##   并通过 `confirm_changed` 让 WorldMap 把背包格子的焦点也收起来（模态）。
-##
-## ── 没有全屏遮罩（重要）──
-##   本面板**故意不带 `Dim`**（早先有，已删）：交易时背包是**可交互**的（要能点着卖东西），
-##   而全屏 ColorRect 默认会吃掉鼠标事件、还会把并排的背包压暗 —— 那是"背包看起来不能点"的元凶。
-##   世界地图的压暗由背包那一层（0.35）负责，交易窗口自己有实底面板，不靠遮罩也看得清。
-##   ⚠ 同理，本面板的**根节点**（铺满全屏的 Control）必须 `mouse_filter = IGNORE`：
-##   Control 默认是 STOP，一个全屏 STOP 等于"整屏都是商人面板的地盘"——并排背包的鼠标事件
-##   在根节点这里就被吃掉了（悬停不出属性卡、点击不进 pressed）。.tscn 里设了，_ready() 里再兜一次。
-##
-## ── 位置 ──
-##   屏幕**最左边**（左下角锚点，距左边/下边 WINDOW_MARGIN）。交易时背包会**同时打开**并贴在
-##   屏幕最右边（见 WorldMap._open_merchant）：一左一右，天然不重叠，谁也不用给谁让位。
-##   位置与尺寸都是**代码算出来的**（_apply_window_geometry），.tscn 里的 offset 只是编辑器预览值
-##   —— 理由同背包：高度依赖"一屏几行 + 标题/台词/提示"这些常量，写死迟早对不上；
-##   视口变小时还要自动少显示几行，免得顶出屏幕。
-##
-## ── 在系统里的位置 ──
-##   纯 UI 场景：由 WorldMap._setup_overlays() 实例化后挂在它的 UI（CanvasLayer）下面。
-##   本文件**不改钱、不改背包**：确认购买后只 emit buy_requested(item)，
-##   真正的校验与扣款在 GameRoot（item_can_buy / buy_item），买完 GameRoot 回调
-##   WorldMap.notify_shop_changed()，WorldMap 让本面板按新状态重建。
-##
-## ── 货架从哪来 ──
-##   MapNPC.sell_pool 优先；留空 → Global.get_all_equipment()（递归扫
-##   res://resources/items/equipment/，当前 26 件 = 头盔/武器/腰带/项链/衣服/鞋子，
-##   按"栏位 → 价格"排序）。老武器（ItemWeapon）已经不进地图线的货架了。
-##
-## ── 买不起的格子和"两个提示叠一起"的坑 ──
-##   能不能买由 GameRoot.item_can_buy() 统一判定（金币不够 / 背包满 BAG_SLOTS 格）：
-##     · **买得起**的格子 → 接属性卡（悬停/焦点都弹），**不设** tooltip_text；
-##     · **买不起**的格子 → 置灰 + 价格角标转红 + `tooltip_text` 写明原因，**不接属性卡**。
-##   一条格子只走一种提示，所以不会出现"属性卡 + 原生 tooltip"两个框同时冒出来。
-##   老版 ShopCard"点了没反应"的毛病这里没有：买不起一定有理由，且一定看得见。
-##
-## ── 键盘 ──
-##   方向键由 Godot 的 GUI 焦点系统按几何位置走；W A S D 走 Global.grid_nav()
-##   （上下 = 上一行同一列，中间夹着买不起的格子也会自动跳过）。
-##   方格语义归本面板自己管，所以 WorldMap 的商人分支**不**替它处理 WASD，只接 Esc / E
-##   （E = 按下焦点上的那一格：买得起的格子弹确认框、确认框里的「确定」就是真买）。
-##   Esc 的层级：**先关确认框，再关交易窗口** —— 由 WorldMap 调 cancel_confirm() 判断。
+## 版面：名字居中 → 结果提示 → 6 列方格货架（6×20 = 120 格，一屏 6×10，其余靠滚动）；
+## 没有台词/金币/按键提示/关闭按钮，关交易走 Esc / B，余额看并排的背包那一行。
+## 位置：屏幕最左边（左下角锚点），交易时背包同时开在最右边；尺寸由代码按视口算，视口小就少显示几行。
+## 本文件不改钱、不改背包：确认后只 emit 信号，校验与扣款在 GameRoot。
+## ⚠ 根节点铺满全屏必须 mouse_filter = IGNORE，否则会吃掉并排背包的鼠标事件（.tscn 设了，_ready 再兜一次）。
+## ⚠ 本面板故意不带全屏 Dim 遮罩：背包要能点，ColorRect 会吞事件并压暗背包。
 
 ## 确认购买后 emit：参数是要买的道具（ItemBase 资源，不是节点）。
 signal buy_requested(item: ItemBase)
-## 确认卖出后 emit：参数是要卖的道具（由**背包**点选、本面板只负责弹确认框）。
-## 为什么要绕这一圈：卖出规则（能不能卖、卖多少）属于 GameRoot，界面只发请求；
-##   而"确认框"只有交易窗口有，所以背包点选 → WorldMap → 本面板 ask_sell() → 确认后 emit 这个。
+## 确认卖出后 emit（背包点选 → WorldMap → ask_sell() → 确认后发这个）；卖出规则属于 GameRoot。
 signal sell_requested(item: ItemBase)
-## 确认框开了/关了（true = 开着）。WorldMap 收到后会同步把**背包格子**的键盘焦点收起来/放开
-##   —— 确认是一次模态询问，这时不该还能用方向键跑到背包上按 E。
+## 确认框开了/关了（true = 开着）。WorldMap 据此收起/放开背包格子的键盘焦点。
 signal confirm_changed(open: bool)
-## 关掉面板回到地图。**当前没有任何按钮发它**（「关闭」按钮已按要求移除，关闭靠 Esc / B）——
-## 保留是为了以后加「关闭」这类按钮时直接接上，WorldMap 那边也已经连好了。
+## 关掉面板回到地图。当前没有按钮发它（关闭靠 Esc / B），保留给以后加「关闭」类按钮用。
+## ⚠ @warning_ignore：类里没人 emit，编辑器报 "signal declared but never explicitly used" 是故意的。
+@warning_ignore("unused_signal")
 signal close_requested
 
 ## 货架一行几格（和背包一致）。改这个值要同时改 .tscn 里 GridContainer 的 columns。
 const GRID_COLUMNS := 6
-## 一屏显示几行（用户要求 6×10）。现有 26 件装备一屏看得完，以后货多了靠滚动
-## （滚轮 / 键盘往下走，follow_focus 自动滚）。
+## 一屏显示几行（6×10）；货多了靠滚动（滚轮 / 键盘往下走，follow_focus 自动滚）。
 const VISIBLE_ROWS := 10
-## 货架**总行数**：6 列 × 20 行 = 120 格（用户要求"总共展示 6×20"）。
-## 现有 26 件装备只占前 26 格，剩下的是空格子 —— 和背包一样把空格画出来
-## （一眼看得出这个商人一共有多少格、还剩多少空位）；一屏只看得到 10 行，其余靠滚动。
+## 货架总行数：6 列 × 20 行 = 120 格，货不足用空格补满（一屏只看得见 10 行）。
 const TOTAL_ROWS := 20
 ## 货架总格数（= GRID_COLUMNS × TOTAL_ROWS）。
 const SHELF_SLOTS := GRID_COLUMNS * TOTAL_ROWS
-## 格子之间的间距（横向纵向都用它，尺寸能按格数精确算出来）。
+## 格子间距（横纵都用它，尺寸能按格数精确算出来）。
 const GRID_SEPARATION := 10
-## 格子边长（像素）。**84 是按 1920×1080 反推的**：现在一屏要显示 10 行，
-## 10×84 + 9×10 = 930 是能塞进 1080 的最大值（面板总高 1038，y = 26~1064；
-## 顺带和背包面板的 1044 几乎一样高，两个窗口并排看着齐）。
-## 宽度 6×84 + 间距 + 滚动条 + 内边距 = 610，和背包的 662 也在同一档。
+## 格子边长（像素）。84 是按 1920×1080 反推的：10 行 = 10×84 + 9×10 = 930，能塞进 1080。
 const SLOT_SIZE := 84.0
 ## 角标高度（价格 / 已持有），也是图标往上让位的量。
 const TAG_HEIGHT := 20.0
 
-## 窗口离屏幕右边/下边的留白，以及面板内部的四边留白（1080 高要省着用）。
+## 窗口离屏幕右边/下边的留白。
 const WINDOW_MARGIN := 16.0
+## 面板内部左右留白。
 const WINDOW_PADDING := 20.0
+## 面板内部上下留白（1080 高要省着用）。
 const WINDOW_PADDING_V := 16.0
-## 各固定行的预留高度（名字行 / 提示行），用于算窗口总高。
-## 台词行、金币行、按键提示行、关闭按钮行都已按需求移除，所以常量也不留了。
+## 名字行的预留高度（用于算窗口总高）。
 const HEADER_ROW_HEIGHT := 34.0
+## 提示行的预留高度（用于算窗口总高）。
 const MESSAGE_ROW_HEIGHT := 26.0
-## VBox 里各块之间的间距（.tscn 里也是这个值；现在只有"名字 / 提示 / 货架"三块 → 2 道）。
+## VBox 里各块之间的间距（.tscn 里同值；现在只有名字/提示/货架三块 → 2 道）。
 const VBOX_SEPARATION := 8.0
 ## 给竖直滚动条留的宽度，免得第 6 列被它挤掉。
 const SCROLLBAR_ALLOWANCE := 16.0
@@ -111,8 +54,7 @@ const SCROLLBAR_ALLOWANCE := 16.0
 @onready var title_label: Label = %TitleLabel
 @onready var message_label: Label = %MessageLabel
 @onready var grid: GridContainer = %Grid
-## 滚动容器。用 get_node_or_null 而不是 `%Scroll` 直取：场景万一被编辑器的旧副本覆盖
-## （%Scroll 丢了），直取会在 null 上崩；这里降级成"货架不能滚"并喊一声。
+## 滚动容器。用 get_node_or_null 而不是 %Scroll 直取：旧副本丢了节点时降级成"不能滚"并喊一声。
 @onready var scroll: ScrollContainer = get_node_or_null(^"%Scroll") as ScrollContainer
 ## 确认购买框（默认隐藏，点格子才弹）。缺节点时降级成"点了直接买"（见 _ask_confirm）。
 @onready var confirm_box: Panel = get_node_or_null(^"%ConfirmBox") as Panel
@@ -120,24 +62,21 @@ const SCROLLBAR_ALLOWANCE := 16.0
 @onready var confirm_buy_button: Button = get_node_or_null(^"%ConfirmBuyButton") as Button
 @onready var confirm_cancel_button: Button = get_node_or_null(^"%ConfirmCancelButton") as Button
 
-## 购买按钮上的动词。WorldMap 打开本面板前用 MapNPC.shop_label 赋值（默认"购买"）。
-## 放在成员变量而不是 show_shop() 的参数里：那是"面板配置"，不是"这一屏的数据"。
+## 购买按钮上的动词。WorldMap 打开面板前用 MapNPC.shop_label 赋值（默认"购买"）。
 var buy_label := "购买"
 
-## 当前"买得起"的格子（= 能聚焦的那些）。关闭按钮也会进焦点环。
+## 当前"买得起"的格子（= 能聚焦的那些）。
 var _slots: Array[Control] = []
 ## 正在等确认的那件道具（null = 没有确认框在开）。
 var _pending: ItemBase = null
 ## 待确认的是"卖"（true）还是"买"（false）。确认框付款时按它分流。
 var _pending_is_sell := false
-## 最近一次算出来的窗口尺寸（window_width() 给背包算"并排偏移"用）。
+## 最近一次算出来的窗口尺寸（window_width() 给背包算并排偏移用）。
 var _window_size := Vector2.ZERO
 
 
 func _ready() -> void:
-	# 根节点铺满全屏，必须忽略鼠标 —— 否则并排的背包收不到任何鼠标事件（见文件头）。
-	# 设成 IGNORE 只影响"根节点自己"：窗口（Panel）、确认框、货架格子都是它的子节点，
-	# 仍然照常接管落在自己身上的鼠标事件。
+	# 根节点铺满全屏，必须忽略鼠标，否则并排的背包收不到任何事件；只影响根节点自己，子节点照常接管。
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hide()
 	grid.columns = GRID_COLUMNS
@@ -156,24 +95,13 @@ func _ready() -> void:
 		push_warning("MerchantPanel：场景里找不到 %Scroll —— 货架将无法滚动。"
 				+ "请重新打开 scenes/ui/merchant_panel/merchant_panel.tscn")
 	_apply_window_geometry()
-	# 窗口大小变了就重新摆一次（最右边锚点 + 必要时少显示几行）
+	# 窗口大小变了就重新摆一次（左下锚点 + 必要时少显示几行）。
 	get_viewport().size_changed.connect(_apply_window_geometry)
 
 
-## 按"货架 + 金币 + 已持有"重建整个方格并显示。
-## 参数 p_title：面板顶部的名字（**居中**，用 NPC 的 display_name，例如"商人"）。
-## 参数 items：在卖的东西（顺序就是显示顺序 —— 由 Global.get_all_equipment() 排好）。
-## 参数 coins：当前金币。**只用来判定"买不买得起"**（哪些格子置灰），界面上不再显示余额
-##   —— 余额看并排的背包那一行（用户要求把交易界面自己的金币展示去掉）。
-## 参数 owned：背包里的东西（Global.equipped_weapons，用来显示"已持有 ×n"）。
-##   见 GameRoot.item_owned_count()（数同名道具，所以装备同样适用）。
-## 副作用：show()；收起确认框；改名字；清空并重建 %Grid（货 + 空格子，总数 SHELF_SLOTS）；
-##        滚动回到顶部；重算窗口尺寸。
-## 货架为空（NPC 没配 sell_pool 且装备目录也扫不到）时：在提示行说明原因，并把 120 个格子
-##   全画成空格子 —— 版面尺寸保持一致，不会因为"没货"变成一个奇怪的小窗。
-## ⚠ 刻意**不清空提示文字**（message_label）：买完是"先 show_message()、
-##   再 call_deferred(show_shop)"（直接在按钮回调里重建会把正在发信号的按钮摘掉），
-##   这里清一次玩家就永远看不到"买下了 XXX！"了。要清旧提示就调 clear_message()。
+## 按"货架 + 金币 + 已持有"重建方格并显示（副作用：show、收确认框、重建 %Grid、滚动回顶、重算尺寸）。
+## 参数：p_title 名字；items 在卖的东西（顺序即显示顺序）；coins 只用于判买得起；owned 用于"持×n"。
+## ⚠ 刻意不清空 message_label：买完是先 show_message() 再 deferred 重建，清了就永远看不到提示。
 func show_shop(p_title: String, items: Array[ItemBase], coins: int,
 		owned: Array[ItemBase]) -> void:
 	show()
@@ -195,8 +123,7 @@ func show_shop(p_title: String, items: Array[ItemBase], coins: int,
 	_apply_window_geometry()
 
 
-## 在面板上显示一句提示（"买下了 XXX（-12 金币）。" / "金币不够…" 等）。
-## 由 WorldMap.notify_shop_changed() 调用。
+## 在面板上显示一句提示（"买下了 XXX（-12 金币）。" / "金币不够…" 等），由 WorldMap 调用。
 func show_message(text: String) -> void:
 	message_label.text = text
 
@@ -225,25 +152,17 @@ func cancel_confirm() -> bool:
 	return true
 
 
-## 按视觉顺序返回可聚焦的控件：所有"当前买得起"的格子。
-## 买不起的格子是 disabled 的，grab_focus() 对它无效，所以必须排除（否则焦点会卡住不动）。
-## 已经没有「关闭」按钮了（按需求移除），所以环里就只有货架格子。
+## 按视觉顺序返回可聚焦控件：所有"当前买得起"的格子。
+## 买不起的格子是 disabled 的，grab_focus() 对它无效，必须排除（否则焦点会卡住不动）。
 func focus_ring() -> Array[Control]:
 	return _slots.duplicate()
 
 
-# ══════════════════════════════════════════════════════════
-#  确认购买框
-# ══════════════════════════════════════════════════════════
+# ── 确认购买框 ──
 
-## 点货架格子 → 弹确认框（**不直接买**）。
-## 参数 item：玩家点的那件道具。
-## 副作用：显示确认框并把文字填成"名字 + 价格 + 买后余额"，焦点交给「确定」，
-##        同时**把货架格子设成不可聚焦**（否则方向键会从确认框窜回货架）。
-## ⚠ 已经在等一个确认时**直接返回**：不然连着点两件，待确认的那件会被悄悄换掉。
-## ⚠ 层级：确认框在 .tscn 里设了 `z_index = 100` —— 交易时背包面板也开着，
-##   按树序画下来可能会压住它，高 z_index 保证它永远画在最上面。
-## 兜底：场景里没有确认框节点（旧副本被覆盖）时退化成"直接买"——功能仍在，只是少一步确认。
+## 点货架格子 → 弹确认框（不直接买）：填"名字 + 价格 + 买后余额"，焦点交给「确定」。
+## 副作用：显示确认框、临时禁用货架焦点（否则方向键会窜回货架）、收起属性卡。
+## ⚠ 已在等一个确认时直接返回（不然连着点两件，待确认的那件会被悄悄换掉）；缺节点时退化成直接买。
 func _ask_confirm(item: ItemBase) -> void:
 	if _pending != null:
 		return
@@ -257,10 +176,8 @@ func _ask_confirm(item: ItemBase) -> void:
 	_show_confirm(item, false)
 
 
-## 背包里点了某件东西 → 弹**卖出**确认框（由 WorldMap 调用：它才知道现在是不是在交易）。
-## 参数 item：要卖的道具。
-## 参数 price：卖价（GameRoot.item_sell_price() 算好的，界面不自己算规则）。
-## 副作用：与 _ask_confirm 一样（同一套确认框，只换措辞），确认后 emit sell_requested。
+## 背包点了某件东西 → 弹**卖出**确认框（WorldMap 调，它才知道现在是不是在交易）。
+## 参数：item 要卖的道具；price 卖价（GameRoot.item_sell_price() 算好的，界面不自己算规则）。
 ## 兜底：没有确认框节点时直接 emit sell_requested（少一步确认，但功能在）。
 func ask_sell(item: ItemBase, price: int) -> void:
 	if _pending != null:
@@ -274,10 +191,8 @@ func ask_sell(item: ItemBase, price: int) -> void:
 	_show_confirm(item, true)
 
 
-## 显示确认框的公共部分（买卖共用）。参数 item：待处理的道具；is_sell：是卖还是买。
-## 副作用：记下待处理项、show()、把「确定」按钮换成"确定卖出 / 确定购买"的措辞、
-##        禁用货架焦点、聚焦「确定」、收起属性卡、
-##        并 emit confirm_changed(true)（WorldMap 据此把背包的格子焦点也收起来）。
+## 显示确认框的公共部分（买卖共用）：记待处理项、按 is_sell 换「确定」措辞、禁用货架焦点。
+## 副作用：show()、聚焦「确定」、收起属性卡、emit confirm_changed(true)（WorldMap 据此收背包焦点）。
 func _show_confirm(item: ItemBase, is_sell: bool) -> void:
 	_pending = item
 	_pending_is_sell = is_sell
@@ -309,8 +224,7 @@ func _confirm_pending() -> void:
 
 ## 收起确认框并恢复货架的焦点能力。
 ## 副作用：清待处理项、hide()、恢复货架焦点、emit confirm_changed(false)。
-## ⚠ 这个函数只负责"收起"，**不 emit 买/卖请求** —— 请求由 _confirm_pending() 发，
-##   取消（Esc / 「取消」）走这里就只是取消。
+## ⚠ 只负责"收起"，**不 emit 买卖请求** —— 请求由 _confirm_pending() 发，取消走这里就只是取消。
 func _hide_confirm() -> void:
 	_pending = null
 	_pending_is_sell = false
@@ -328,13 +242,10 @@ func _set_shelf_focus_enabled(enabled: bool) -> void:
 		(slot as Control).focus_mode = mode
 
 
-# ══════════════════════════════════════════════════════════
-#  货架格子
-# ══════════════════════════════════════════════════════════
+# ── 货架格子 ──
 
 ## 造一个货架格子（背包那种格子 + 价格角标；买得起才能点）。
-## 参数 item：这件货是什么（ItemBase，地图线现在全是 ItemEquipment）。
-## 参数 coins / owned：只用来算"能不能买""已持有几件"（判定本体在 GameRoot.item_can_buy）。
+## 参数：item 这件货是什么；coins / owned 只用来算"能不能买""已持有几件"（判定本体在 GameRoot.item_can_buy）。
 ## 返回值：Button（买得起时接了 pressed 与属性卡；买不起时 disabled + tooltip 写原因）。
 func _make_slot(item: ItemBase, coins: int, owned: Array[ItemBase]) -> Button:
 	var slot := Button.new()
@@ -362,7 +273,7 @@ func _make_slot(item: ItemBase, coins: int, owned: Array[ItemBase]) -> Button:
 
 	if reason.is_empty():
 		slot.pressed.connect(_ask_confirm.bind(item))
-		# 悬停 / 键盘焦点都弹同一张属性卡（TooltipManager 会把卡片锚到这个格子的右上角）
+		# 悬停 / 键盘焦点都弹同一张属性卡；买不起的格子不接，避免"属性卡 + 原生 tooltip"两个框一起冒。
 		slot.mouse_entered.connect(TooltipManager.show_for_control.bind(slot, item))
 		slot.mouse_exited.connect(TooltipManager.hide_tip)
 		slot.focus_entered.connect(TooltipManager.show_for_control.bind(slot, item))
@@ -375,9 +286,8 @@ func _make_slot(item: ItemBase, coins: int, owned: Array[ItemBase]) -> Button:
 	return slot
 
 
-## 造一个**空格子**：货架总格数是固定的 6×20，货不够就补空格（和背包一样把空格画出来）。
+## 造一个**空格子**：货架总格数固定 6×20，货不够就补空格（和背包一样把空格画出来）。
 ## 返回值：Button（disabled：不可点、不可聚焦、不弹属性卡，只有一圈暗描边）。
-## 为什么不摆 Label 说明"这里是空的"：空格本身就是说明，摆文字反而比货还显眼。
 func _make_empty_slot() -> Button:
 	var slot := Button.new()
 	slot.name = "EmptySlot"
@@ -388,11 +298,8 @@ func _make_empty_slot() -> Button:
 
 
 ## 格子上的小角标（价格 / 已持有）。
-## 参数 text：角标文字。
-## 参数 is_owned：true = 左上角的"已持有"角标（淡蓝），false = 右下角的价格角标（金/红）。
-## 参数 affordable：价格角标的颜色 —— true 金色（买得起）、false 红色（买不起）。
-## 说明：角标 mouse_filter 设成 IGNORE —— 它压在格子上，不能把鼠标事件吃掉，
-##   否则格子的 mouse_entered（属性卡）会被它挡住。
+## 参数：text 文字；is_owned true = 左上"已持有"（淡蓝），false = 右下角价格（金/红）；affordable 价格色。
+## ⚠ mouse_filter = IGNORE：它压在格子上，不能吃掉格子的 mouse_entered（否则属性卡会被挡）。
 func _make_tag(text: String, is_owned: bool, affordable: bool) -> Label:
 	var tag := Label.new()
 	tag.name = "OwnedTag" if is_owned else "PriceTag"
@@ -427,10 +334,8 @@ func _make_tag(text: String, is_owned: bool, affordable: bool) -> Label:
 
 
 ## 格子的方形描边样式（和背包格子同一套观感）。
-## 参数 border：描边颜色（按稀有度；置灰时是半透明白）。
-## 参数 bg：底色（半透明，压在面板的深色背景上）。
-## 实现细节：expand_icon 会把图标撑满按钮，所以内边距靠 StyleBox 的 content_margin 留出来；
-##   这里**底部特意留出 TAG_HEIGHT 那么多**，免得图标被价格角标压住。
+## 参数：border 描边色（按稀有度；置灰时是半透明白）；bg 底色（压面板深色背景）。
+## 底部特意留出 TAG_HEIGHT 的 content_margin，免得 expand_icon 撑满后图标被价格角标压住。
 func _slot_style(border: Color, bg: Color) -> StyleBoxFlat:
 	var style := StyleBoxFlat.new()
 	style.bg_color = bg
@@ -457,13 +362,10 @@ func _price_text(item: ItemBase) -> String:
 	return "%d 金" % item.item_cost if item.item_cost > 0 else "免费"
 
 
-# ══════════════════════════════════════════════════════════
-#  窗口位置与尺寸（最右边，按视口自适应）
-# ══════════════════════════════════════════════════════════
+# ── 窗口位置与尺寸（最左边，按视口自适应）──
 
 ## 把面板摆到屏幕**最左边**，尺寸按内容算；视口不够高时先砍货架的可见行数。
-## 为什么每次打开都调：窗口可能被玩家拉小过，而"一屏几行"要跟着变
-##   （不然窗口高于屏幕时，标题会被顶到屏幕外）。
+## 为什么每次打开都调：窗口可能被玩家拉小过，"一屏几行"要跟着变（不然标题会被顶到屏幕外）。
 ## 副作用：改 _window_size、scroll.custom_minimum_size.y、Panel 的 anchor/offset。
 func _apply_window_geometry() -> void:
 	var panel := get_node_or_null(^"Panel") as Panel
@@ -478,7 +380,6 @@ func _apply_window_geometry() -> void:
 		var rows_budget := int(floor((view.y - fixed + GRID_SEPARATION) / row_height))
 		rows = clampi(rows_budget, 1, VISIBLE_ROWS)
 		scroll.custom_minimum_size.y = rows * SLOT_SIZE + (rows - 1) * GRID_SEPARATION
-	# 宽 = 6 列 + 滚动条 + 内边距（台词那行比这窄，不用参与比较）
 	_window_size = Vector2(
 			GRID_COLUMNS * SLOT_SIZE + (GRID_COLUMNS - 1) * GRID_SEPARATION
 			+ SCROLLBAR_ALLOWANCE + WINDOW_PADDING * 2.0,
@@ -499,12 +400,9 @@ func _apply_window_geometry() -> void:
 		scroll.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 
 
-## 键盘补丁：W A S D 在方格上移动焦点（方向键交给 Godot 的几何导航）。
-## 实现走 Global.grid_nav()，与**背包**共用同一套方格导航。
-## 确认框开着时**不接管** WASD：那时焦点只在「确定 / 取消」两个按钮之间，
-##   交给 Godot 的几何导航就够了（货架格子已临时设成不可聚焦，见 _ask_confirm）。
-## E / Enter 不在这里处理：E 由 WorldMap 的商人分支接（→ Global.activate_focused()），
-## Enter 是内置 ui_accept，GUI 自己会按。
+## 键盘补丁：W A S D 在方格上移动焦点（方向键交给 Godot 的几何导航），走 Global.grid_nav()，与背包共用。
+## 确认框开着时**不接管** WASD：货架格子已临时设成不可聚焦，焦点只在「确定 / 取消」之间。
+## E / Enter 不在这里处理：E 由 WorldMap 的商人分支接（→ Global.activate_focused()），Enter 是内置 ui_accept。
 func _unhandled_input(event: InputEvent) -> void:
 	if not visible or is_confirm_open():
 		return

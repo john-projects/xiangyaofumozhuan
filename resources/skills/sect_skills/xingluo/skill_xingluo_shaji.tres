@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="SkillData" format=3]
+
+[ext_resource type="Script" path="res://resources/skills/skill_data.gd" id="1_ibscm"]
+
+[resource]
+script = ExtResource("1_ibscm")
+id = "xingluo_shaji"
+display_name = "星罗杀机"
+description = "3 回合内自身暴击伤害提升（随技能等级成长）。"
+mana_cost = 10.0
+cooldown = 4
+power = 0.0
+crit_bonus = 0.0
+target_mode = 2
+sect_id = "xingluo"
+sect_skill_key = "xingluo_shaji"
+buff_stat = "crit_damage_bonus"
+buff_value = 15.0
+buff_per_level = 1.0
+buff_turns = 3
+tint = Color(0.95, 0.5, 0.85, 1)

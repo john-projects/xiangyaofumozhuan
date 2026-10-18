@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="SkillData" format=3]
+
+[ext_resource type="Script" path="res://resources/skills/skill_data.gd" id="1_oy7tw"]
+
+[resource]
+script = ExtResource("1_oy7tw")
+id = "sanchi_qingfeng"
+display_name = "三尺清风"
+description = "剑气横扫，攻击 2 个目标；技能 30 级后攻击 3 个。"
+mana_cost = 12.0
+cooldown = 2
+power = 1.15
+crit_bonus = 0.05
+sect_id = "taixu"
+sect_skill_key = "sanchi_qingfeng"
+max_targets = 2
+tint = Color(0.75, 0.9, 1, 1)

@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="SkillData" format=3]
+
+[ext_resource type="Script" path="res://resources/skills/skill_data.gd" id="1_skn3m"]
+
+[resource]
+script = ExtResource("1_skn3m")
+id = "wanling_zhufu"
+display_name = "万灵祝福"
+description = "全体队友获得增益：伤害与法伤提升（随技能等级成长），持续 3 回合。"
+mana_cost = 18.0
+cooldown = 4
+power = 0.0
+crit_bonus = 0.0
+target_mode = 2
+sect_id = "wanyao"
+sect_skill_key = "wanling_zhufu"
+buff_stat = "damage_spell"
+buff_value = 5.0
+buff_per_level = 1.0
+buff_turns = 3
+buff_all_allies = true
+tint = Color(0.7, 1, 0.75, 1)
