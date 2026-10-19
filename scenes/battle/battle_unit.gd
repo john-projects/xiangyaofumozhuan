@@ -49,6 +49,39 @@ const DEFEND_TINT := Color(0.75, 0.85, 1.0)
 ## 施法过曝暖色：G/B 通道 >1.0 是刻意的自发光（modulate 允许超过 1）。
 const CAST_TINT := Color(1.45, 1.2, 0.9)
 
+## 单位在战斗**场景里的显示高度**（像素）。与贴图分辨率无关：
+## _refresh_visuals() 会按 tex_h 反推 sprite.scale，所以换 150px / 320px / 512px 的立绘，
+## 屏幕上都是这么高 —— 提高分辨率只提升清晰度，不改布局、也不影响还没换图的老素材。
+## 这是一条"美术口径"：想让单位整体变大变小，改这里一处即可。
+const UNIT_DISPLAY_HEIGHT := 240.0
+
+# ── 名字配色 ──
+# 我方和怪物（敌方）默认都是绿色；只有"当前被选为攻击目标"的那只才变红（见 set_focused）。
+## 常态名字：绿色。
+const NAME_COLOR_NORMAL := Color(0.45, 1.0, 0.55)
+## 攻击目标名字：红色。
+const NAME_COLOR_TARGETED := Color(1.0, 0.35, 0.35)
+## 我方名字整体上移的像素数（怪物不动）。地图上的姓名版也做了同样的上移。
+const NAME_LIFT_PLAYER := 10.0
+
+# ── 战斗里的朝向 ──
+# battle.tscn 里 PlayerSlots 在 X 正方向（右）、EnemySlots 在负方向（左）。
+# 但镜头是**观战视角**（相机在右下往左上斜看）：我方在右下、敌人在左上，
+# 所以我方面朝左上 = 背对镜头，应该用 45° 的 up_left（背面 3/4）；
+# 敌人面朝右下 = 面向镜头，用 down_right（正面 3/4）。
+# 这正是"越肩视角"该有的样子：近的角色露背、远的角色露脸。
+const BATTLE_FACING_PLAYER := "up_left"
+const BATTLE_FACING_ENEMY := "down_right"
+
+# ── 头顶信息块的排布（渲染像素，从头顶往上依次堆）──
+# 顺序：名字 / 2px / 血条 / 蓝条（血条蓝条紧贴，中间不留缝）/ 6px / 头顶
+# 整块完全在角色头顶之上 —— 立绘四周有留白，可见头顶比贴图顶边还要低约 10px，
+# 所以这里按"贴图顶边（head）再往上 6px"留足余量，不会压到头发。
+const PLATE_NAME_H := 26.0        # 名字标签高度（与场景里 -160~-134 一致）
+const PLATE_BAR_H := 22.0         # 每条血/蓝条的高度
+const PLATE_NAME_BAR_GAP := 2.0   # 名字和血条之间
+const PLATE_HEAD_GAP := 6.0       # 蓝条底边离头顶
+
 # ── 轮廓配色 ──
 # 与 %Selection 色块是两套：色块铺脚下，轮廓贴剪影描实色边（%Outline），都不带 alpha。
 
@@ -101,6 +134,12 @@ var _focused := false
 var _arrow_base_y := 0.0
 ## sprite 初始缩放（场景里可能不是 1.0）；play_cast() 的涨大必须回到这个基准，否则会越放越大/小。
 var _base_scale := Vector2.ONE
+## 立绘脚在原点时，身体中心相对原点的偏移（负值向上）；_refresh_visuals 里按贴图高度算。
+var body_center_offset := 0.0
+## 8 方位帧动画控制器。只有 UnitStats.anim_dir 非空的角色才有，否则为 null（走静态贴图）。
+var _anim: CharAnim2D = null
+## 实时 3D 头像（3D-in-2D）。只有 UnitStats.model_glb 非空的角色才有，优先级最高。
+var _model3d: Model3DAvatar = null
 
 # ── 节点引用（%Xxx = unique_name_in_owner，改层级也不失效）──
 # 这些 @onready 在 _ready() 之前赋值；_refresh_* 依赖它们，所以 setup() 必须在 add_child() 之后调。
@@ -162,19 +201,126 @@ func setup(p_stats: UnitStats, p_is_player: bool) -> void:
 
 
 ## 按 stats/is_player/当前 HP·MP 刷界面：贴图、名字、翻转、两条 bar 的染色与可见性。
+## **锚点约定：本地坐标 (0,0) = 脚底**（Sprite2D 用 offset 把贴图整体上移半个高度）——
+## 单位节点摆在哪，脚就踩在哪；名字 / 血条 / 蓝条 / 头顶箭头全部按"头顶"（-贴图高 × 缩放）排，
+## 所以换任何尺寸的立绘都不用再手调偏移。
 ## 敌人整体水平翻转（正对镜头，不用两套素材）；血条用 self_modulate 染色（只影响自己不影响子节点），
 ## 我方白、敌方偏红/偏蓝；max_mp==0 的单位整条蓝条隐藏。只在 setup() 调一次。
+## 建立 8 方位帧动画（只在 stats.anim_dir 非空时）。战斗里朝向固定：
+## 我方站左边、面朝右，敌方面朝左，所以只播 "right"/"left" 这一列。
+## 副作用：往本节点加一个 CharAnim2D 子节点，并把 sprite.texture 换成交给它的条带图。
+## 没有动画资源时静默返回（留 _anim = null），调用方继续用静态贴图。
+func _setup_anim() -> void:
+	if _anim != null:
+		return
+	if stats == null or stats.anim_dir.is_empty():
+		return
+	var anim := CharAnim2D.new()
+	anim.name = "CharAnim"
+	add_child(anim)
+	if not anim.setup(sprite, stats.anim_dir):
+		anim.queue_free()
+		return
+	_anim = anim
+	_anim.frame_changed.connect(_on_anim_frame)
+	# 朝向由 BATTLE_FACING_* 决定（45° 斜侧，见常量处的说明）。
+	_anim.play("idle", BATTLE_FACING_PLAYER if is_player else BATTLE_FACING_ENEMY)
+
+
+## 建实时 3D 头像（只在 stats.model_glb 非空时）。优先级高于帧动画和静态贴图。
+## 战斗里朝向固定：我方朝右、敌朝向 —— 3D 模式下用 face_dir 转模型。
+func _setup_model3d() -> void:
+	if _model3d != null:
+		return
+	if stats == null or stats.model_glb.is_empty():
+		return
+	var av := Model3DAvatar.new()
+	av.name = "Model3D"
+	add_child(av)
+	if not av.setup(stats.model_glb, UNIT_DISPLAY_HEIGHT):
+		av.queue_free()
+		return
+	_model3d = av
+	sprite.visible = false
+	# 战斗舞台里我方在左、面朝右；敌方在右、面朝左
+	_model3d.face_dir("right" if is_player else "left")
+	_model3d.play("idle", 0.0)
+
+
+## 帧动画换帧时同步轮廓：轮廓是同一张贴图的 Sprite 子节点，
+## 不同步 region 的话描边会一直停在第一帧的剪影上（选中框跟人错位）。
+func _on_anim_frame() -> void:
+	if not outline.visible:
+		return
+	if outline.texture != sprite.texture:
+		outline.texture = sprite.texture
+	outline.region_enabled = sprite.region_enabled
+	outline.region_rect = sprite.region_rect
+
+
 func _refresh_visuals() -> void:
-	sprite.texture = stats.icon
+	# 优先级：实时 3D 模型 > 8 方位帧动画 > 静态立绘
+	_setup_model3d()
+	if _model3d == null:
+		_setup_anim()
+		if _anim == null:
+			sprite.texture = stats.icon
 	name_label.text = stats.name
+	# 脚锚定：Sprite2D 居中绘制贴图，offset 上移半个高度后底边正好落在 y=0
+	var tex_h := 0.0
+	var head := 0.0
+	if _model3d != null:
+		# 3D 头像自己按 UNIT_DISPLAY_HEIGHT 算缩放，这里只用它来排头顶 UI。
+		tex_h = UNIT_DISPLAY_HEIGHT
+		head = -tex_h
+	else:
+		if sprite.texture != null:
+			tex_h = float(sprite.texture.get_height())
+			# 按贴图高度反推缩放：不管立绘是 150px（老的蛋形头像）还是 320px（新立绘），
+			# 显示出来都是 UNIT_DISPLAY_HEIGHT 这么高。这样提高素材分辨率只会更清晰，
+			# 不会让单位变大，也不会影响还没换图的敌人。
+			var s := UNIT_DISPLAY_HEIGHT / tex_h
+			sprite.scale = Vector2(s, s)
+			_base_scale = sprite.scale          # play_cast() 涨大后要回到这个基准
+			sprite.offset = Vector2(0.0, -tex_h * 0.5)
+		head = -tex_h * sprite.scale.y          # 头顶（负值 = 向上）
+	body_center_offset = head * 0.5              # 身体中心（飘字/弹道落点都瞄这里）
+	# 头顶信息块：从头顶往上依次是 蓝条 / 血条 / 名字，整块都在角色头顶之上。
+	# 我方整体再上移 NAME_LIFT_PLAYER（怪物的位置不变）。
+	var lift := NAME_LIFT_PLAYER if is_player else 0.0
+	var mp_bottom := head - PLATE_HEAD_GAP - lift
+	var mp_top := mp_bottom - PLATE_BAR_H
+	var hp_bottom := mp_top                    # 蓝条顶 = 血条底 -> 中间没有缝
+	var hp_top := hp_bottom - PLATE_BAR_H
+	var name_bottom := hp_top - PLATE_NAME_BAR_GAP
+	var name_top := name_bottom - PLATE_NAME_H
+	mana_bar.offset_top = mp_top
+	mana_bar.offset_bottom = mp_bottom
+	health_bar.offset_top = hp_top
+	health_bar.offset_bottom = hp_bottom
+	name_label.offset_top = name_top
+	name_label.offset_bottom = name_bottom
+	_refresh_name_color()
+	target_arrow.position.y = name_top - 26.0       # 目标箭头浮在信息块上方
+	_arrow_base_y = target_arrow.position.y
+	# 选中光环就在原点（= 脚下）
+	selection.position = Vector2.ZERO
+	# 点击判定挪到身体中段（Area2D 在脚底，光靠半径盖不住上半身）
+	click_area.position.y = body_center_offset
 	# 敌人翻转：flip_h 只影响绘制，不改坐标/碰撞，点击区域不受影响。
-	sprite.flip_h = not is_player
+	# 有帧动画时朝向已经画在图里了（我方朝左、敌朝右），再 flip 会镜像回去，所以跳过。
+	sprite.flip_h = (not is_player) and _anim == null
 	health_bar.self_modulate = Color(1, 1, 1) if is_player else Color(1, 0.72, 0.72)
 	# 没蓝的单位不显示蓝条，省得所有敌人都挂着一条空槽。
 	mana_bar.visible = max_mp > 0.0
 	mana_bar.self_modulate = Color(1, 1, 1) if is_player else Color(0.85, 0.85, 1)
 	_refresh_hp()
 	_refresh_mana()
+
+
+## 身体中心（世界坐标）：立绘脚在原点，往上抬半个身高。弹道落点、命中爆炸、飘字都用它。
+func body_center() -> Vector2:
+	return global_position + Vector2(0.0, body_center_offset)
 
 
 # ── 数值（伤害/暴击/格挡/速度的唯一口径）──
@@ -454,6 +600,7 @@ func set_focused(value: bool) -> void:
 	if not show_it:
 		target_arrow.position.y = _arrow_base_y
 	_refresh_outline()
+	_refresh_name_color()          # 被选为攻击目标 -> 名字变红
 
 
 ## 底层接口：直接开关轮廓并指定颜色（不参与优先级判断）。显示时同步本体的贴图与翻转。
@@ -463,10 +610,25 @@ func set_outline(active: bool, color: Color) -> void:
 	if show_it:
 		outline.texture = sprite.texture
 		outline.flip_h = sprite.flip_h
+		# 帧动画模式下轮廓也要跟着当前帧的 region，否则描边是整张条带图的剪影。
+		outline.region_enabled = sprite.region_enabled
+		outline.region_rect = sprite.region_rect
+		# ⚠ 轮廓是 Sprite 的子节点，但它自己也要画一遍贴图：父节点的 offset 不会传给子节点，
+		# 不跟着平移就会整体错开半个身高（描边跑到腰/腿上）。
+		outline.offset = sprite.offset
 		var mat := outline.material as ShaderMaterial
 		if mat != null:
 			mat.set_shader_parameter("outline_color", color)
 	outline.visible = show_it
+
+
+## 名字颜色的唯一出口：被选为攻击目标（键盘/鼠标光标停在它身上）时红色，否则绿色。
+## 顺手补一圈黑描边 —— 立绘不管是深色还是浅色，名字都看得清。
+func _refresh_name_color() -> void:
+	name_label.add_theme_color_override("font_color",
+			NAME_COLOR_TARGETED if (_focused and alive) else NAME_COLOR_NORMAL)
+	name_label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
+	name_label.add_theme_constant_override("outline_size", 4)
 
 
 ## 轮廓的唯一真相出口：优先级 键盘光标（金+箭头）> 行动者（青/橙红）> 不显示。
@@ -521,6 +683,12 @@ func set_defending(value: bool) -> void:
 func play_attack(target: BattleUnit) -> void:
 	if not is_instance_valid(target):
 		return
+	# 帧动画：播放攻击动作（一次性，播完自动回 idle）。位移 tween 与它并行，
+	# 所以"冲上去"和"挥击"是同时发生的。
+	if _model3d != null:
+		_model3d.play_once("attack")
+	elif _anim != null:
+		_anim.play_once("attack")
 	var from := position
 	var dir := (target.global_position - global_position).normalized()
 	var to := from + dir * 80.0
@@ -537,6 +705,11 @@ func play_attack(target: BattleUnit) -> void:
 ## parallel() 让缩放与染色同时进行；收尾色 DEFEND_TINT if defending else WHITE（防御中施法保持淡蓝）。
 func play_cast() -> void:
 	sprite.modulate = Color.WHITE
+	# 帧动画：播放施法动作（一次性）。涨大/染色 tween 与它并行，不冲突。
+	if _model3d != null:
+		_model3d.play_once("cast")
+	elif _anim != null:
+		_anim.play_once("cast")
 	var tween := create_tween()
 	tween.tween_property(sprite, "scale", _base_scale * 1.14, 0.14)
 	tween.parallel().tween_property(sprite, "modulate", CAST_TINT, 0.14)

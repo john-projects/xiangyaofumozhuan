@@ -40,11 +40,11 @@ const AOE_TARGET_BURST_RATIO := 0.55
 # ── 演示队伍（只用于直接 F6 运行本场景）──
 # const 装不了 Resource，只存路径，由 _load_demo() 现场 load()。
 const DEMO_PLAYERS := [
-	"res://resources/units/players/stats_player_knight.tres",
-	"res://resources/units/players/stats_player_bunny.tres",
-	"res://resources/units/players/stats_player_crazy.tres",
-	"res://resources/units/players/stats_player_well_rounded.tres",
-	"res://resources/units/players/stats_player_brawler.tres"
+	"res://resources/units/players/燕如意.tres",
+	"res://resources/units/players/行修.tres",
+	"res://resources/units/players/厉狂澜.tres",
+	"res://resources/units/players/霓裳.tres",
+	"res://resources/units/players/陆孤鸣.tres"
 
 ]
 # 敌方演示队伍：与 DEMO_PLAYERS 一一对应，站 Stage/EnemySlots 的 Marker2D。
@@ -111,6 +111,31 @@ enum State { IDLE, INTRO, TURN_START, COMMAND, TARGET_SELECT, EXECUTE, TURN_END,
 @onready var command_menu: CommandMenu = $UI/CommandMenu
 ## 信息栏（"第 N 回合""某某的回合"、伤害播报等）。
 @onready var info_label: Label = $UI/InfoLabel
+## 地图截图当背景：Backdrop 是独立 CanvasLayer（layer = -1，画在所有单位和 UI 下面），
+## Photo 铺满屏幕（cover 裁剪），Dim 是压暗蒙层；没截图时整个 Backdrop 隐藏，用场景自带绿底。
+@onready var backdrop: CanvasLayer = %Backdrop
+@onready var photo_rect: TextureRect = %Photo
+@onready var dim_rect: ColorRect = %Dim
+## 场景自带绿底（没截图时用；有截图时隐藏）。
+@onready var background: Sprite2D = $Background
+## 由 GameRoot.enter_battle() 在 add_child 之前塞进来的地图截图。
+var _backdrop_photo: Texture2D = null
+
+
+## 设置战斗背景照片（地图截图）；null = 用场景自带的绿底。
+func set_backdrop(texture: Texture2D) -> void:
+	_backdrop_photo = texture
+
+
+## 把截图铺上去并压暗；没截图就藏掉整层、露出绿底。
+func _apply_backdrop() -> void:
+	var has_photo := _backdrop_photo != null
+	if backdrop != null:
+		backdrop.visible = has_photo
+	if background != null:
+		background.visible = not has_photo
+	if has_photo:
+		photo_rect.texture = _backdrop_photo
 
 # ── 运行时状态（全部由流程函数维护，外部不要直接改）──
 
@@ -143,6 +168,7 @@ var _pending_skill: SkillData = null      # 已经选了技能、正在等玩家
 func _ready() -> void:
 	# Area2D 的 input_event 需要物理点选，否则"点敌人选目标"会彻底失灵。
 	get_viewport().physics_object_picking = true
+	_apply_backdrop()
 	# 菜单只负责显示 + 发信号，具体做什么由 Battle 决定。
 	command_menu.command_selected.connect(_on_command_selected)
 	command_menu.skill_selected.connect(_on_skill_selected)
@@ -640,10 +666,10 @@ func _perform_skill(caster: BattleUnit, skill: SkillData, targets: Array[BattleU
 
 		var projectile: SkillProjectile = SKILL_PROJECTILE_SCENE.instantiate() as SkillProjectile
 		fx_root.add_child(projectile)
-		# setup 的起点用 global_position——敌我可能挂在不同的父节点下。
-		projectile.setup(skill, caster.global_position)
+		# 起点/落点都用 body_center()（脚在原点，往上抬半个身高）——敌我可能挂在不同的父节点下。
+		projectile.setup(skill, caster.body_center())
 		# await 到飞体抵达目标坐标那一刻再结算。
-		await projectile.fly_to(target.global_position)
+		await projectile.fly_to(target.body_center())
 
 		# 连击（hits > 1）：同一个飞体命中后连续结算 N 次，中间留一点间隔让伤害数字错开。
 		var times := maxi(1, skill.hits)
@@ -691,7 +717,7 @@ func _cast_aoe(caster: BattleUnit, skill: SkillData, victims: Array[BattleUnit])
 	# ① 一颗火球飞向敌阵中心（序列帧/粒子来自 SkillData）
 	var projectile: SkillProjectile = SKILL_PROJECTILE_SCENE.instantiate() as SkillProjectile
 	fx_root.add_child(projectile)
-	projectile.setup(skill, caster.global_position)
+	projectile.setup(skill, caster.body_center())
 	await projectile.fly_to(center)
 
 	# ② 中心大爆炸：burst() 内部读 skill.hit_effect_scene / burst_scale，并自毁
@@ -716,7 +742,7 @@ func _cast_aoe(caster: BattleUnit, skill: SkillData, victims: Array[BattleUnit])
 				target.take_damage(damage)
 				create_floating_text(target, str(int(damage)), critical_color if is_crit else skill.tint)
 				# 中心那朵盖不到斜排角落，所以每个敌人身上再补一朵小的。
-				_spawn_hit_burst(skill, target.global_position, AOE_TARGET_BURST_RATIO)
+				_spawn_hit_burst(skill, target.body_center(), AOE_TARGET_BURST_RATIO)
 				target.play_hit()          # 故意不 await：要的是"同时闪红"
 		_apply_skill_statuses(caster, skill, target)
 		await get_tree().create_timer(aoe_step_delay).timeout
@@ -958,12 +984,13 @@ func _finish_battle(player_won: bool, reason: String) -> void:
 
 
 ## 在单位头顶生成飘字（伤害/Blocked!/防御），播完自毁。
-## 坐标：unit.global_position 是单位中心，y-70 抬到头顶，x 随机 ±18 防止连炸时飘字叠成竖线。
+## 坐标：立绘脚在原点，body_center() 是身体中心，再往上抬 30px 落到头顶附近；
+## x 随机 ±18 防止连炸时飘字叠成竖线。
 ## 坑：必须先 add_child() 再 setup()——setup() 内部访问 @onready 的 value_label。
 func create_floating_text(unit: BattleUnit, text: String, color: Color) -> void:
 	var fx := Global.FLOATING_TEXT_SCENE.instantiate() as FloatingText
 	fx_root.add_child(fx)
-	fx.global_position = unit.global_position + Vector2(randf_range(-18.0, 18.0), -70.0)
+	fx.global_position = unit.body_center() + Vector2(randf_range(-18.0, 18.0), -30.0)
 	fx.setup(text, color)
 
 

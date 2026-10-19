@@ -145,8 +145,9 @@ Main (Node)  [main.gd = GameRoot]
 
 五项基础属性：**体质 / 魔力 / 力量 / 耐力 / 敏捷**（`GameRoot.ATTR_KEYS`）。
 
+- `1 级底数`：五项**各有 11 点**（`ATTR_BASE`），否则 1 级角色五项全是 0、属性面板看起来像坏了；
 - `每级成长`：升 1 级 → 五项**各 +1**（自动），再给 **5 点自由属性点**（玩家自己分配）；
-- `总点数` = `(等级-1) × 1 + 自由分配的点`（`GameRoot.attribute_points()`；自动成长不落盘，按等级现算）；
+- `总点数` = `ATTR_BASE(11) + (等级-1) × 1 + 自由分配的点`（`GameRoot.attribute_points()`；自动成长不落盘，按等级现算）；
 - `自由点` = `(等级-1) × 5 − 已分配`（`free_attribute_points()`），在属性面板（`C`）里点「＋」分配；
 - `分配`只走 `GameRoot.allocate_attr(character, index)`（唯一写入点，存 `Global.attr_alloc_by_character`）。
 

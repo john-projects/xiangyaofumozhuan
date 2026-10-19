@@ -34,6 +34,17 @@ enum Race {
 @export var race: Race
 ## 头像/立绘。用于选人卡片、悬浮卡、战斗头像。留空不报错，只是没图。
 @export var icon: Texture2D
+## 动作帧目录（可选）。填了就用这套 8 方位帧动画代替静态 icon：
+## 目录下应有 idle_<方位>.png / run_<方位>.png / attack_<方位>.png / cast_<方位>.png，
+## 每张是横向序列帧条带（帧宽 384、高 576）。方位共 8 个：
+## down / down_right / right / up_right / up / up_left / left / down_left。
+## 留空 = 继续用静态 icon（敌人和还没做动画的角色都是这样）。
+@export var anim_dir: String = ""
+## 3D 模型路径（可选）。填了就改用「实时渲染 3D 模型」代替 2D 贴图（3D-in-2D）：
+## 例 "res://assets/models/xingxiu/xingxiu_rigged.glb"。
+## 该 .glb 需带骨骼 + idle/run/attack/cast 动画（由 xx3d 的 export_glb.py 生成）。
+## 优先级：model_glb > anim_dir > icon。留空则走下面两者。
+@export var model_glb: String = ""
 ## 最大生命值（单位：血点；默认 1.0 = 最小值兜底，防止忘了填导致瞬间暴毙或除零）。
 ## ⚠ 它是**模板值**：运行时真正在跑的是 HealthComponent.max_health（setup() 时从这里拷过去）。
 @export var health:= 1.0

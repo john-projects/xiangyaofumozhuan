@@ -64,6 +64,8 @@ const MERCHANT_PANEL_SCENE := preload("res://scenes/ui/merchant_panel/merchant_p
 const BAG_PANEL_SCENE := preload("res://scenes/ui/bag_panel/bag_panel.tscn")
 ## 角色属性面板（操作菜单的「角色属性」或地图上按 C）。见 scenes/ui/stats_panel/。
 const STATS_PANEL_SCENE := preload("res://scenes/ui/stats_panel/stats_panel.tscn")
+## 拍地图截图（战斗背景）时最多等多少帧 frame_post_draw；headless / 最小化时渲染不推进，超时就放弃。
+const PHOTO_WAIT_FRAMES := 20
 ## 对话面板最小高度。**必须等于 world_map.tscn 里 TravelPanel 的原始高度 200**，否则面板高度会莫名跳一下。
 const PANEL_MIN_HEIGHT := 200.0
 ## 对话面板离屏幕底边的留白（像素）。面板是底部居中的横条，宽度靠 tscn 里的左右锚点 0.125 / 0.875。
@@ -82,6 +84,31 @@ const PANEL_OPTION_COLOR_ACTIVE := Color(1.0, 0.92, 0.62)
 const EDGE_MARGIN := 60.0
 
 # ── 跟随队伍的数值（只影响观感，不影响任何玩法数据）──
+## 地图上角色（玩家 + 跟随队友）的**显示高度**（像素），与贴图分辨率无关。
+## 立绘可能是 150px 的老头像，也可能是 320px 的新立绘；都按 tex_h 反推缩放，
+## 保证屏幕上一样大 —— 提高素材分辨率只提升清晰度，不改地图布局。
+const MAP_UNIT_HEIGHT := 195.0
+
+## 立绘内容在贴图里距**底边**的留白比例（实测：动画帧 20/480=4.2%，静态头像 13/320=4.1%）。
+## 脚底锚定要用它算 offset —— 直接把半高当偏移会让角色"陷进"地面前 8px。
+const SPRITE_FEET_MARGIN := 0.042
+
+# ── 姓名版（名字 + 血条 + 蓝条）──
+# 配色：我方绿、NPC 金、可交互红（NPC 的红在 world_npc.gd 里切）。
+const NAME_COLOR_ALLY := Color(0.45, 1.0, 0.55)
+
+# 版式按"渲染像素"排布：_make_name_plate() 会插一个 scale = 1/父缩放 的中间节点，
+# 让版式不受角色节点缩放影响（目前父节点都是 1.0，等于直出）。
+# 整块压在角色头顶上方：地图的 Sprite2D 是**居中**绘制的（没做脚底锚定），
+# 195 高的立绘头顶约在 -97.5，所以版式最下沿（蓝条底）放在 -106，留 8px 余量。
+const NAME_PLATE_TOP := -259.0      # 名字标签顶边
+const NAME_PLATE_HEIGHT := 30.0     # 名字标签高度
+const MAP_BAR_TOP := -227.0         # 血条顶边（名字下面留 2px）
+const MAP_BAR_WIDTH := 130.0
+const MAP_BAR_HEIGHT := 16.0
+const MAP_BAR_FONT := 12           # 16px 高的条塞得下的字号
+const HP_BAR_SCENE := preload("res://scenes/ui/health_bar/health_bar.tscn")
+
 ## 队长每移动这么远，往轨迹里记一个点（像素）。越小越平滑，但轨迹数组涨得越快。
 const TRAIL_SPACING := 2.0
 ## 轨迹最多保留多少个点（400 × 2px = 800px 的历史路径，够 4 个跟随者排在后面）。
@@ -142,6 +169,8 @@ var spawn_override := Vector2.INF
 var _map_size := Vector2.ZERO
 ## 本次生成的 NPC 节点列表（运行时 add_child 进来的，owner 为 null）。
 var _npcs: Array[WorldNPC] = []
+## capture_map_photo() 等 frame_post_draw 用的标志（一次性信号回调置 true）。
+var _photo_drawn := false
 ## 当前高亮的 NPC（离玩家最近且进入 interact_radius 的那个），没有则为 null。
 var _nearest: WorldNPC = null
 ## 对话/传送面板是否打开。为 true 时 _process 不处理走动，避免"一边看对话一边飘走"。
@@ -191,6 +220,10 @@ var _stats_panel: StatsPanel
 @onready var player_sprite: Sprite2D = %PlayerSprite
 ## 玩家占位色块（Polygon2D）。仅在角色没配 icon 时可见。
 @onready var player_fallback: Polygon2D = %PlayerFallback
+## 队长的 8 方位帧动画控制器（只有配了 UnitStats.anim_dir 的角色才有，否则为 null）。
+var _player_anim: CharAnim2D = null
+## 队长的实时 3D 模型头像（3D-in-2D，只有配了 UnitStats.model_glb 才有）。
+var _player_model3d: Model3DAvatar = null
 ## 相机。它是 Player 的**子节点**，所以只要玩家移动，相机天然跟随（省掉每帧同步）。
 @onready var camera: Camera2D = %Camera
 ## 左上角地图名标签（通关后会追加"（已通关）"）。
@@ -254,9 +287,43 @@ func _ready() -> void:
 
 	# ── 玩家 ──
 	# 没选人时用场景里预置的蓝色方块占位，直接运行 world_map.tscn 调试也能看出玩家在哪。
+	# 若队长的 UnitStats 配了 anim_dir，就用 8 方位帧动画代替静态立绘；
+	# 没有（敌人、还没做动画的角色）则完全走原来的静态贴图逻辑。
+	var stats := _leader_stats()
+	_player_anim = null
+	_player_model3d = null
+	# 优先级：实时 3D 模型（3D-in-2D） > 8 方位帧动画 > 静态立绘
+	if stats != null and not stats.model_glb.is_empty():
+		var av := Model3DAvatar.new()
+		av.name = "Model3D"
+		player.add_child(av)
+		if av.setup(stats.model_glb, MAP_UNIT_HEIGHT):
+			_player_model3d = av
+			player_sprite.visible = false        # 2D 立绘让位给 3D 视口
+		else:
+			av.queue_free()
+	if _player_model3d == null and stats != null and not stats.anim_dir.is_empty():
+		var anim := CharAnim2D.new()
+		anim.name = "CharAnim"
+		player.add_child(anim)
+		if anim.setup(player_sprite, stats.anim_dir):
+			_player_anim = anim
+			_player_anim.play("idle", "down")
+		else:
+			anim.queue_free()
 	var icon := _player_icon()
-	player_sprite.texture = icon
-	player_fallback.visible = icon == null
+	if _player_anim == null and _player_model3d == null:
+		player_sprite.texture = icon
+	# 分辨率归一：显示高度恒等于 MAP_UNIT_HEIGHT，与贴图分辨率无关。
+	# 动画模式下取的是条带图高度（480），region 高度一致，所以同一套公式照样成立。
+	# 3D 模式下 2D 精灵被隐藏，取景和缩放由 Model3DAvatar 自己算。
+	var tex := player_sprite.texture
+	if tex != null and _player_model3d == null:
+		var denom := float(tex.get_height()) * player.scale.y
+		if denom > 0.0:
+			player_sprite.scale = Vector2.ONE * (MAP_UNIT_HEIGHT / denom)
+		_anchor_sprite_feet(player_sprite)     # 脚底落到原点（阴影就在脚下）
+	player_fallback.visible = icon == null and _player_anim == null and _player_model3d == null
 	player.position = _world_pos(_spawn_normalized())
 
 	# ── 相机（挂在玩家下面，自动跟随）──
@@ -292,6 +359,17 @@ func _ready() -> void:
 func _player_icon() -> Texture2D:
 	var stats := Global.main_player_selected
 	return stats.icon if stats != null else null
+
+
+## 把 Sprite2D 锚定成「脚底在原点」：中心绘制 + offset 上移（半高 − 底部留白）。
+## 为什么必须做：脚下的 Shadow（椭圆）画在原点，精灵不锚定的话角色是"中心"对齐原点，
+## 阴影就会跑到腰上；顺带 y_sort 也按脚底算才对（角色该站在地上，不是浮在地面下）。
+## 参数 sprite：已经设好 texture 的精灵；texture 为空时直接返回（占位方块走原逻辑）。
+func _anchor_sprite_feet(sprite: Sprite2D) -> void:
+	if sprite.texture == null:
+		return
+	var h := float(sprite.texture.get_height())
+	sprite.offset = Vector2(0.0, -(h * 0.5 - h * SPRITE_FEET_MARGIN))
 
 
 ## 显示 setup 时存下的结算文案；空串直接返回（淡出由 _add_toast_line 负责）。
@@ -485,15 +563,26 @@ func _process(delta: float) -> void:
 
 ## 按输入向量移动玩家并夹在地图内；dash 按住即持续冲刺，flip_h 只在 |dir.x| > 0.01 时更新以免朝向抖动。
 ## 上界写 maxf(EDGE_MARGIN, size - EDGE_MARGIN)：地图比两倍留白还小时，否则会把玩家拉到图外。
+## 配了帧动画时改用 8 方位朝向（不再靠 flip_h 镜像），并把动作切成 run / idle。
 func _move_player(delta: float) -> void:
 	var dir := Input.get_vector("move_left", "move_right", "move_up", "move_down")
 	if dir == Vector2.ZERO:
+		if _player_model3d != null:
+			_player_model3d.play("idle")
+		elif _player_anim != null:
+			_player_anim.play("idle")
 		return
 	var speed := move_speed * (dash_multiplier if Input.is_action_pressed("dash") else 1.0)
 	player.position += dir * speed * delta
 	player.position.x = clampf(player.position.x, EDGE_MARGIN, maxf(EDGE_MARGIN, _map_size.x - EDGE_MARGIN))
 	player.position.y = clampf(player.position.y, EDGE_MARGIN, maxf(EDGE_MARGIN, _map_size.y - EDGE_MARGIN))
-	if absf(dir.x) > 0.01:
+	if _player_model3d != null:
+		_player_model3d.face_from_vector(dir)     # 3D 模式下直接转模型，不用 8 套贴图
+		_player_model3d.play("run")
+	elif _player_anim != null:
+		_player_anim.set_facing(_player_anim.facing_from_vector(dir))
+		_player_anim.play("run")
+	elif absf(dir.x) > 0.01:
 		player_sprite.flip_h = dir.x < 0.0
 
 
@@ -504,8 +593,7 @@ func _move_player(delta: float) -> void:
 ## 建队长名字 + 队友小人（_ready 调一次；队伍变化时走 _rebuild_companions）。
 func _setup_party_visuals() -> void:
 	if _leader_name_label == null:
-		_leader_name_label = _make_name_label(18)
-		player.add_child(_leader_name_label)
+		_leader_name_label = _make_name_plate(player, 18, NAME_COLOR_ALLY, _leader_stats())
 	_update_leader_name()
 	_rebuild_companions()
 
@@ -517,6 +605,7 @@ func _update_leader_name() -> void:
 	var leader := _leader_stats()
 	_leader_name_label.text = leader.name if leader != null else ""
 	_leader_name_label.visible = leader != null
+	_refresh_map_bars(player, leader)
 
 
 ## 当前"队长"（地图上那个能操控的 Player）——就是选人时定下的主角。
@@ -571,27 +660,101 @@ func _make_companion(stats: UnitStats) -> Node2D:
 	var sprite := Sprite2D.new()
 	sprite.name = "Sprite"
 	sprite.texture = stats.icon
-	sprite.scale = Vector2(1.3, 1.3)      # 和 PlayerSprite 的缩放一致
+	# 和玩家一样按贴图高度归一到 MAP_UNIT_HEIGHT（队友的 sprite 没有父级缩放，直接算）。
+	sprite.scale = Vector2(1.3, 1.3)      # 贴图为空时的兜底
+	if stats.icon != null and stats.icon.get_height() > 0:
+		sprite.scale = Vector2.ONE * (MAP_UNIT_HEIGHT / float(stats.icon.get_height()))
+	_anchor_sprite_feet(sprite)            # 和玩家一样脚底锚定，否则阴影在腰上
 	node.add_child(sprite)
-	var label := _make_name_label(16)
+	var label := _make_name_plate(node, 16, NAME_COLOR_ALLY, stats)
 	label.text = stats.name
-	node.add_child(label)
 	return node
 
 
-## 造"头顶名字"标签（白字 + 黑描边，压在地图上也看得清）。参数 font_size：队长 18、队友 16。
-func _make_name_label(font_size: int) -> Label:
+## 造一整块"姓名版"：名字 + 血条 + 蓝条，挂在角色节点下。
+## 内部的 Plate 节点把父节点缩放抵消掉（scale = 1/父缩放），让版式固定为"渲染像素"：
+## 目前队长和队友的角色节点都是 1.0（那个 1.3 在 PlayerSprite 上，不是节点），
+## 所以这一步现在等于没放大 —— 留着是为了以后万一给角色节点加缩放，姓名版也不会跟着错位。
+## 返回值：名字 Label（调用方自己填 text）。
+func _make_name_plate(parent: Node2D, font_size: int, color: Color, stats: UnitStats) -> Label:
+	var plate := Node2D.new()
+	plate.name = "Plate"
+	var s := parent.scale.y
+	if absf(s) < 0.001:
+		s = 1.0
+	plate.scale = Vector2.ONE / s
+	parent.add_child(plate)
+	var label := _make_name_label(font_size, color)
+	plate.add_child(label)
+	_make_status_bars(plate)
+	_refresh_map_bars(plate, stats)
+	return label
+
+
+## 造"头顶名字"标签（黑描边，压在地图上也看得清）。参数 font_size：队长 18、队友 16。
+## 参数 color：名字颜色（我方绿；NPC 的金/红在 world_npc.gd 里自己管）。
+func _make_name_label(font_size: int, color: Color = NAME_COLOR_ALLY) -> Label:
 	var label := Label.new()
 	label.name = "NameLabel"
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE   # 别挡住底下的点击
 	label.add_theme_font_size_override("font_size", font_size)
+	label.add_theme_color_override("font_color", color)
 	label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
 	label.add_theme_constant_override("outline_size", 5)
-	label.size = Vector2(220, 30)
-	label.position = Vector2(-110, -78)               # 以角色脚下为原点，往上抬到头顶
+	label.size = Vector2(220, NAME_PLATE_HEIGHT)
+	label.position = Vector2(-110, NAME_PLATE_TOP)     # 以角色脚下为原点，往上抬到头顶
 	return label
+
+
+## 在名字标签下方造血条 + 蓝条（非战斗状态也显示血量/蓝量）。
+## 参数 parent：挂到哪（玩家或队友的角色节点）。数值由 _refresh_map_bars() 填。
+## 副作用：往 parent 里加两个 HealthBar 子节点。
+func _make_status_bars(parent: Node2D) -> void:
+	for i in 2:
+		var bar := HP_BAR_SCENE.instantiate() as HealthBar
+		if i == 0:
+			bar.name = "HealthBar"
+			bar.back_color = Color(0.08, 0.08, 0.1, 1)
+			bar.fill_color = Color(0.35, 0.85, 0.4, 1)
+		else:
+			bar.name = "ManaBar"
+			bar.back_color = Color(0.06, 0.07, 0.12, 1)
+			bar.fill_color = Color(0.32, 0.58, 0.95, 1)
+		bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		# 场景里的 custom_minimum_size 是 96x20，不改的话高度会被撑到 20，两条 bar 就贴不紧了。
+		bar.custom_minimum_size = Vector2(MAP_BAR_WIDTH, MAP_BAR_HEIGHT)
+		bar.size = Vector2(MAP_BAR_WIDTH, MAP_BAR_HEIGHT)
+		# 血条在上、蓝条紧贴其下沿（y 差正好一个条高，中间没有空隙）
+		bar.position = Vector2(-MAP_BAR_WIDTH * 0.5,
+				MAP_BAR_TOP + (MAP_BAR_HEIGHT if i == 1 else 0.0))
+		parent.add_child(bar)
+		bar.size = Vector2(MAP_BAR_WIDTH, MAP_BAR_HEIGHT)   # 进树后再设一次，确保生效
+		# 条里的数字用小字号，否则 14px 高的条塞不下
+		for child in bar.get_children():
+			if child is Label:
+				(child as Label).add_theme_font_size_override("font_size", MAP_BAR_FONT)
+
+
+## 把某个角色的血量/蓝量写进它脚下的两条 bar（按名字找子节点，没建过就跳过）。
+## 注意：非战斗期没有"当前血量"这个运行时数据（每场战斗都是从 UnitStats.health 满血开始），
+##   所以这里按满值显示 —— 将来若做了持久血量，改这里的 update_bar() 入参即可。
+func _refresh_map_bars(plate: Node2D, stats: UnitStats) -> void:
+	# 递归找：血条挂在 Plate 节点下（不是角色的直接子节点）。
+	var hp := plate.find_child("HealthBar", true, false) as HealthBar
+	var mp := plate.find_child("ManaBar", true, false) as HealthBar
+	if hp == null or mp == null:
+		return
+	if stats == null:
+		hp.visible = false
+		mp.visible = false
+		return
+	hp.visible = true
+	hp.update_bar(1.0, maxf(1.0, stats.health))
+	var mana := maxf(0.0, stats.mana)
+	mp.visible = mana > 0.0            # 没蓝的角色不挂一条空槽
+	mp.update_bar(1.0, mana)
 
 
 ## 记录队长轨迹：沿"上一记录点 → 当前位置"每 TRAIL_SPACING 像素插一个点。
@@ -1418,6 +1581,60 @@ func _build_sect_buttons(data: MapNPC) -> void:
 func _on_sect_join_pressed(character: UnitStats, sect_id: String) -> void:
 	SoundManager.play_sound(SoundManager.Sound.UI)
 	sect_join_requested.emit(character, sect_id)
+
+
+## 拍一张"只有地图"的画面，给战斗当背景：临时隐藏 NPC / 玩家 / 整个 UI 层，抓完立刻恢复。
+## 返回值：viewport 截图（Image）；headless / 拿不到画面时返回 null（调用方退回绿底）。
+## 坑：必须等 frame_post_draw 才抓，否则抓到的是"还没隐藏"的上一帧；恢复用同一份列表，别漏。
+## 为什么不用裸 `await RenderingServer.frame_post_draw`：headless / 最小化时可能永远不触发，会卡住进战斗。
+##   这里挂一次性连接 + 最多等 PHOTO_WAIT_FRAMES 帧兜底。
+func capture_map_photo() -> Image:
+	# headless（--headless 跑测试）没有渲染设备，读 viewport 贴图会报 "Parameter t is null"：直接放弃。
+	if DisplayServer.get_name() == "headless":
+		return null
+	# CanvasLayer 不是 CanvasItem，不能塞进同一个类型数组；UI 层单独记。
+	var hidden: Array[CanvasItem] = []
+	var hidden_layer: CanvasLayer = null
+	for npc in _npcs:
+		if is_instance_valid(npc) and npc.visible:
+			npc.visible = false
+			hidden.append(npc)
+	if player != null and player.visible:
+		player.visible = false
+		hidden.append(player)
+	# 跟随的队友小人（_companions）不是 Player 的子节点，必须单独隐藏，否则会留在战斗背景里。
+	for companion in _companions:
+		if is_instance_valid(companion) and companion.visible:
+			companion.visible = false
+			hidden.append(companion)
+	if ui_layer != null and ui_layer.visible:
+		ui_layer.visible = false
+		hidden_layer = ui_layer
+
+	_photo_drawn = false
+	RenderingServer.frame_post_draw.connect(_on_photo_drawn, CONNECT_ONE_SHOT)
+	for i in PHOTO_WAIT_FRAMES:
+		if _photo_drawn:
+			break
+		await get_tree().process_frame
+	if RenderingServer.frame_post_draw.is_connected(_on_photo_drawn):
+		RenderingServer.frame_post_draw.disconnect(_on_photo_drawn)
+
+	var texture := get_viewport().get_texture()
+	var img: Image = texture.get_image() if texture != null else null
+	for node in hidden:
+		if is_instance_valid(node):
+			node.visible = true
+	if hidden_layer != null:
+		hidden_layer.visible = true
+	if img == null or img.is_empty():
+		return null
+	return img
+
+
+## frame_post_draw 的一次性回调（只置标志，真正的截图在 capture_map_photo 里做）。
+func _on_photo_drawn() -> void:
+	_photo_drawn = true
 
 
 ## 门派变化后刷新（GameRoot 拜师成功/失败后调用）。参数 message 非空时走顶部一行弹窗。

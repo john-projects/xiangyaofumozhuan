@@ -37,6 +37,12 @@ class_name WorldNPC
 ## 注意：缩放的基准是 self（整个 NPC 节点），所以名字标签和提示标记也会跟着一起放大。
 const HIGHLIGHT_SCALE := 1.1
 
+## NPC 名字的两种颜色。
+## 常态金色（和"路人/NPC"的视觉语言一致）；玩家走进交互半径、能按 E 时切成红色提示。
+## 红金两色都配了黑描边（见 _apply_name_style），铺在任何地图底图上都看得清。
+const NAME_COLOR_NPC := Color(1.0, 0.84, 0.36)
+const NAME_COLOR_INTERACT := Color(1.0, 0.35, 0.35)
+
 ## 本 NPC 的配置数据（MapNPC 资源：id / display_name / texture / position / dialogue /
 ## destinations / teleport_label）。由 WorldMap 在 setup() 里注入；本文件只读不写。
 ## 类型是 Resource（不是节点），运行时改它会影响所有引用同一 .tres 的 NPC，务必小心。
@@ -69,7 +75,16 @@ func setup(p_data: MapNPC) -> void:
 	else:
 		fallback.visible = true
 	name_label.text = data.display_name
+	_apply_name_style(NAME_COLOR_NPC)      # NPC 名字常态是金色
 	set_highlight(false)
+
+
+## 给名字上色（并补一圈黑描边，地图底色再花也看得清）。
+## 参数 color：金色（常态）/ 红色（可交互）。
+func _apply_name_style(color: Color) -> void:
+	name_label.add_theme_color_override("font_color", color)
+	name_label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
+	name_label.add_theme_constant_override("outline_size", 5)
 
 
 ## 切换"可交谈"高亮表现：显示/隐藏头顶提示 + 平滑放大/还原。
@@ -86,5 +101,7 @@ func setup(p_data: MapNPC) -> void:
 ##     所以调用方必须做"只在状态变化时调用"的优化（WorldMap._update_nearest 已这么做）。
 func set_highlight(value: bool) -> void:
 	mark.visible = value
+	# 能交互时名字变红，离开交互半径恢复金色。
+	_apply_name_style(NAME_COLOR_INTERACT if value else NAME_COLOR_NPC)
 	var tween := create_tween()
 	tween.tween_property(self, "scale", Vector2.ONE * (HIGHLIGHT_SCALE if value else 1.0), 0.1)

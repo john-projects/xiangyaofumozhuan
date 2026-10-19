@@ -1,6 +1,6 @@
 [gd_resource type="Resource" script_class="UnitStats" format=3 uid="uid://ckn4x2cq26fjk"]
 
-[ext_resource type="Texture2D" uid="uid://cproxhccob85g" path="res://assets/sprites/tomato/Players/Player_1.png" id="1_ywjqh"]
+[ext_resource type="Texture2D" path="res://assets/sprites/units/players/Player_yechi.png" id="1_ywjqh"]
 [ext_resource type="Script" uid="uid://j6ibt5vlkg3t" path="res://resources/units/unit_stats.gd" id="2_lu0qv"]
 [ext_resource type="Script" uid="uid://sbgbq3puamij" path="res://resources/skills/skill_data.gd" id="3_fs1jk"]
 

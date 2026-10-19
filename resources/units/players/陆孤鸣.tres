@@ -1,13 +1,14 @@
 [gd_resource type="Resource" script_class="UnitStats" format=3 uid="uid://bdu4l4j30auv1"]
 
-[ext_resource type="Texture2D" uid="uid://dpxw8tsbgrfse" path="res://assets/sprites/tomato/Players/Player_2.png" id="1_artcn"]
 [ext_resource type="Script" uid="uid://j6ibt5vlkg3t" path="res://resources/units/unit_stats.gd" id="1_fokdh"]
+[ext_resource type="Texture2D" uid="uid://bo7e3tmqyic8d" path="res://assets/sprites/units/players/Player_luguming.png" id="1_qhuv5"]
 [ext_resource type="Script" uid="uid://sbgbq3puamij" path="res://resources/skills/skill_data.gd" id="3_qhuv5"]
 
 [resource]
 script = ExtResource("1_fokdh")
 name = "陆孤鸣"
-icon = ExtResource("1_artcn")
+icon = ExtResource("1_qhuv5")
+anim_dir = "res://assets/sprites/units/players/luguming_anim"
 speed = 270
 block_chance = 5.0
 metadata/_custom_type_script = "uid://j6ibt5vlkg3t"

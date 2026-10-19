@@ -28,7 +28,8 @@ const WORLD_MAP_SCENE := preload("res://scenes/world/world_map.tscn")
 const BATTLE_SCENE := preload("res://scenes/battle/battle.tscn")
 ## 默认队长；⚠ 用敌人资源当队长也安全：战斗走 start_battle(我方, 敌方) 显式传参，不读 UnitStats.type。
 ## 换人改这一行，或在 main.tscn 检查器填 default_leader 覆盖。
-const DEFAULT_LEADER := preload("res://resources/units/players/stats_player_well_rounded.tres")
+const DEFAULT_LEADER := preload("res://resources/units/players/行修.tres")
+
 
 # ── 配置（main.tscn 检查器里填；改这些等于改关卡结构与难度曲线）──
 ## 地图顺序表：数组顺序 = 关卡顺序，map_difficulty() 靠下标算，调序会连带改难度/奖励。
@@ -66,6 +67,8 @@ const ATTR_KEYS := ["con", "mag", "str", "end", "agi"]
 const ATTR_NAMES := ["体质", "魔力", "力量", "耐力", "敏捷"]
 ## 每升 1 级：五项基础属性**各 +本值**（自动，不受操作影响）。
 const ATTR_PER_LEVEL := 1
+## 1 级时的基础属性点数（五项各这么多）。没有它的话 1 级角色五项全是 0，属性面板看起来像坏了。
+const ATTR_BASE := 11
 ## 每升 1 级：额外获得这么多点**自由属性点**，玩家自己加到任意一项上。
 const ATTR_FREE_PER_LEVEL := 5
 ## 种族 × 基础属性 → 派生属性的系数表（用户给的数值，一字不改）。
@@ -213,13 +216,13 @@ static func exp_of(character: UnitStats) -> int:
 	return maxi(0, int(Global.exp_by_character.get(character_key(character), 0)))
 
 
-## 五项基础属性总点数（自动成长 + 自由分配），顺序同 ATTR_KEYS。
+## 五项基础属性总点数（1 级基础 + 自动成长 + 自由分配），顺序同 ATTR_KEYS。
 ## 自动成长按 (等级-1) 现算而不落库，永远与等级一致。
 static func attribute_points(character: UnitStats) -> Array[int]:
 	var out: Array[int] = [0, 0, 0, 0, 0]
 	if character == null:
 		return out
-	var auto_points := maxi(0, level_of(character) - 1) * ATTR_PER_LEVEL
+	var auto_points := ATTR_BASE + maxi(0, level_of(character) - 1) * ATTR_PER_LEVEL
 	var alloc := _attr_alloc(character)
 	for i in ATTR_KEYS.size():
 		out[i] = auto_points + int(alloc[i])
@@ -556,7 +559,7 @@ func _remember_position() -> void:
 		_map_positions[current_map_id] = world.player_normalized()
 
 
-## 进入战斗：记位置 → 生成敌人 → 实例化 Battle，await _swap 后 start_battle（不 await 战斗本身）。
+## 进入战斗：记位置 → **拍一张当前地图当背景** → 生成敌人 → 实例化 Battle，await _swap 后 start_battle（不 await 战斗本身）。
 ## ⚠ auto_start_demo=false 和 connect 都必须在 add_child 之前；start_battle 必须在淡入之后，否则黑屏中开打。
 ## 上阵为空或敌人池为空时警告返回；_last_enemy_count 在这里记下。
 func enter_battle() -> void:
@@ -571,12 +574,36 @@ func enter_battle() -> void:
 		return
 	_last_enemy_count = enemies.size()      # 结算时按"打了几个"给经验（见 exp_reward）
 
+	# 战斗背景 = 当前地图的截图（隐藏 NPC/玩家/UI 后拍，Battle 里再压一层暗色蒙层）。
+	# 必须在 _swap 淡出之前拍：那时地图还是可见的、fade 还是透明的。
+	var backdrop := await _capture_battle_backdrop()
+
 	var battle := BATTLE_SCENE.instantiate() as Battle
 	battle.auto_start_demo = false          # ★ 必须在 add_child 之前
 	battle.battle_ended.connect(_on_battle_ended)
+	battle.set_backdrop(backdrop)           # 也必须早于 add_child（_ready 里就要用）
 	in_battle = true
 	await _swap(battle, world_root)
 	battle.start_battle(_make_player_team(), enemies)
+
+
+## 战斗背景截图的宽度上限（像素）。背景不需要高清：缩到这个宽度再由 TextureRect 拉伸，
+## 一来省显存/上传（1680×960 ≈ 6.4MB → 720×411 ≈ 1.2MB），二来放大后天然柔化、不抢镜。
+const PHOTO_MAX_WIDTH := 720
+
+
+## 让当前地图拍一张"没有 NPC/玩家/UI"的截图；没有地图时返回 null（战斗退回绿底）。
+func _capture_battle_backdrop() -> Texture2D:
+	var world := _current_world_map()
+	if world == null:
+		return null
+	var img: Image = await world.capture_map_photo()
+	if img == null or img.is_empty():
+		return null
+	if img.get_width() > PHOTO_MAX_WIDTH:
+		var h := int(roundf(float(img.get_height()) * PHOTO_MAX_WIDTH / float(img.get_width())))
+		img.resize(PHOTO_MAX_WIDTH, maxi(1, h), Image.INTERPOLATE_BILINEAR)
+	return ImageTexture.create_from_image(img)
 
 
 # ── 战斗结算 ──

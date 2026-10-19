@@ -1,5 +1,8 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene format=3 uid="uid://cykn7ol72w0ge"]
 
 [ext_resource type="PackedScene" path="res://scenes/world/world_map.tscn" id="1_base"]
 
-[node name="WorldMap" instance=ExtResource("1_base")]
+[node name="WorldMap" unique_id=690930798 instance=ExtResource("1_base")]
+
+[node name="TravelPanel" parent="UI" index="4"]
+anchors_preset = -1

@@ -4,7 +4,7 @@
 [ext_resource type="PackedScene" path="res://scenes/ui/health_bar/health_bar.tscn" id="2_hpbar"]
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_click"]
-radius = 70.0
+radius = 110.0
 
 [sub_resource type="Shader" id="Shader_outline"]
 code = "shader_type canvas_item;\n\n// 单位选中轮廓：把剪影往外扩一圈实心色，内部挖空（本体 sprite 画在上面盖住）。\n// 用法：贴在一个 show_behind_parent = true、scale 略大于本体的 Sprite2D 上，\n// texture 用同一张单位贴图，靠 visible 开关。\nuniform vec4 outline_color : source_color = vec4(1.0, 0.85, 0.35, 1.0);\nuniform float thickness : hint_range(0.0, 8.0) = 2.5;\nuniform float alpha_cutoff : hint_range(0.0, 1.0) = 0.05;\n\nvoid fragment() {\nif (texture(TEXTURE, UV).a > alpha_cutoff) {\ndiscard;\n}\nfloat a = 0.0;\nfor (int i = 0; i < 8; i++) {\nfloat ang = float(i) * 0.7853982;\nvec2 off = vec2(cos(ang), sin(ang)) * TEXTURE_PIXEL_SIZE * thickness;\na = max(a, texture(TEXTURE, UV + off).a);\n}\nif (a <= alpha_cutoff) {\ndiscard;\n}\nCOLOR = vec4(outline_color.rgb, outline_color.a * smoothstep(alpha_cutoff, alpha_cutoff + 0.4, a));\n}\n"
@@ -23,8 +23,8 @@ script = ExtResource("1_unit")
 unique_name_in_owner = true
 visible = false
 z_index = -1
-color = Color(1, 0.86, 0.35, 0.3)
-polygon = PackedVector2Array(-64, -78, 64, -78, 64, 26, -64, 26)
+color = Color(1, 0.86, 0.35, 0.32)
+polygon = PackedVector2Array(54, 0, 52.16, 3.88, 46.77, 7.5, 38.18, 10.61, 27, 12.99, 13.98, 14.49, 0, 15, -13.98, 14.49, -27, 12.99, -38.18, 10.61, -46.77, 7.5, -52.16, 3.88, -54, 0, -52.16, -3.88, -46.77, -7.5, -38.18, -10.61, -27, -12.99, -13.98, -14.49, 0, -15, 13.98, -14.49, 27, -12.99, 38.18, -10.61, 46.77, -7.5, 52.16, -3.88)
 
 [node name="Sprite" type="Sprite2D" parent="."]
 unique_name_in_owner = true

@@ -6,7 +6,7 @@
 
 | 文件 | 作用 |
 |---|---|
-| `battle.tscn` / `battle.gd` | 战斗根：站位 Marker、回合调度、指令分发、技能执行（单体 `_perform_skill` / 群体 `_cast_aoe`）、胜负判定 |
+| `battle.tscn` / `battle.gd` | 战斗根：站位 Marker、回合调度、指令分发、技能执行（单体 `_perform_skill` / 群体 `_cast_aoe`）、胜负判定、**背景（地图截图 + 蒙层）** |
 | `battle_unit.tscn` / `battle_unit.gd` | 战斗单位：血量/蓝量、技能冷却、选中高亮、受击与施法表现 |
 | `command_menu.tscn` / `command_menu.gd` | 指令菜单（攻击/法术/道具/防御/逃跑）+ **技能二级菜单** |
 | `turn_order.tscn` / `turn_order.gd` | 出手顺序条（当前出手的加亮边框） |
@@ -46,6 +46,30 @@
   所以不会出现"鼠标指着一个、箭头指着另一个"的割裂感。
 
 ## 站位（双方上限 5 人 · 前三后二）
+
+**锚点约定：单位的本地坐标 `(0,0)` = 脚底**。`BattleUnit._refresh_visuals()` 用
+`sprite.offset = (0, -贴图高/2)` 把立绘整体上移，所以节点摆在哪、脚就踩在哪；
+名字 / 血条 / 蓝条 / 头顶箭头都按"头顶 = `-贴图高 × 缩放`"算，换任何尺寸的立绘都自动对齐。
+`battle.tscn` 的 `Stage` 整体下移了 120px，用来抵消"锚点从身体中心变成脚底"带来的视觉位移。
+
+给特效定位时用 `BattleUnit.body_center()`（脚往上抬半个身高），不要直接用 `global_position`：
+弹道起点/落点、命中爆炸、飘字都改用它了。
+
+## 背景（地图截图 + 蒙层）
+
+进战斗前 `GameRoot.enter_battle()` 会让当前地图拍一张"只有地图"的截图
+（`WorldMap.capture_map_photo()`：临时隐藏 NPC / 玩家 / 整个 UI 层，等 `frame_post_draw` 后抓 viewport，
+抓完立刻恢复），再 `Battle.set_backdrop()` 塞进来（必须在 `add_child` 之前）。
+
+`battle.tscn` 里的 `Backdrop`（`CanvasLayer`，**layer = -1**，画在所有单位和 UI 下面）：
+`Photo` 是铺满屏幕的 `TextureRect`（`stretch_mode = KEEP_ASPECT_COVERED`），`Dim` 是压暗的 `ColorRect`
+（默认 `Color(0.02, 0.02, 0.05, 0.74)`，想更暗/更亮就调它的 alpha）。没有截图（`headless`、直接 F6 跑战斗）时
+整层隐藏，露出场景自带的绿底 `Background`。
+
+截图会先缩到 `GameRoot.PHOTO_MAX_WIDTH = 720` 宽再上传（1680×960 → 720×411，约 1.2 MB）：
+放大回全屏后天然柔化，背景不抢镜，也省显存。实测一次约 9 ms（抓图 5.4 + 缩放 2.9 + 上传 0.8），
+只在进战斗时发生一次，且落在淡出的黑屏期间，战斗过程没有额外开销。
+截图里**没有**玩家、队友跟随小人（`_companions`）和 NPC 节点（它们被临时隐藏），但地图原画本身画着的小人属于美术内容，去不掉。
 
 | 槽位 | 我方 | 敌方 | 含义 |
 |---|---|---|---|
