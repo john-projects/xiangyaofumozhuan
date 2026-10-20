@@ -8,6 +8,7 @@
 script = ExtResource("2_xvmk0")
 name = "燕如意"
 icon = ExtResource("1_ujefh")
+model_glb = "res://assets/models/players/燕如意.glb"
 health = 30
 damage = 6
 speed = 260

@@ -3,13 +3,13 @@
 importer="scene"
 importer_version=1
 type="PackedScene"
-uid="uid://dexa2hdsje1kc"
-path="res://.godot/imported/xingxiu_rigged.glb-3817ec2b10c611b4ef59f6c6640d5ea0.scn"
+uid="uid://cbtkqhlogarrr"
+path="res://.godot/imported/厉狂澜.glb-506a81f68f273e079bb247585fca7f87.scn"
 
 [deps]
 
-source_file="res://assets/models/xingxiu/xingxiu_rigged.glb"
-dest_files=["res://.godot/imported/xingxiu_rigged.glb-3817ec2b10c611b4ef59f6c6640d5ea0.scn"]
+source_file="res://assets/models/players/厉狂澜.glb"
+dest_files=["res://.godot/imported/厉狂澜.glb-506a81f68f273e079bb247585fca7f87.scn"]
 
 [params]
 
@@ -41,5 +41,5 @@ materials/extract_format=0
 materials/extract_path=""
 _subresources={}
 gltf/naming_version=2
-gltf/embedded_image_handling=1
+gltf/embedded_image_handling=2
 gltf/texture_map_mode=1

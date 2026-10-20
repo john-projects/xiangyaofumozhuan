@@ -517,6 +517,7 @@ func show_map(result_text := "", from_map_id := "", restore_position := false) -
 	# 门派：拜师面板里点某个队员 = 让他拜入这个 NPC 的门派（种族/已有门派由 can_join_sect 判）
 	world.sect_join_requested.connect(_on_join_sect_requested)
 	world.party_remove_requested.connect(_on_party_remove_requested)
+	world.party_lead_requested.connect(_on_party_lead_requested)
 	await _swap(world, world_root)
 
 
@@ -646,8 +647,43 @@ func _on_battle_ended(player_won: bool) -> void:
 # ── 队伍生成 ──
 
 # ── 团队（party）与上阵名单（deployed）：增删/规则判定入口（开局初始化除外）──
-# party=大名单（第 0 位队长，上限 MAX_TEAM_SIZE）；deployed=真正上场（≤5，必须是 party 子集）。
+# party=大名单（不限队长位）；deployed=真正上场（≤5，必须是 party 子集）。
+# **队长 = 上阵名单的第 0 位**（见 leader()）：上阵/下阵/「设为队长」都能改变队长。
 # 两者都是 Array[UnitStats] 引用、按引用交给 WorldMap；⚠ 只能就地增删，别整个重新赋值。
+
+## 队长 = 上阵名单的第 0 位；没人上阵时退回团队第 0 位，再没有就退回开局主角。
+## 地图上操控的角色、背包/属性面板默认展示的人，都跟着它走。
+func leader() -> UnitStats:
+	return leader_of(party, deployed)
+
+
+## 静态版：外部脚本拿不到 GameRoot 的实例字段（`class_name GameRoot` 与 autoload 同名，
+## `GameRoot.leader()` 会被当成"类"调用而报错），所以把两个数组显式传进来查。
+static func leader_of(p_party: Array[UnitStats], p_deployed: Array[UnitStats]) -> UnitStats:
+	if not p_deployed.is_empty() and p_deployed[0] != null:
+		return p_deployed[0]
+	if not p_party.is_empty() and p_party[0] != null:
+		return p_party[0]
+	return Global.main_player_selected
+
+
+## 把某个**已上阵**的成员设为队长（挪到 deployed 第 0 位）。
+## 返回值：true = 真的换了位置；false = 不在上阵名单或本来就是第一位。
+func set_leader(stats: UnitStats) -> bool:
+	if stats == null or not is_deployed(deployed, stats):
+		return false
+	var index := -1
+	for i in deployed.size():
+		if deployed[i] != null and (deployed[i] == stats or deployed[i].name == stats.name):
+			index = i
+			break
+	if index <= 0:
+		return false
+	deployed.remove_at(index)
+	deployed.insert(0, stats)
+	party_changed.emit()
+	return true
+
 
 ## 非 null 成员数（允许空位，不能只用 size()）。静态函数让面板共用同一套规则。
 static func party_count(p_party: Array[UnitStats]) -> int:
@@ -731,18 +767,19 @@ func add_party_member(stats: UnitStats) -> bool:
 	return true
 
 
-## 移出团队：下标 0（队长）不可移；同时从 deployed 摘掉并 emit party_changed。
+## 移出团队：任何人都能移（包括队长 —— 队长只是"上阵第一位"，人走了下一位自动顶上）；
+## 同时从 deployed 摘掉并 emit party_changed。团队最后一人不允许移出，否则地图上没人可操控。
 func remove_party_member(stats: UnitStats) -> bool:
 	if stats == null:
+		return false
+	if party_count(party) <= 1:
+		push_warning("GameRoot: 团队至少留 1 人")
 		return false
 	for i in party.size():
 		var member := party[i]
 		if member == null:
 			continue
 		if member == stats or member.name == stats.name:
-			if i == 0:
-				push_warning("GameRoot: 队长不能移出团队")
-				return false
 			party.remove_at(i)
 			_undeploy_silently(member)
 			party_changed.emit()
@@ -829,18 +866,30 @@ func _on_party_undeploy_requested(stats: UnitStats) -> void:
 		world.notify_party_changed("%s 已下阵。" % stats.name)
 
 
-## 移出团队回调：成功则移出并刷新；失败只写原因（队长不可移）。
+## 移出团队回调：成功则移出并刷新；失败只写原因（不在团队 / 团队只剩他一人）。
 func _on_party_remove_requested(stats: UnitStats) -> void:
 	var world := _current_world_map()
 	if not remove_party_member(stats):
 		var why := "这个成员不在团队里。"
-		if stats != null and not party.is_empty() and party[0] == stats:
-			why = "队长不能移出团队。"
+		if party_count(party) <= 1:
+			why = "团队至少留 1 人。"
 		if world != null:
 			world.notify_party_changed(why)
 		return
 	if world != null:
 		world.notify_party_changed("%s 已离开团队。" % stats.name)
+
+
+## 「设为队长」回调：把选中的已上阵成员挪到上阵名单第一位（队长 = 第一位）。
+## 成功后重新走一遍地图（队长换了，地图上操控的立绘/跟随都要重建）。
+func _on_party_lead_requested(stats: UnitStats) -> void:
+	var world := _current_world_map()
+	if not set_leader(stats):
+		if world != null:
+			world.notify_party_changed("他不在上阵名单里，不能设为队长。")
+		return
+	if world != null:
+		world.notify_party_changed("%s 已成为队长。" % stats.name)
 
 
 # ── 背包（Global.equipped_weapons）与装备栏（Global.equipment_by_character）──

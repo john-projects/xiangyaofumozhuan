@@ -62,7 +62,8 @@ const NAME_COLOR_NORMAL := Color(0.45, 1.0, 0.55)
 ## 攻击目标名字：红色。
 const NAME_COLOR_TARGETED := Color(1.0, 0.35, 0.35)
 ## 我方名字整体上移的像素数（怪物不动）。地图上的姓名版也做了同样的上移。
-const NAME_LIFT_PLAYER := 10.0
+## 现在统一贴着头顶排，不再给我方额外上移（0 = 一视同仁）。
+const NAME_LIFT_PLAYER := 0.0
 
 # ── 战斗里的朝向 ──
 # battle.tscn 里 PlayerSlots 在 X 正方向（右）、EnemySlots 在负方向（左）。
@@ -79,8 +80,8 @@ const BATTLE_FACING_ENEMY := "down_right"
 # 所以这里按"贴图顶边（head）再往上 6px"留足余量，不会压到头发。
 const PLATE_NAME_H := 26.0        # 名字标签高度（与场景里 -160~-134 一致）
 const PLATE_BAR_H := 22.0         # 每条血/蓝条的高度
-const PLATE_NAME_BAR_GAP := 2.0   # 名字和血条之间
-const PLATE_HEAD_GAP := 6.0       # 蓝条底边离头顶
+const PLATE_NAME_BAR_GAP := 0.0   # 名字和血条之间（0 = 紧贴）
+const PLATE_HEAD_GAP := -10.0     # 蓝条底边相对头顶（负数 = 往下沉，贴着头顶；3D 立绘上部有透明留白）
 
 # ── 轮廓配色 ──
 # 与 %Selection 色块是两套：色块铺脚下，轮廓贴剪影描实色边（%Outline），都不带 alpha。
@@ -228,7 +229,7 @@ func _setup_anim() -> void:
 
 
 ## 建实时 3D 头像（只在 stats.model_glb 非空时）。优先级高于帧动画和静态贴图。
-## 战斗里朝向固定：我方朝右、敌朝向 —— 3D 模式下用 face_dir 转模型。
+## 战斗里朝向固定：3D 模型和帧动画共用同一组斜向朝向常量。
 func _setup_model3d() -> void:
 	if _model3d != null:
 		return
@@ -242,8 +243,8 @@ func _setup_model3d() -> void:
 		return
 	_model3d = av
 	sprite.visible = false
-	# 战斗舞台里我方在左、面朝右；敌方在右、面朝左
-	_model3d.face_dir("right" if is_player else "left")
+	# 保持与 2D 帧动画一致：我方朝左上，敌方朝右下。
+	_model3d.face_dir(BATTLE_FACING_PLAYER if is_player else BATTLE_FACING_ENEMY)
 	_model3d.play("idle", 0.0)
 
 
@@ -300,6 +301,9 @@ func _refresh_visuals() -> void:
 	health_bar.offset_bottom = hp_bottom
 	name_label.offset_top = name_top
 	name_label.offset_bottom = name_bottom
+	# 名字紧贴血条顶边（标签框比文字高，居中的话会空出一截，看着像"名字飘太高"）。
+	name_label.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
+	name_label.size.y = PLATE_NAME_H
 	_refresh_name_color()
 	target_arrow.position.y = name_top - 26.0       # 目标箭头浮在信息块上方
 	_arrow_base_y = target_arrow.position.y

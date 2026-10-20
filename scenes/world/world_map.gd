@@ -33,6 +33,9 @@ signal party_deploy_requested(stats: UnitStats)
 ## 玩家点了「下阵」。参数 stats：要下阵的 UnitStats。至少要留 1 人上阵。
 signal party_undeploy_requested(stats: UnitStats)
 
+## 玩家点了「设为队长」：把某个已上阵的成员挪到上阵名单第一位（队长 = 第一位）。
+signal party_lead_requested(stats: UnitStats)
+
 ## 商人面板里点了「购买」。参数 item：要买的道具。只请求，GameRoot 判定后回调 notify_shop_changed()。
 signal item_buy_requested(item: ItemBase)
 ## 交易时确认要卖背包里的东西。参数 item：要卖的道具。只请求，成功后回调 notify_shop_changed()。
@@ -99,22 +102,17 @@ const NAME_COLOR_ALLY := Color(0.45, 1.0, 0.55)
 
 # 版式按"渲染像素"排布：_make_name_plate() 会插一个 scale = 1/父缩放 的中间节点，
 # 让版式不受角色节点缩放影响（目前父节点都是 1.0，等于直出）。
-# 整块压在角色头顶上方：地图的 Sprite2D 是**居中**绘制的（没做脚底锚定），
-# 195 高的立绘头顶约在 -97.5，所以版式最下沿（蓝条底）放在 -106，留 8px 余量。
-const NAME_PLATE_TOP := -259.0      # 名字标签顶边
+# 整块压在角色头顶上方：立绘脚底锚定在原点，195 高的头像头顶约在 -185，
+# 所以名字标签顶边给 -206（名字高 30 → 下沿 -176，离头顶约 9px）。
+const NAME_PLATE_TOP := -206.0      # 名字标签顶边
 const NAME_PLATE_HEIGHT := 30.0     # 名字标签高度
-const MAP_BAR_TOP := -227.0         # 血条顶边（名字下面留 2px）
-const MAP_BAR_WIDTH := 130.0
-const MAP_BAR_HEIGHT := 16.0
-const MAP_BAR_FONT := 12           # 16px 高的条塞得下的字号
-const HP_BAR_SCENE := preload("res://scenes/ui/health_bar/health_bar.tscn")
 
 ## 队长每移动这么远，往轨迹里记一个点（像素）。越小越平滑，但轨迹数组涨得越快。
 const TRAIL_SPACING := 2.0
 ## 轨迹最多保留多少个点（400 × 2px = 800px 的历史路径，够 4 个跟随者排在后面）。
 const TRAIL_MAX := 400
-## 每个跟随者落后多少个轨迹点（20 × 2px = 40px 一个人，5 人一支队伍约 160px）。
-const TRAIL_STEP := 20
+## 每个跟随者落后多少个轨迹点（32 × 2px = 64px 一个人；3D 头像比原来的像素小人宽，间隔要放大）。
+const TRAIL_STEP := 32
 ## 跟随者的"追上去"速度：每帧按 1 - exp(-speed × delta) 插值，越大跟得越紧（不至于瞬移）。
 const COMPANION_FOLLOW_SPEED := 12.0
 
@@ -224,6 +222,8 @@ var _stats_panel: StatsPanel
 var _player_anim: CharAnim2D = null
 ## 队长的实时 3D 模型头像（3D-in-2D，只有配了 UnitStats.model_glb 才有）。
 var _player_model3d: Model3DAvatar = null
+## 当前队长的角色键（换队长时用它判断要不要重建地图立绘）。
+var _leader_key := ""
 ## 相机。它是 Player 的**子节点**，所以只要玩家移动，相机天然跟随（省掉每帧同步）。
 @onready var camera: Camera2D = %Camera
 ## 左上角地图名标签（通关后会追加"（已通关）"）。
@@ -325,6 +325,7 @@ func _ready() -> void:
 		_anchor_sprite_feet(player_sprite)     # 脚底落到原点（阴影就在脚下）
 	player_fallback.visible = icon == null and _player_anim == null and _player_model3d == null
 	player.position = _world_pos(_spawn_normalized())
+	_leader_key = GameRoot.character_key(_leader_stats())
 
 	# ── 相机（挂在玩家下面，自动跟随）──
 	_setup_camera()
@@ -598,6 +599,50 @@ func _setup_party_visuals() -> void:
 	_rebuild_companions()
 
 
+## 队长换人后重建地图上的玩家立绘：3D 头像 / 8 方位帧动画 / 静态贴图三选一。
+## 由 notify_party_changed() 检测到队长变化时 deferred 调用（不能在同一帧里 free 正在发信号的节点）。
+func _refresh_player_avatar() -> void:
+	if _player_model3d != null and is_instance_valid(_player_model3d):
+		_player_model3d.queue_free()
+	_player_model3d = null
+	if _player_anim != null and is_instance_valid(_player_anim):
+		_player_anim.queue_free()
+	_player_anim = null
+	player_sprite.visible = true
+
+	var stats := _leader_stats()
+	if stats != null and not stats.model_glb.is_empty():
+		var av := Model3DAvatar.new()
+		av.name = "Model3D"
+		player.add_child(av)
+		if av.setup(stats.model_glb, MAP_UNIT_HEIGHT):
+			_player_model3d = av
+			player_sprite.visible = false
+		else:
+			av.queue_free()
+	if _player_model3d == null and stats != null and not stats.anim_dir.is_empty():
+		var anim := CharAnim2D.new()
+		anim.name = "CharAnim"
+		player.add_child(anim)
+		if anim.setup(player_sprite, stats.anim_dir):
+			_player_anim = anim
+			_player_anim.play("idle", "down")
+		else:
+			anim.queue_free()
+
+	var icon := _player_icon()
+	if _player_anim == null and _player_model3d == null:
+		player_sprite.texture = icon
+		var tex := player_sprite.texture
+		if tex != null:
+			var denom := float(tex.get_height()) * player.scale.y
+			if denom > 0.0:
+				player_sprite.scale = Vector2.ONE * (MAP_UNIT_HEIGHT / denom)
+			_anchor_sprite_feet(player_sprite)
+	player_fallback.visible = icon == null and _player_anim == null and _player_model3d == null
+	_update_leader_name()
+
+
 ## 刷新队长头顶的名字（队长换人/改名时调；平时只在 _setup_party_visuals 里调一次）。
 func _update_leader_name() -> void:
 	if _leader_name_label == null:
@@ -605,11 +650,16 @@ func _update_leader_name() -> void:
 	var leader := _leader_stats()
 	_leader_name_label.text = leader.name if leader != null else ""
 	_leader_name_label.visible = leader != null
-	_refresh_map_bars(player, leader)
 
 
 ## 当前"队长"（地图上那个能操控的 Player）——就是选人时定下的主角。
+## 队长 = 上阵名单第一位（GameRoot 注入的 deployed 是同一个数组引用）；
+## 没上阵时退回团队第一位，再没有就退回开局主角。地图上操控的就是他。
 func _leader_stats() -> UnitStats:
+	if not deployed.is_empty() and deployed[0] != null:
+		return deployed[0]
+	if not _party.is_empty() and _party[0] != null:
+		return _party[0]
 	return Global.main_player_selected
 
 
@@ -666,6 +716,15 @@ func _make_companion(stats: UnitStats) -> Node2D:
 		sprite.scale = Vector2.ONE * (MAP_UNIT_HEIGHT / float(stats.icon.get_height()))
 	_anchor_sprite_feet(sprite)            # 和玩家一样脚底锚定，否则阴影在腰上
 	node.add_child(sprite)
+	# 和队长一致：配了 model_glb 就用 3D-in-2D（实时模型头像），2D 立绘让位。
+	if not stats.model_glb.is_empty():
+		var av := Model3DAvatar.new()
+		av.name = "Model3D"
+		node.add_child(av)
+		if av.setup(stats.model_glb, MAP_UNIT_HEIGHT):
+			sprite.visible = false
+		else:
+			av.queue_free()
 	var label := _make_name_plate(node, 16, NAME_COLOR_ALLY, stats)
 	label.text = stats.name
 	return node
@@ -686,8 +745,7 @@ func _make_name_plate(parent: Node2D, font_size: int, color: Color, stats: UnitS
 	parent.add_child(plate)
 	var label := _make_name_label(font_size, color)
 	plate.add_child(label)
-	_make_status_bars(plate)
-	_refresh_map_bars(plate, stats)
+	# 非战斗状态只显示名字：血条/蓝条只在战斗里才有意义（见 battle_unit.tscn）。
 	return label
 
 
@@ -708,54 +766,8 @@ func _make_name_label(font_size: int, color: Color = NAME_COLOR_ALLY) -> Label:
 	return label
 
 
-## 在名字标签下方造血条 + 蓝条（非战斗状态也显示血量/蓝量）。
-## 参数 parent：挂到哪（玩家或队友的角色节点）。数值由 _refresh_map_bars() 填。
-## 副作用：往 parent 里加两个 HealthBar 子节点。
-func _make_status_bars(parent: Node2D) -> void:
-	for i in 2:
-		var bar := HP_BAR_SCENE.instantiate() as HealthBar
-		if i == 0:
-			bar.name = "HealthBar"
-			bar.back_color = Color(0.08, 0.08, 0.1, 1)
-			bar.fill_color = Color(0.35, 0.85, 0.4, 1)
-		else:
-			bar.name = "ManaBar"
-			bar.back_color = Color(0.06, 0.07, 0.12, 1)
-			bar.fill_color = Color(0.32, 0.58, 0.95, 1)
-		bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		# 场景里的 custom_minimum_size 是 96x20，不改的话高度会被撑到 20，两条 bar 就贴不紧了。
-		bar.custom_minimum_size = Vector2(MAP_BAR_WIDTH, MAP_BAR_HEIGHT)
-		bar.size = Vector2(MAP_BAR_WIDTH, MAP_BAR_HEIGHT)
-		# 血条在上、蓝条紧贴其下沿（y 差正好一个条高，中间没有空隙）
-		bar.position = Vector2(-MAP_BAR_WIDTH * 0.5,
-				MAP_BAR_TOP + (MAP_BAR_HEIGHT if i == 1 else 0.0))
-		parent.add_child(bar)
-		bar.size = Vector2(MAP_BAR_WIDTH, MAP_BAR_HEIGHT)   # 进树后再设一次，确保生效
-		# 条里的数字用小字号，否则 14px 高的条塞不下
-		for child in bar.get_children():
-			if child is Label:
-				(child as Label).add_theme_font_size_override("font_size", MAP_BAR_FONT)
 
-
-## 把某个角色的血量/蓝量写进它脚下的两条 bar（按名字找子节点，没建过就跳过）。
-## 注意：非战斗期没有"当前血量"这个运行时数据（每场战斗都是从 UnitStats.health 满血开始），
-##   所以这里按满值显示 —— 将来若做了持久血量，改这里的 update_bar() 入参即可。
-func _refresh_map_bars(plate: Node2D, stats: UnitStats) -> void:
-	# 递归找：血条挂在 Plate 节点下（不是角色的直接子节点）。
-	var hp := plate.find_child("HealthBar", true, false) as HealthBar
-	var mp := plate.find_child("ManaBar", true, false) as HealthBar
-	if hp == null or mp == null:
-		return
-	if stats == null:
-		hp.visible = false
-		mp.visible = false
-		return
-	hp.visible = true
-	hp.update_bar(1.0, maxf(1.0, stats.health))
-	var mana := maxf(0.0, stats.mana)
-	mp.visible = mana > 0.0            # 没蓝的角色不挂一条空槽
-	mp.update_bar(1.0, mana)
-
+## 地图（非战斗）不画血条/蓝条：只在战斗单位上显示（见 battle_unit.tscn 的 HealthBar/ManaBar）。
 
 ## 记录队长轨迹：沿"上一记录点 → 当前位置"每 TRAIL_SPACING 像素插一个点。
 ## 为什么不按帧塞点：每帧位移随帧率/冲刺变化，固定像素间隔才能让队友间距稳定。
@@ -779,7 +791,8 @@ func _update_trail() -> void:
 
 
 ## 每帧把队友朝"轨迹上属于他的点"插值挪过去（直接赋值会瞬移，插值才像"跟"上来）。
-## 副作用：改小人 position 与 Sprite.flip_h。
+## 朝向：3D 头像直接转模型（face_from_vector），2D 立绘靠 Sprite.flip_h 镜像。
+## 副作用：改小人 position、Model3D 的旋转/动作、Sprite.flip_h。
 func _update_companions(delta: float) -> void:
 	if _companions.is_empty() or _trail.is_empty():
 		return
@@ -791,11 +804,18 @@ func _update_companions(delta: float) -> void:
 		var target: Vector2 = _trail[mini((i + 1) * TRAIL_STEP, _trail.size() - 1)]
 		var before := node.position
 		node.position = before.lerp(target, weight)
+		var moved := node.position - before
+		# 3D 头像：朝移动方向转，走 run、停 idle（模型没有动画时 play() 内部自动忽略）
+		var avatar := node.get_node_or_null(^"Model3D") as Model3DAvatar
+		if avatar != null:
+			if moved.length() > 0.15:
+				avatar.face_from_vector(moved)
+				avatar.play("run")
+			else:
+				avatar.play("idle")
 		var sprite := node.get_node_or_null(^"Sprite") as Sprite2D
-		if sprite != null:
-			var dx := node.position.x - before.x
-			if absf(dx) > 0.05:
-				sprite.flip_h = dx < 0.0
+		if sprite != null and sprite.visible and absf(moved.x) > 0.05:
+			sprite.flip_h = moved.x < 0.0
 
 
 # ── 交互 ──
@@ -939,6 +959,7 @@ func _setup_overlays() -> void:
 	_party_panel.deploy_requested.connect(_on_party_deploy_requested)
 	_party_panel.undeploy_requested.connect(_on_party_undeploy_requested)
 	_party_panel.remove_requested.connect(_on_party_remove_requested)
+	_party_panel.lead_requested.connect(_on_party_lead_requested)
 
 	_bag_panel = BAG_PANEL_SCENE.instantiate() as BagPanel
 	ui_layer.add_child(_bag_panel)
@@ -1149,6 +1170,11 @@ func _on_party_undeploy_requested(stats: UnitStats) -> void:
 ## 点了「移出团队」：同上，只转请求。
 func _on_party_remove_requested(stats: UnitStats) -> void:
 	party_remove_requested.emit(stats)
+
+
+## 点了「设为队长」：同上，只转请求（GameRoot.set_leader 负责挪位置）。
+func _on_party_lead_requested(stats: UnitStats) -> void:
+	party_lead_requested.emit(stats)
 
 
 # ── 商人面板（NPC 交互类型 SELL_WEAPONS）──
@@ -1668,6 +1694,12 @@ func notify_party_changed(message := "") -> void:
 		_sync_party_focus.call_deferred()
 	# 上阵名单变了 → 地图上的跟随队伍跟着变；deferred 理由同上。
 	_rebuild_companions.call_deferred()
+	# 队长（上阵第一位）换人 → 地图上操控的立绘/3D 头像也要跟着换。
+	var new_leader := _leader_stats()
+	var new_key := GameRoot.character_key(new_leader) if new_leader != null else ""
+	if new_key != _leader_key:
+		_leader_key = new_key
+		_refresh_player_avatar.call_deferred()
 
 ## 关闭对话面板（「再想想」按钮与 Esc 都走这里）。
 ## 不清理 panel_buttons：下次 _open_panel() 会重建，且隐藏父节点下的旧按钮不可见也不接收输入。

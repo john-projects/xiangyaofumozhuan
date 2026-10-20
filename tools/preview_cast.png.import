@@ -2,24 +2,20 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://cq3cc3lqigvbh"
-path.s3tc="res://.godot/imported/xingxiu_rigged_Image_1.jpg-da3af61882dce4a30106d2db8cffced1.s3tc.ctex"
+uid="uid://covyatq8jugbc"
+path="res://.godot/imported/preview_cast.png-ff2fbd9b4e2a75af47a3dab7904a2c0a.ctex"
 metadata={
-"imported_formats": ["s3tc_bptc"],
-"vram_texture": true
-}
-generator_parameters={
-"md5": "f1934ab9a1ec5101631d28a350182796"
+"vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/models/xingxiu/xingxiu_rigged_Image_1.jpg"
-dest_files=["res://.godot/imported/xingxiu_rigged_Image_1.jpg-da3af61882dce4a30106d2db8cffced1.s3tc.ctex"]
+source_file="res://tools/preview_cast.png"
+dest_files=["res://.godot/imported/preview_cast.png-ff2fbd9b4e2a75af47a3dab7904a2c0a.ctex"]
 
 [params]
 
-compress/mode=2
+compress/mode=0
 compress/high_quality=false
 compress/lossy_quality=0.7
 compress/uastc_level=0
@@ -27,7 +23,7 @@ compress/rdo_quality_loss=0.0
 compress/hdr_compression=1
 compress/normal_map=0
 compress/channel_pack=0
-mipmaps/generate=true
+mipmaps/generate=false
 mipmaps/limit=-1
 roughness/mode=0
 roughness/src_normal=""
@@ -41,4 +37,4 @@ process/normal_map_invert_y=false
 process/hdr_as_srgb=false
 process/hdr_clamp_exposure=false
 process/size_limit=0
-detect_3d/compress_to=0
+detect_3d/compress_to=1

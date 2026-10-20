@@ -3,13 +3,13 @@
 importer="scene"
 importer_version=1
 type="PackedScene"
-uid="uid://c0eyioo5uyjma"
-path="res://.godot/imported/厉狂澜.glb-2d768b4e7a3d743e1345fe05b64bc3ce.scn"
+uid="uid://2d20xuvoag7q"
+path="res://.godot/imported/夜魑.glb-609489dfeba1679cd28ee6703d7438f7.scn"
 
 [deps]
 
-source_file="res://assets/sprites/units/players/origine/厉狂澜.glb"
-dest_files=["res://.godot/imported/厉狂澜.glb-2d768b4e7a3d743e1345fe05b64bc3ce.scn"]
+source_file="res://assets/models/players/夜魑.glb"
+dest_files=["res://.godot/imported/夜魑.glb-609489dfeba1679cd28ee6703d7438f7.scn"]
 
 [params]
 
@@ -41,5 +41,5 @@ materials/extract_format=0
 materials/extract_path=""
 _subresources={}
 gltf/naming_version=2
-gltf/embedded_image_handling=1
+gltf/embedded_image_handling=2
 gltf/texture_map_mode=1

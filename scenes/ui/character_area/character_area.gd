@@ -78,7 +78,7 @@ func current_character() -> UnitStats:
 		var member: UnitStats = _party[_view_index]
 		if member != null:
 			return member
-	return Global.main_player_selected
+	return _default_character()
 
 
 ## 把"正在看谁"切到指定角色（外层在"背包换人了"时调它，保持两边同一个人）。
@@ -266,7 +266,7 @@ func _slot_style(border: Color, bg: Color, bottom_margin: float) -> StyleBoxFlat
 
 ## 团队里"当前主角"排第几（打开面板时先展示谁）。找不到就展示第一个人。
 func _index_of_leader() -> int:
-	var index := _index_of(Global.main_player_selected)
+	var index := _index_of(_default_character())
 	return maxi(0, index)
 
 
@@ -282,3 +282,10 @@ func _index_of(character: UnitStats) -> int:
 				and member.resource_path == character.resource_path:
 			return i
 	return -1
+
+## 默认展示的人：团队第一位（没有团队时退回开局主角）。队长由 WorldMap 按上阵顺序决定，
+## 这里只拿到团队名册，所以用"第一位"当默认。
+func _default_character() -> UnitStats:
+	if not _party.is_empty() and _party[0] != null:
+		return _party[0]
+	return Global.main_player_selected

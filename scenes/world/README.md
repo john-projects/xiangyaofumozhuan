@@ -53,14 +53,23 @@ WorldMap (Node2D, y_sort_enabled = true)   [world_map.gd]
 
 ## 队伍立绘：队长名字 + 队友跟随
 
-- **队长名字**：`_setup_party_visuals()` 在 `Player` 下加一个 `Label`（白字+黑描边，y = -78、宽 220 居中），
+- **头顶只显示名字**：地图是**非战斗**状态，所以不再画血条/蓝条（`_make_name_plate()` 只建名字 Label，
+  白字+黑描边、宽 220 居中）；血条/蓝条只在战斗单位上出现（`battle_unit.tscn`）。
+- **队长 = 上阵名单第一位**（`GameRoot.leader()`）：不再是固定的"开局主角"，`deployed[0]` 是谁，地图上操控的就是谁；
+  在团队管理面板点「设为队长」把他挪到第一位即可换人（换人后 `notify_party_changed()` 会重建地图立绘和名字）。
+- **队长名字**：`_setup_party_visuals()` 在 `Player` 下加一个 `Label`，
   文字取 `Global.main_player_selected.name`。因为它是 `Player` 的子节点，走动时自动跟着走，不用每帧同步。
 - **上阵队友**：`_rebuild_companions()` 给 `deployed` 里除队长外的每个人生成一个 `Companion` 节点
   （Shadow + Sprite2D + 名字 Label，立绘用各自的 `UnitStats.icon`，缩放 1.3 和玩家一致）。
+- **3D-in-2D**：`UnitStats.model_glb` 非空就用 `Model3DAvatar`（实时 3D 模型渲染进 SubViewport 再贴回 2D），
+  2D 立绘自动隐藏；六个玩家角色现在都配了 `res://assets/models/players/<角色名>.glb`，
+  队长和跟随者、以及战斗单位共用同一套优先级：**model_glb > anim_dir > icon**。
 - **跟随方式**：队长每走 **2px** 就往"面包屑轨迹" `_trail` 头部插一个点（`_update_trail()`）；
-  第 i 个队友的目标是轨迹里第 `i × 20` 个点（= 身后约 40px/人），再用
+  第 i 个队友的目标是轨迹里第 `i × 32` 个点（= 身后约 64px/人，3D 头像比像素小人宽所以间隔放大），再用
   `1 - exp(-12 × delta)` 插值挪过去（`_update_companions()`）——
   拐弯时队友是沿着队长**走过的路**跟过来，不会斜穿墙角，也不会几个小人叠在一起。
+- **队友也会转向**：`_update_companions()` 每帧算出位移，3D 头像用 `face_from_vector(位移)` 转模型
+  （走 `run`、停 `idle`），2D 立绘则用 `Sprite.flip_h` 镜像；队长走 `_move_player()` 里的同一套逻辑。
 - **队伍变了**：`notify_party_changed()`（上阵/下阵/移除）会 `_rebuild_companions.call_deferred()`，
   场上小人数量立刻跟着变；队长本人永远不生成小人（他就是 `Player`）。
 
@@ -100,11 +109,15 @@ WorldMap (Node2D, y_sort_enabled = true)   [world_map.gd]
 **双向传送就是两边互相指**。当前配置：
 
 ```
+桃花村   路牌     -> [jianyecheng]     （起始地图，兜底出口 NPC）
 建邺城   船夫     -> [donghaiwan]
 东海湾   船夫     -> [jianyecheng]     向导 -> [aolaiguo]
 傲来国   向导     -> [donghaiwan]      猎人 -> [huaguoshan]
 花果山   看山猴   -> [aolaiguo]
 ```
+
+起始地图由 `main.tscn` 的 `GameRoot.start_map_id` 决定（现在是 `taohuacun`），
+`maps` 数组第 0 位也是桃花村；数组顺序同时决定 `map_difficulty()`（越靠前越简单）。
 
 落点规则（`WorldMap._spawn_normalized()`）：
 
@@ -565,7 +578,7 @@ func _ready() -> void:
 | 场景 | 是什么 | 信号 → 谁处理 |
 |---|---|---|
 | `scenes/ui/pause_menu/pause_menu.tscn` | 操作菜单：继续游戏 / 队伍管理 / 背包 / 角色属性 / 进入战斗 / 返回主菜单 | `resume_requested` → 关菜单；`party_requested` / `bag_requested` / `stats_requested` → 开对应二级页；`battle_requested` / `title_requested` → 直接接到 `_on_battle_pressed` / `_on_back_pressed`（**与地图上那两个常驻按钮同一条通路**，不存在两份实现） |
-| `scenes/ui/party_panel/party_panel.tscn` | 队伍管理页：每个成员一行（头像 + 属性 + 上阵状态 + 「上阵/下阵」+「移出团队」），标题带「团队 n 人 · 上阵 m/5」 | `deploy_requested` / `undeploy_requested` / `remove_requested` → `WorldMap.party_deploy_requested` / `party_undeploy_requested` / `party_remove_requested` → `GameRoot` 对应的三个 `_on_party_*`；`close_requested` → 退回操作菜单 |
+| `scenes/ui/party_panel/party_panel.tscn` | 团队管理页：**两排坑位**（第一排 5 格 = 队伍中 / 上阵，第二排 10 格 = 未上阵；每格「头像在上、名字在下」的纵向格子，空位画虚线框），点格子选中后再用底部「上阵 / 下阵 / 移出团队」按钮搬人；标题带「上阵 m/5 · 团队 n 人」 | `deploy_requested` / `undeploy_requested` / `remove_requested` → `WorldMap.party_deploy_requested` / `party_undeploy_requested` / `party_remove_requested` → `GameRoot` 对应的三个 `_on_party_*`；`close_requested` → 退回操作菜单 |
 | `scenes/ui/merchant_panel/merchant_panel.tscn` | 商人货架：顶部**居中显示 NPC 名字** + 结果提示 + **6 列方格**（84px 格子，**总共 6×20 = 120 格、一屏 6×10**，货不足补空格子；窗口 610×1038 ≈ 背包的 662×1044；贴屏幕**最左边**；**没有全屏遮罩**）；每格一个图标 + 价格角标（右下）/「持×n」角标（左上），点一下弹**确认框**（`z_index = 100`，买卖共用）。没有台词/金币/按键提示/「关闭」按钮（都按需求移除了） | `buy_requested` → `WorldMap.item_buy_requested`；`sell_requested` → `WorldMap.item_sell_requested` → `GameRoot._on_item_sell_requested()`；`confirm_changed` → WorldMap 同步背包格子焦点；`close_requested` → 关面板回游戏（并收掉并排的背包）；`cancel_confirm()` 给 WorldMap 判 Esc 层级 |
 | `scenes/ui/bag_panel/bag_panel.tscn` | 背包：右下角窗口，标题「背包 n/120」+ 角色区（「◀ 形象(名字牌) ▶ + 左右各 3 个 **96px 装备栏**（头盔/武器/腰带 · 项链/衣服/鞋子）」，形象框 240×308）+ 信息行（**左金币 / 右 MessageLabel**）+ **8 列方格**（120 格，一屏 8×8 可滚动，格子 68px），格子上悬停/聚焦弹属性卡、**点一下 = 卖（交易中）/ 穿给当前角色（平时）**，装备栏点一下 = 从当前角色身上脱 | `item_activated` → `WorldMap._on_bag_item_activated()`（交易中→弹卖确认框；平时→`equip_requested(current_character, item)`）；`unequip_requested` → `WorldMap.unequip_requested(current_character, slot)` → `GameRoot._on_unequip_requested()`；`close_requested` → 关面板（当前没有按钮发它：关闭靠 Esc / B）；`set_slot_focus_enabled()` 供 WorldMap 在「确认框弹出时」临时收焦点；◀ / ▶ 只在面板内部翻团队成员（并刷新装备栏）；`current_character()` 给 WorldMap 问"现在穿给谁" |
 | `scenes/ui/character_area/character_area.tscn` | **角色形象区**（属性面板上半部分用的复用场景，外观和背包那块**逐像素一致**）：◀ 形象 240×308（名字牌）▶ + 左右各 3 个 **96px 装备栏**（头盔/武器/腰带 · 项链/衣服/鞋子）。装备栏悬停弹属性卡、点已穿的 = 请求脱下（`unequip_requested`，判定仍在 `GameRoot.unequip_slot()`）；装备栏是鼠标专用、不进焦点环（背包同屏时那边已有一份可点的） | `show_party(party)` / `current_character()` / `show_character()` / `step_player(±1)` / `refresh()` / `focus_ring()`（只有 ◀ / ▶）；发 `character_changed` / `unequip_requested` |

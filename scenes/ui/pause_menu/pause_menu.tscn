@@ -87,7 +87,7 @@ unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 58)
 layout_mode = 2
 theme_override_font_sizes/font_size = 24
-text = "队伍管理"
+text = "团队管理"
 
 [node name="BagButton" type="Button" parent="Panel/Margin/VBox"]
 unique_name_in_owner = true

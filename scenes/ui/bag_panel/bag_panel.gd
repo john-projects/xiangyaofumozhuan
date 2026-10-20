@@ -3,7 +3,7 @@ class_name BagPanel
 
 ## 背包面板：方格背包（8 列 × 15 行 = 120 格）+ 角色区（形象 + 左右各 3 个装备栏）。
 ## 只读展示：不改游戏数据，点击只发信号，卖 / 穿 / 脱的规则由 WorldMap 与 GameRoot 决定。
-## 角色区 ◀/▶ 只在团队名册里切换"看谁"，不动 Global.main_player_selected 与上阵名单。
+## 角色区 ◀/▶ 只在团队名册里切换"看谁"，不动队长与上阵名单。
 ## 窗口位置与尺寸由 _apply_window_geometry() 算出，不依赖 .tscn 里的 offset / 尺寸。
 ## 由 WorldMap._setup_overlays() 实例化后挂在 UI（CanvasLayer）下。
 
@@ -337,7 +337,7 @@ func current_character() -> UnitStats:
 		var member: UnitStats = _party[_view_index]
 		if member != null:
 			return member
-	return Global.main_player_selected
+	return _default_character()
 
 
 ## 刷新形象 / 名字 / 箭头可用状态。贴图取 UnitStats.icon，与地图一致；不改任何游戏数据。
@@ -379,7 +379,7 @@ func _step_player(step: int) -> void:
 
 ## 当前主角在名册里的下标；不在名册时返回 0（展示第一个人）。
 func _index_of_leader() -> int:
-	var index := _index_of(Global.main_player_selected)
+	var index := _index_of(_default_character())
 	return maxi(0, index)
 
 
@@ -537,3 +537,10 @@ func _unhandled_input(event: InputEvent) -> void:
 	if not visible:
 		return
 	Global.grid_nav(event, self)
+
+## 团队里默认展示的人：队长（上阵第一位）由 WorldMap 决定，背包这里拿不到上阵名单，
+## 所以退回"团队第一位"；团队为空时再退回开局主角。
+func _default_character() -> UnitStats:
+	if not _party.is_empty() and _party[0] != null:
+		return _party[0]
+	return Global.main_player_selected

@@ -9,6 +9,7 @@ script = ExtResource("2_wvmxc")
 name = "厉狂澜"
 race = 1
 icon = ExtResource("1_6fhtk")
+model_glb = "res://assets/models/players/厉狂澜.glb"
 health = 15
 damage = 3
 speed = 350

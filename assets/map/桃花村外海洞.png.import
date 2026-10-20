@@ -2,24 +2,20 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://bnwsj6ibgaoi5"
-path.s3tc="res://.godot/imported/xingxiu_rigged_0.jpg-075cfd1b3db104a5fb7534d1b7c2a7b2.s3tc.ctex"
+uid="uid://cfo7b7c5xni74"
+path="res://.godot/imported/桃花村外海洞.png-319f538a26a17e9070e54e34fd984f1b.ctex"
 metadata={
-"imported_formats": ["s3tc_bptc"],
-"vram_texture": true
-}
-generator_parameters={
-"md5": "ea14c91d1dca512994c24db47f49bcdc"
+"vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/models/xingxiu/xingxiu_rigged_0.jpg"
-dest_files=["res://.godot/imported/xingxiu_rigged_0.jpg-075cfd1b3db104a5fb7534d1b7c2a7b2.s3tc.ctex"]
+source_file="res://assets/map/桃花村外海洞.png"
+dest_files=["res://.godot/imported/桃花村外海洞.png-319f538a26a17e9070e54e34fd984f1b.ctex"]
 
 [params]
 
-compress/mode=2
+compress/mode=0
 compress/high_quality=false
 compress/lossy_quality=0.7
 compress/uastc_level=0
@@ -27,7 +23,7 @@ compress/rdo_quality_loss=0.0
 compress/hdr_compression=1
 compress/normal_map=0
 compress/channel_pack=0
-mipmaps/generate=true
+mipmaps/generate=false
 mipmaps/limit=-1
 roughness/mode=0
 roughness/src_normal=""
@@ -41,4 +37,4 @@ process/normal_map_invert_y=false
 process/hdr_as_srgb=false
 process/hdr_clamp_exposure=false
 process/size_limit=0
-detect_3d/compress_to=0
+detect_3d/compress_to=1

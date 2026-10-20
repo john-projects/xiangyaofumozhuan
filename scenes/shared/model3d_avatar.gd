@@ -17,7 +17,7 @@ extends Node2D
 ## 用法：
 ##   var av := Model3DAvatar.new()
 ##   add_child(av)
-##   if av.setup("res://assets/models/xingxiu/xingxiu_rigged.glb", 195.0):
+##   if av.setup("res://assets/models/players/行修.glb", 195.0):
 ##       av.play("run")
 ##       av.face_from_vector(dir)
 
