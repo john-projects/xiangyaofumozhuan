@@ -646,18 +646,22 @@ func _perform_skill(caster: BattleUnit, skill: SkillData, targets: Array[BattleU
 	caster.spend_mana(skill.mana_cost)
 	caster.start_cooldown(skill)
 	_play_sfx(skill.cast_sfx)
+	_spawn_screen_effect(skill)
 	await caster.play_cast()
 
-	# 群体技能走另一条演出路径：一颗火球 → 敌阵中心 → 中心大爆炸 + 全体结算。
+	# 多目标（max_targets > 1）或全体技能：走**群体演出**——
+	# 只生成一颗弹体、只播一次大特效，然后所有目标同时结算（雷动九天就是这条路径）。
+	# 之前 max_targets 走单体循环，会变成"每个敌人各播一遍"，观感像连放 3 次技能。
 	if skill.target_mode == SkillData.TargetMode.ENEMY_ALL:
 		await _cast_aoe(caster, skill, victims)
 		if not _check_battle_end():
 			_finish_turn()
 		return
-
-	# 多目标技能（max_targets > 1）：玩家只点一个主目标，剩下的按"离主目标最近"自动补齐。
 	if skill.target_mode == SkillData.TargetMode.ENEMY_SINGLE and skill.max_targets > 1:
-		victims = _expand_targets(victims, skill.max_targets)
+		await _cast_aoe(caster, skill, _expand_targets(victims, skill.max_targets))
+		if not _check_battle_end():
+			_finish_turn()
+		return
 
 	for target in victims:
 		# 串行演出期间目标可能已死/被释放：跳过而不是 break，后面的目标仍然该被打到。
@@ -695,6 +699,9 @@ func _perform_skill(caster: BattleUnit, skill: SkillData, targets: Array[BattleU
 				await get_tree().create_timer(0.12).timeout
 
 		# burst() 内部会 queue_free 飞体本身，之后不能再碰 projectile。
+		# 贴地类特效（地面法阵）压到目标脚下再爆。
+		if skill.hit_effect_on_ground:
+			projectile.global_position = Vector2(target.global_position.x, target.global_position.y)
 		projectile.burst()
 		_play_sfx(skill.hit_sfx)
 		# screen_shake 为 0 表示不抖镜头。
@@ -708,7 +715,8 @@ func _perform_skill(caster: BattleUnit, skill: SkillData, targets: Array[BattleU
 		_finish_turn()
 
 
-## 群体技能（ENEMY_ALL）：一颗飞行体飞敌阵中心 → 中心爆炸 → 按 aoe_step_delay 逐个结算。
+## 群体演出（ENEMY_ALL，或多目标技能 ENEMY_SINGLE + max_targets > 1）：
+## 一颗飞行体飞目标阵型中心 → **只播一次**大特效 → 按 aoe_step_delay 逐个结算（间隔极短 = 同时受击）。
 ## 蓝/冷却不在这里扣（_perform_skill 起手已扣）；hit_sfx 与镜头抖动只做一次；命中者再补一朵小爆炸，
 ## 中心爆炸先于伤害结算。坑：循环内重判有效/存活（不要 break）；play_hit() 故意不 await，要同时闪红。
 func _cast_aoe(caster: BattleUnit, skill: SkillData, victims: Array[BattleUnit]) -> void:
@@ -721,7 +729,11 @@ func _cast_aoe(caster: BattleUnit, skill: SkillData, victims: Array[BattleUnit])
 	await projectile.fly_to(center)
 
 	# ② 中心大爆炸：burst() 内部读 skill.hit_effect_scene / burst_scale，并自毁
-	projectile.burst()
+	# 贴地类特效（雷动九天）把落点压到敌人脚下的地面线，否则地面法阵会浮在半空。
+	# hit_effect_center = false 时中心不炸（群星陨落只在每个目标脚下各落一颗陨星）。
+	if skill.hit_effect_on_ground:
+		projectile.global_position = Vector2(center.x, _group_ground_y(victims))
+	projectile.burst(not skill.hit_effect_center)
 	_play_sfx(skill.hit_sfx)
 	if skill.screen_shake > 0.0:
 		_shake_camera(skill.screen_shake)
@@ -742,7 +754,13 @@ func _cast_aoe(caster: BattleUnit, skill: SkillData, victims: Array[BattleUnit])
 				target.take_damage(damage)
 				create_floating_text(target, str(int(damage)), critical_color if is_crit else skill.tint)
 				# 中心那朵盖不到斜排角落，所以每个敌人身上再补一朵小的。
-				_spawn_hit_burst(skill, target.body_center(), AOE_TARGET_BURST_RATIO)
+				# 贴地技能（群星陨落）把这份"小爆点"放到目标脚下的地面线上。
+				var burst_pos: Vector2 = target.global_position if skill.hit_effect_on_ground \
+						else target.body_center()
+				# 专属的 target_effect_scene 给足尺寸（不乘 0.55 的小爆比例）
+				var ratio := 1.0 if skill.target_effect_scene != null else AOE_TARGET_BURST_RATIO
+				# 传入施法者位置：陨石等特效据此决定"从哪边斜插过来"
+				_spawn_hit_burst(skill, burst_pos, ratio, caster.body_center())
 				target.play_hit()          # 故意不 await：要的是"同时闪红"
 		_apply_skill_statuses(caster, skill, target)
 		await get_tree().create_timer(aoe_step_delay).timeout
@@ -892,17 +910,46 @@ func _group_center(units: Array[BattleUnit]) -> Vector2:
 	return sum / float(count)
 
 
+## 一组单位"脚下地面"的 y 坐标（脚在原点，取最低的那个）。
+## 贴地特效（地面法阵 / 天降落雷）要放在这里，放在身体中心就会浮在半空。
+func _group_ground_y(units: Array[BattleUnit]) -> float:
+	var y := -INF
+	for unit in units:
+		if is_instance_valid(unit):
+			y = maxf(y, unit.global_position.y)
+	return y if y > -INF else 0.0
+
+
+## 施法瞬间放一次"全屏氛围特效"（夜色压暗 / 流星雨 / 暴雨）。
+## 场景根节点通常是 CanvasLayer，所以直接挂到 Battle 根下即可（不受相机与震屏影响）。
+func _spawn_screen_effect(skill: SkillData) -> void:
+	if skill == null or skill.screen_effect_scene == null:
+		return
+	var fx = skill.screen_effect_scene.instantiate()
+	add_child(fx)
+
+
 ## 在指定位置补一朵（缩小版）命中爆炸，用来表现"这个敌人也被炸到了"。
-## 场景优先 skill.hit_effect_scene，留空则用 DEFAULT_BURST_EFFECT_SCENE；scale_ratio 相对 skill.burst_scale。
+## 场景优先级：`target_effect_scene`（每个目标专属，群星陨落）→ `hit_effect_scene`（逐目标开关为真时）
+## → 默认程序化爆炸；scale_ratio 相对 skill.burst_scale。
+## 参数 from：施法者位置。给了就通知特效"从哪边砸过来"（实现 set_impact_direction 的特效才有方向感）。
 ## 坑：纯序列帧特效没有 play()，要走 SkillProjectile.play_sequence_once()，故用 has_method 而非类型判断。
-func _spawn_hit_burst(skill: SkillData, pos: Vector2, scale_ratio: float) -> void:
-	var scene: PackedScene = skill.hit_effect_scene if skill.hit_effect_scene != null else DEFAULT_BURST_EFFECT_SCENE
+func _spawn_hit_burst(skill: SkillData, pos: Vector2, scale_ratio: float,
+		from := Vector2.INF) -> void:
+	var scene: PackedScene = DEFAULT_BURST_EFFECT_SCENE
+	if skill.target_effect_scene != null:
+		scene = skill.target_effect_scene
+	elif skill.hit_effect_scene != null and skill.hit_effect_per_target:
+		scene = skill.hit_effect_scene
 	if scene == null:
 		return
 	var boom = scene.instantiate()
 	fx_root.add_child(boom)
 	boom.global_position = pos
 	boom.scale = Vector2.ONE * maxf(0.05, skill.burst_scale * scale_ratio)
+	# 有方向感的特效（陨石砸落）：告诉它"从施法者那边斜插过来"
+	if from != Vector2.INF and boom.has_method("set_impact_direction"):
+		boom.call("set_impact_direction", pos - from)
 	if boom.has_method("play"):
 		@warning_ignore("integer_division")
 		boom.play(skill.tint, maxi(8, skill.hit_particles / 2))

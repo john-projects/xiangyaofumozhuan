@@ -99,6 +99,25 @@ enum TargetMode {
 ## 填了就用它，例如像素火焰序列 effect_fireball_hit.tscn（纯 AnimatedSprite2D，由 play_sequence_once() 播一次并自毁）。
 @export var hit_effect_scene: PackedScene
 
+## true = 命中特效**贴地**播放（节点放在目标脚下的地面线），而不是放在身体中心。
+## 适合"地面法阵 / 天降落雷"这类素材（雷动九天）；普通爆炸保持 false。
+@export var hit_effect_on_ground := false
+
+## true = 群体技能给**每个目标**再补一朵小爆炸（默认）。
+## 放了整屏大特效（比如雷动九天 1 秒的雷柱）时关掉，否则 3~5 份特效会叠成一团。
+@export var hit_effect_per_target := true
+
+## 每个目标脚下**单独**放的特效场景（群星陨落用：每个被打的敌人各落一颗陨星）。
+## 留空 = 沿用 hit_effect_scene 的小爆点。这个字段不受 hit_effect_per_target 影响。
+@export var target_effect_scene: PackedScene
+
+## true = 群体技能在阵型中心再炸一次（默认）；false = 中心不炸，只在每个目标脚下出特效。
+@export var hit_effect_center := true
+
+## 全屏氛围特效（施法瞬间播一次）：夜色压暗 / 流星雨 / 暴雨之类。
+## 场景根节点建议用 CanvasLayer，这样不受相机和震屏影响。
+@export var screen_effect_scene: PackedScene
+
 ## 命中爆发的整体缩放（1.0 = 原始大小）。群体技能调大，让爆炸能盖住整个敌阵（爆裂火球用 1.8，再逐个补 0.55 倍小爆炸）。
 @export var burst_scale := 1.0
 

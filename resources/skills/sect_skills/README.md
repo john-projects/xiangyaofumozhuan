@@ -78,7 +78,7 @@ resources/skills/sect_skills/
    持续回血（`healing × hot_power` 每回合）、增益状态；`SELF` 打自己，`ALLY_SINGLE` 选队友，
    `buff_all_allies` 给全体队友，`max_targets > 1` 自动补最近的队友。
 10. **封印 / 封法术**：`_apply_skill_statuses()` 按 `seal_chance` / `silence_chance` 判定，
-    封印 = 跳过下回合（头顶飘「封印」），封法术 = `can_use_skill()` 直接 false（菜单置灰）。
+	封印 = 跳过下回合（头顶飘「封印」），封法术 = `can_use_skill()` 直接 false（菜单置灰）。
 
 ## 还没做的
 

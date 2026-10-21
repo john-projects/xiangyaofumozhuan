@@ -108,9 +108,25 @@ resources/skills/skill_fireball_aoe.tres    爆裂火球      全体 · 蓝 14 �
 | | `tint` | 染色 + 技能伤害飘字颜色 |
 | | `hit_particles` / `hit_particle_texture` | 命中粒子数量 / 粒子贴图（留空用柔光） |
 | | `hit_effect_scene` | **命中爆炸用哪个场景**；留空 = 默认 `burst_effect.tscn`，填了可用像素火焰序列 |
+| | `hit_effect_on_ground` | true = 命中特效**贴地**播放（放在目标脚下，而不是身体中心）——地面法阵/天降落雷这类素材用 |
+| | `hit_effect_per_target` | true = 群体技能给每个目标再补一朵小爆炸（默认）；放整屏大特效时关掉，避免叠 3~5 份 |
+| | `target_effect_scene` | 每个目标**脚下单独**一份的特效（群星陨落：每个敌人各落一颗陨星）；填了就不再受 `hit_effect_per_target` 影响 |
+| | `hit_effect_center` | true = 阵型中心也炸一次（默认）；false = 中心不炸，只在各目标脚下出特效 |
+| | `screen_effect_scene` | **全屏氛围特效**，施法瞬间播一次（夜色压暗 / 流星雨 / 暴雨），根节点用 CanvasLayer 不受震屏影响 |
 | | `burst_scale` | 命中爆炸的整体缩放（群体技能调大） |
 | | `screen_shake` | 命中镜头抖动强度（0 = 不抖） |
 | 音效 | `cast_sfx` / `hit_sfx` | 起手 / 命中 |
+
+**视频素材转技能特效**（雷动九天就是这么做的）：mp4 → ffmpeg 抽 12~15fps 的帧 →
+Pillow 裁掉水印 + 按亮度抠出 alpha + 拼 4×4 图集 → `scenes/effects/leidong_jiutian/`
+里的 `AnimatedSprite2D` 在运行时把图集切成 `AtlasTexture` 逐帧播一次、播完自毁。
+素材本身是"地面法阵 + 天降落雷"，所以 `hit_effect_on_ground = true` 且 `hit_effect_per_target = false`。
+
+**群星陨落（零贴图"拼图法"）**：`scenes/effects/qunxing_yunluo/`
+- `qunxing_screen.tscn`（`screen_effect_scene`）= CanvasLayer：`ColorRect` 全屏压暗 + 90 条代码画的流星线，2.4s 淡入淡出；
+- `qunxing_impact.tscn`（`target_effect_scene`）= 每个目标脚下：0.22s 陨星坠落 + 0.42s 柔光爆闪/冲击波/碎星，
+  发光用代码生成的 `GradientTexture2D` 径向渐变 + 加法混合（`draw_circle` 实心圆在暗背景上会糊成灰盘）；
+- 配合 `hit_effect_center = false`：中心不放特效，只在每个被打的敌人脚下各落一颗。
 
 ## 执行流程
 
@@ -140,7 +156,10 @@ _cast_aoe()（爆裂火球走的路径）
 
 **门派技能**：`SkillData` 里有一组「门派技能」字段（`max_targets` / `hits` / `fixed_damage` / `seal_chance` /
 `silence_*` / `heal_power` / `hot_*` / `buff_*`），资源在 `resources/skills/sect_skills/`。
-多目标技能的 `max_targets > 1` 时，玩家点主目标后由 `_expand_targets()` 自动补齐最近的 N-1 个敌人；
+多目标技能（`max_targets > 1`）**走群体演出**：玩家点主目标后 `_expand_targets()` 补齐最近的 N-1 个敌人，
+然后和 `ENEMY_ALL` 一样走 `_cast_aoe()` —— **只生成一颗弹体、只播一次命中特效**，
+所有目标在 `aoe_step_delay`（0.06s）内逐个结算，观感是"同时受击"。
+> 之前 `max_targets` 走单体循环，每个敌人各播一遍特效，像连放 3 次技能（已修）。
 `hits > 1` 在同一目标上连结算 N 次；`fixed_damage` 的技能伤害取 `flat_damage`（不吃攻击力）；
 辅助技能（`SELF` / `ALLY_SINGLE`）走 `_perform_support()`：治疗、持续回血、增益状态。
 

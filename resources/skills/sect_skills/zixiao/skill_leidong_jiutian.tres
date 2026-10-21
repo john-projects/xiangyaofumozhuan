@@ -1,6 +1,7 @@
 [gd_resource type="Resource" script_class="SkillData" format=3]
 
 [ext_resource type="Script" path="res://resources/skills/skill_data.gd" id="1_5nk4j"]
+[ext_resource type="PackedScene" path="res://scenes/effects/leidong_jiutian/leidong_jiutian.tscn" id="2_leidong"]
 
 [resource]
 script = ExtResource("1_5nk4j")
@@ -14,4 +15,9 @@ crit_bonus = 0.05
 sect_id = "zixiao"
 sect_skill_key = "leidong_jiutian"
 max_targets = 3
+screen_shake = 12.0
+hit_effect_scene = ExtResource("2_leidong")
+hit_effect_on_ground = true
+hit_effect_per_target = false
+burst_scale = 2.0
 tint = Color(0.7, 0.5, 1, 1)

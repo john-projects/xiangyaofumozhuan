@@ -37,6 +37,8 @@ var _sprite: Sprite2D = null
 var _model: Node3D = null
 var _anim: AnimationPlayer = null
 var _ready_ok := false
+## 希望模型在 2D 屏幕上显示的高度（像素）；_calibrate() 用它换算精灵缩放。
+var _display_height := 195.0
 
 ## 模型根节点的额外 Y 旋转。正视角下模型朝 +Z（面向相机）= 游戏里的"正下"，所以偏移为 0。
 var _yaw_offset := 0.0
@@ -106,16 +108,21 @@ func setup(glb_path: String, display_height := 195.0) -> bool:
 	var inst = packed.instantiate()
 	_model.add_child(inst)
 	_anim = _find_animation_player(inst)
+	# 不同来源的模型原点不一样（有的在脚底、有的在身体中心）：先按网格包围盒把**身体中心**挪到原点，
+	# 否则"原点在脚底"的模型会把头挤出画面（Meshy 的模型就是这样，头直接被裁掉）。
+	var bounds := _model_bounds(inst)
+	if bounds.size.y > 0.0:
+		_model.position = -bounds.get_center()
 
 	# ── 显示用 Sprite2D ──
 	_sprite = Sprite2D.new()
 	_sprite.name = "Sprite3DView"
 	_sprite.texture = _viewport.get_texture()
-	# 视口像素 → 世界像素：让整张视口在 2D 里显示成 display_height 那么高
+	# 视口像素 → 世界像素：先按"整张视口 = display_height"估算，真正的大小由 _calibrate() 按实际像素量出来再修正。
 	_sprite.scale = Vector2.ONE * (display_height / float(VIEW_H))
-	# 脚底锚定：正视角下模型投影高 = 1.898，占正交尺寸 2.10 的 90.4%，
-	# 所以脚底在视口中心下方 45.2% 处。
+	# 脚底锚定的初值（旧模型的近似值），_calibrate() 会按真实 alpha 包围盒重算
 	_sprite.offset = Vector2(0.0, -VIEW_H * 0.452)
+	_display_height = display_height
 
 	# 诊断输出：出问题时这几行能直接定位是视口尺寸、相机还是贴图不对
 	var tex_size := Vector2.ZERO
@@ -128,9 +135,35 @@ func setup(glb_path: String, display_height := 195.0) -> bool:
 		print("[Model3DAvatar] 网格 AABB 尺寸=%s（原始应为约 1.19 × 1.90 × 0.81）"
 				% mi.get_aabb().size)
 	add_child(_sprite)
+	# 不同来源的模型（Meshy / 自建）骨骼姿势缩放差很多，AABB 不可靠：
+	# 等第一帧画完，用视口里真实的 alpha 包围盒把「身高」和「脚底」校准一次。
+	_calibrate.call_deferred()
 
 	_ready_ok = true
 	return true
+
+
+## 按视口第一帧的实际像素校准显示：身高 = display_height，脚底落在原点。
+## 为什么不用 AABB：绑定姿势的 AABB 和骨骼摆出来的实际大小可能差一倍（Meshy 的模型尤其明显）。
+func _calibrate() -> void:
+	if _sprite == null or _viewport == null:
+		return
+	await RenderingServer.frame_post_draw
+	if not is_instance_valid(self) or _sprite == null:
+		return
+	var img := _viewport.get_texture().get_image()
+	if img == null or img.is_empty():
+		return
+	var used := img.get_used_rect()
+	if used.size.y <= 0:
+		return
+	# 身高：让 alpha 包围盒的高度正好等于 display_height
+	_sprite.scale = Vector2.ONE * (_display_height / float(used.size.y))
+	# 脚底：包围盒底边（used.end.y）对齐到节点原点 y=0
+	_sprite.offset = Vector2(VIEW_W * 0.5 - float(used.get_center().x),
+			VIEW_H * 0.5 - float(used.end.y))
+	print("[Model3DAvatar] 校准：alpha 包围盒=%s → 缩放=%.4f 偏移=%s"
+			% [used, _sprite.scale.x, _sprite.offset])
 
 
 func _find_animation_player(root: Node) -> AnimationPlayer:
@@ -153,24 +186,81 @@ func _find_mesh_instance(root: Node) -> MeshInstance3D:
 	return null
 
 
-## 播放动画。参数 anim：idle / run / attack / cast（导出时写进 GLB 的片段名）。
+## 所有网格的世界包围盒并集（用来找"身体中心"，不依赖模型原点在哪）。
+## 用 global_transform × aabb：模型实例已经在视口树里，变换有效。
+func _model_bounds(root: Node) -> AABB:
+	var out := AABB()
+	var first := true
+	for node in root.find_children("*", "MeshInstance3D", true, false):
+		var mi := node as MeshInstance3D
+		if mi == null or mi.mesh == null:
+			continue
+		var box: AABB = mi.global_transform * mi.get_aabb()
+		if first:
+			out = box
+			first = false
+		else:
+			out = out.merge(box)
+	return out
+
+
+## 逻辑动作名 → 各模型可能用的剪辑名（不同美术导出的命名不统一，按这张表兜底）。
+## Meshy 那套：Alert=站立、Running=跑、Walking=走、Attack=攻击、Skill_01=施法、Dead=倒地。
+const ANIM_ALIASES := {
+	"idle": ["idle", "Idle", "Alert", "Standing", "Stand"],
+	"run": ["run", "Run", "Running", "Walk", "Walking"],
+	"walk": ["walk", "Walk", "Walking"],
+	"attack": ["attack", "Attack", "Attack_01"],
+	"cast": ["cast", "Cast", "Skill_01", "Skill", "Spell"],
+	"dead": ["dead", "Dead", "Death"],
+}
+
+
+## 播放循环动画。参数 anim：逻辑动作名（idle / run / walk / attack / cast / dead）；
+## 实际剪辑名由 _resolve_anim() 模糊匹配（精确 → 别名表 → 包含关键词），找不到就什么也不做。
 func play(anim: String, blend := 0.15) -> void:
 	if _anim == null:
 		return
-	if _anim.current_animation == anim and _anim.is_playing():
+	var clip := _resolve_anim(anim)
+	if clip.is_empty():
 		return
-	_anim.play(anim, blend)
+	if _anim.current_animation == clip and _anim.is_playing():
+		return
+	_anim.play(clip, blend)
+
+
+## 把逻辑动作名解析成这个模型真实存在的剪辑名；找不到返回 ""。
+func _resolve_anim(anim: String) -> String:
+	if _anim == null:
+		return ""
+	var list := _anim.get_animation_list()
+	if list.has(anim):
+		return anim
+	for candidate in ANIM_ALIASES.get(anim, []):
+		if list.has(candidate):
+			return candidate
+	# 最后退化成"包含关键词"（大小写不敏感），兼容 Move_Run / run_cycle 这类命名
+	var low := anim.to_lower()
+	for clip in list:
+		if String(clip).to_lower().contains(low):
+			return String(clip)
+	return ""
 
 
 ## 播放一次性动作，播完自动回 idle。返回片段时长（秒），0 表示没有这个片段。
+## 参数 anim 同样走 _resolve_anim()：模型里叫 "Attack"/"Skill_01" 也能用 "attack"/"cast" 调用。
 func play_once(anim: String, blend := 0.08) -> float:
-	if _anim == null or not _anim.has_animation(anim):
+	if _anim == null:
 		return 0.0
-	_anim.play(anim, blend)
-	var dur := _anim.get_animation(anim).length
+	var clip := _resolve_anim(anim)
+	if clip.is_empty():
+		return 0.0
+	_anim.play(clip, blend)
+	var dur := _anim.get_animation(clip).length
+	var idle_clip := _resolve_anim("idle")
 	get_tree().create_timer(dur).timeout.connect(func() -> void:
-		if is_instance_valid(self) and _anim != null:
-			_anim.play("idle", 0.18))
+		if is_instance_valid(self) and _anim != null and not idle_clip.is_empty():
+			_anim.play(idle_clip, 0.18))
 	return dur
 
 

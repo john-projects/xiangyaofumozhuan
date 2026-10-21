@@ -87,8 +87,9 @@ func fly_to(target_pos: Vector2) -> void:
 
 ## 命中爆炸：收掉飞行层，在当前位置放"命中特效场景"，然后自己 queue_free。
 ## 用哪个：SkillData.hit_effect_scene，留空用 BURST_EFFECT_SCENE（程序化爆炸）；缩放用 burst_scale。
+## 参数 skip_effect：true = 只收尾不放爆炸（群体技能改在"每个目标脚下"各放一份时用）。
 ## 副作用：new 一个命中特效挂在父节点下（世界坐标，本体消失不影响它继续播）；镜头震动由 Battle 负责。
-func burst() -> void:
+func burst(skip_effect := false) -> void:
 	sprite.visible = false
 	trail.visible = false
 	# 外观包自己收尾（停发射、藏序列帧），让已生成的粒子自然消亡；没实现 stop_flight() 的就整个藏掉。
@@ -109,7 +110,7 @@ func burst() -> void:
 		effect_scale = maxf(0.05, _skill.burst_scale)
 
 	var parent := get_parent()
-	if parent != null and effect_scene != null:
+	if not skip_effect and parent != null and effect_scene != null:
 		# 不写 as BurstEffect：新脚本的 class_name 需要编辑器索引一次才进全局类缓存，用 preload 常量实例化更稳
 		var boom = effect_scene.instantiate()
 		parent.add_child(boom)
