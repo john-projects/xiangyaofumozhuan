@@ -343,13 +343,6 @@ func roll_crit(crit_bonus := 0.0) -> bool:
 	return Global.get_chance_success(0.10 + stats.crit_rate / 100.0 + status_value("crit_rate") / 100.0 + crit_bonus)
 
 
-## 是否格挡（格挡 = 本次完全免伤，只飘 Blocked!）。副作用：**推进全局随机数序列**。
-## 公式：stats.block_chance / 100.0 —— block_chance 资源里按百分数填（15 = 15%），这里**必须除 100**。
-## 坑：没填字段时默认 0.0 → 永不格挡（不是 100%）。
-func try_block() -> bool:
-	return Global.get_chance_success(stats.block_chance / 100.0)
-
-
 ## 本回合缓存的出手速度，由 Battle._next_round() 排序前调 roll_turn_speed() 写入。
 ## ⚠ 必须缓存：排序会反复调比较函数，若在里面调 turn_speed() 每次取新随机数，
 ##   "a>b"与"b>a"可能同时成立，引擎报 "bad comparison function" 且排序结果未定义。
@@ -368,19 +361,32 @@ func roll_turn_speed() -> float:
 	return round_speed
 
 
+## 防御减伤曲线的常数：减伤率 = 防御 / (防御 + DEF_SOFT)，防越高收益越平缓。
+## 梦幻西游里这条是 [攻 − 防×K2]×K3 的攻防差公式；我们的数值小（攻 9 / 防 18），
+## 直接相减会变成"全部打 1 血"，所以换成等价意图的百分比曲线。
+const DEF_SOFT := 60.0
+
+
 ## 扣血（战斗里唯一的伤害入口，普攻和技能最后都走这里）。
-## 减伤：defending 时 ×0.5、下限 1.0（防御不能完全免伤）。
-## 副作用：改 hp、_refresh_hp()；归零调 _die()。已死单位直接 return（防鞭尸/重复 _die()）。
-func take_damage(amount: float) -> void:
+## 公式：最终伤害 = max(1, 伤害 × (1 − 防护/(防护+60)) − 格挡值)（防御姿态再 ×0.5）
+##   · 参数 magic = true 时防护用 `spell_defense`（法防），否则用 `defense`（物理防御）
+##   · 格挡值：**最后一步固定减法**（不乘任何系数），所以对高频低伤特别有效
+## 返回值：实际扣掉的血量（Battle 用它飘伤害数字，避免显示未减伤的值）。
+## 副作用：改 hp、_refresh_hp()；归零调 _die()。已死单位直接 return 0（防鞭尸/重复 _die()）。
+func take_damage(amount: float, magic := false) -> float:
 	if not alive:
-		return
-	var final := amount
+		return 0.0
+	var guard := float(stats.spell_defense) if magic else float(stats.defense)
+	var def_ratio := guard / (guard + DEF_SOFT)
+	var final := maxf(1.0, amount * (1.0 - def_ratio))
+	final = maxf(1.0, final - float(stats.block_value))
 	if defending:
 		final = maxf(1.0, final * 0.5)
 	hp = maxf(0.0, hp - final)
 	_refresh_hp()
 	if hp <= 0.0:
 		_die()
+	return final
 
 
 ## 回血（治疗技能未实现，目前无人调用）。用 minf(max_hp, ...) 夹上限；死人不能靠回血复活。
@@ -489,13 +495,20 @@ func tick_cooldowns() -> void:
 		cooldowns.erase(key)
 
 
-## 技能伤害 = maxf(1.0, skill.power × stats.damage)（固定伤害则取 flat_damage），再叠状态加成：
+## 技能伤害 = maxf(1.0, 倍率 × stats.damage/法伤)（固定伤害则取 flat_damage），再叠状态加成：
 ## `damage_pct` / `damage_spell` 按百分比放大，`spell_damage` 按点数加。纯函数，不碰随机数。
-func skill_damage(skill: SkillData) -> float:
+## 参数 hit：第几击（0 起）。技能配了 hit_power 时用它，否则一律用 power。
+func skill_damage(skill: SkillData, hit := 0) -> float:
 	if skill == null:
 		return roll_damage()
-	# 固定伤害（缥缈剑指 / 药雾弥漫）：吃固定值，不随攻击力成长。
-	var base := skill.flat_damage if skill.fixed_damage else skill.power * stats.damage
+	# 固定伤害（缥缈剑指 / 药雾弥漫）：吃固定值，不随攻击力/法伤成长。
+	var raw := stats.damage
+	if skill.damage_type == SkillData.DamageType.MAGIC:
+		raw = stats.spell_damage
+	var power := skill.power
+	if hit >= 0 and hit < skill.hit_power.size():
+		power = skill.hit_power[hit]
+	var base := skill.flat_damage if skill.fixed_damage else power * raw
 	base = maxf(1.0, base)
 	base *= 1.0 + (status_value("damage_pct") + status_value("damage_spell")) / 100.0
 	base += status_value("spell_damage")
@@ -653,10 +666,13 @@ func _process(_delta: float) -> void:
 
 
 ## 按三个标记重算 %Selection 的可见性与颜色（唯一"高亮真相"出口）。
-## 优先级：_targetable 红 > _selected 暖黄 > 悬停白；可见性 alive and (...)——死了永不显示（双保险）。
+## 优先级：键盘/悬停的红色目标 > _selected 暖黄 > 悬停白。
+## ⚠ `_targetable` 只表示"能被点"，不再直接显示红框：
+##   否则进入选目标时，所有敌人会同时被红框标成"已选中"（之前就是这样）。
 func _update_selection() -> void:
-	selection.visible = alive and (_selected or _targetable or _hovered)
-	if _targetable:
+	var aiming := _targetable and (_focused or _hovered)
+	selection.visible = alive and (aiming or _selected or _hovered)
+	if aiming:
 		selection.color = TARGET_COLOR
 	elif _selected:
 		selection.color = SELECT_COLOR

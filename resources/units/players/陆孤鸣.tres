@@ -8,8 +8,7 @@
 script = ExtResource("1_fokdh")
 name = "陆孤鸣"
 icon = ExtResource("1_qhuv5")
-model_glb = "res://assets/models/players/陆孤鸣.glb"
 anim_dir = "res://assets/sprites/units/players/luguming_anim"
-speed = 270
-block_chance = 5.0
+model_glb = "res://assets/models/players/陆孤鸣.glb"
+speed = 350.0
 metadata/_custom_type_script = "uid://j6ibt5vlkg3t"

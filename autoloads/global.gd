@@ -163,7 +163,7 @@ const SECT_SKILLS := {
 const SECT_SKILL_MAX_LEVEL := 100
 
 ## ── 运行时状态（跨场景存活，新档需手动清空）──
-var coins: int = 500                                  # 金币（单位：枚，整数）。默认 500 与 GameRoot.starting_coins 一致；开新档时会被 start_new_game() 重置回那个值
+var coins: int = 1000                                  # 金币（单位：枚，整数）。默认 500 与 GameRoot.starting_coins 一致；开新档时会被 start_new_game() 重置回那个值
 
 ## 每个角色各自的等级（键 = GameRoot.character_key()，缺键 = 1 级）。经验按人发，板凳不涨。
 ## 唯一写入点：GameRoot.add_exp() 与 start_new_game()。
@@ -409,11 +409,15 @@ func clear_sect_skill_cache() -> void:
 
 # ── UI 文本工具 ──
 
-## 属性数值转 UI 文本：整数不带小数点（25 而不是 25.0），真小数原样保留。
+## 属性数值转 UI 文本：**一律显示整数**（四舍五入），内部计算仍然用 float。
+## 例：43.375 → "43"，1.5 → "2"，0.4 → "1"（非 0 的值不会显示成 0，否则"暴击 +0%"看着像没生效）。
 ## ⚠ 故意不写 static：调用点都走 autoload 实例，static 被实例调用会刷 static_called_on_instance。
 func format_stat(value) -> String:
 	var f := float(value)
-	return str(int(f)) if is_equal_approx(f, roundf(f)) else str(f)
+	var n := int(roundf(f))
+	if n == 0 and not is_zero_approx(f):
+		n = 1 if f > 0.0 else -1
+	return str(n)
 
 
 # ── UI 键盘焦点工具（主菜单 / 世界地图共用）──

@@ -3,108 +3,14 @@
 [ext_resource type="Script" uid="uid://j6ibt5vlkg3t" path="res://resources/units/unit_stats.gd" id="1_abwhm"]
 [ext_resource type="Script" uid="uid://v6570clid4e6" path="res://resources/maps/map_data.gd" id="1_mapdata"]
 [ext_resource type="Texture2D" uid="uid://dudt86f6iqppy" path="res://assets/map/map_jianyecheng.png" id="2_texture"]
-[ext_resource type="Texture2D" uid="uid://dpxw8tsbgrfse" path="res://assets/sprites/tomato/Players/Player_2.png" id="3_h1f2s"]
 [ext_resource type="Script" uid="uid://ctu1nt07fqrnc" path="res://resources/maps/map_npc.gd" id="3_npc"]
-[ext_resource type="Script" uid="uid://c60dn4pj1cfw7" path="res://resources/items/item_base.gd" id="3_st1wf"]
-[ext_resource type="PackedScene" uid="uid://bl3xpexlvqo3u" path="res://scenes/world/maps/world_jianyecheng.tscn" id="4_world"]
-[ext_resource type="Texture2D" uid="uid://dmox6e28kf6ax" path="res://assets/sprites/tomato/Players/Player_4.png" id="4_yulw2"]
-[ext_resource type="Texture2D" uid="uid://bt0lww88864ws" path="res://assets/sprites/tomato/Players/Player_5.png" id="5_yulw2"]
-[ext_resource type="Texture2D" uid="uid://cproxhccob85g" path="res://assets/sprites/tomato/Players/Player_1.png" id="6_taixu"]
-[ext_resource type="Texture2D" uid="uid://dq63ocnu3lset" path="res://assets/sprites/tomato/Players/Player_3}.png" id="7_zixiao"]
-
-[sub_resource type="Resource" id="Resource_chuanfu"]
-script = ExtResource("3_npc")
-id = "chuanfu"
-display_name = "船夫"
-texture = ExtResource("3_h1f2s")
-position = Vector2(0.6, 0.95)
-dialogue = "客官要出海吗？东海湾就在前头，坐我的船一会儿就到。"
-destinations = Array[String](["donghaiwan"])
-teleport_label = "出海前往"
-
-[sub_resource type="Resource" id="Resource_pi0uk"]
-script = ExtResource("3_npc")
-id = "duiyou"
-display_name = "队友"
-texture = ExtResource("4_yulw2")
-position = Vector2(0.45, 0.4)
-dialogue = "需要加入队伍吗？"
-action = 3
-metadata/_custom_type_script = "uid://ctu1nt07fqrnc"
-
-[sub_resource type="Resource" id="Resource_rgkfj"]
-script = ExtResource("3_npc")
-id = "shangren"
-display_name = "商人"
-texture = ExtResource("5_yulw2")
-position = Vector2(0.4, 0.3)
-dialogue = "看看有没有趁手的家伙？都是现货。"
-action = 4
-metadata/_custom_type_script = "uid://ctu1nt07fqrnc"
-
-[sub_resource type="Resource" id="Resource_taixu"]
-script = ExtResource("3_npc")
-id = "taixu_zhangmen"
-display_name = "太虚剑宗掌门"
-texture = ExtResource("6_taixu")
-position = Vector2(0.54, 0.38)
-dialogue = "剑者，心也。太虚剑宗只收人族弟子 —— 你若有这份心性，便来试剑。"
-action = 5
-sect_id = "taixu"
-metadata/_custom_type_script = "uid://ctu1nt07fqrnc"
-
-[sub_resource type="Resource" id="Resource_piaomiao"]
-script = ExtResource("3_npc")
-id = "piaomiao_zhangmen"
-display_name = "缥缈仙府府主"
-texture = ExtResource("3_h1f2s")
-position = Vector2(0.57, 0.35)
-dialogue = "云海缥缈，人族与仙族皆可入我门下 —— 只看你肯不肯静心。"
-action = 5
-sect_id = "piaomiao"
-metadata/_custom_type_script = "uid://ctu1nt07fqrnc"
-
-[sub_resource type="Resource" id="Resource_zixiao"]
-script = ExtResource("3_npc")
-id = "zixiao_zhangmen"
-display_name = "紫霄神道教道尊"
-texture = ExtResource("7_zixiao")
-position = Vector2(0.6, 0.33)
-dialogue = "雷法天授，非仙族血脉不可轻传。你是什么出身，自己清楚。"
-action = 5
-sect_id = "zixiao"
-metadata/_custom_type_script = "uid://ctu1nt07fqrnc"
-
-[sub_resource type="Resource" id="Resource_wanyao"]
-script = ExtResource("3_npc")
-id = "wanyao_guzhu"
-display_name = "万药谷谷主"
-texture = ExtResource("4_yulw2")
-position = Vector2(0.63, 0.3)
-dialogue = "不问出身，只问药性。仙族、魔族的弟子我这儿都收。"
-action = 5
-sect_id = "wanyao"
-metadata/_custom_type_script = "uid://ctu1nt07fqrnc"
-
-[sub_resource type="Resource" id="Resource_xingluo"]
-script = ExtResource("3_npc")
-id = "xingluo_jiaozhu"
-display_name = "星罗教教主"
-texture = ExtResource("5_yulw2")
-position = Vector2(0.67, 0.36)
-dialogue = "星象已定，魔族当兴。入我星罗教，先看你命盘。"
-action = 5
-sect_id = "xingluo"
-metadata/_custom_type_script = "uid://ctu1nt07fqrnc"
+[ext_resource type="Script" uid="uid://b23h0s27eoug8" path="res://resources/maps/map_prop.gd" id="9_3yypj"]
 
 [resource]
 script = ExtResource("1_mapdata")
 id = "jianyecheng"
 display_name = "建邺城"
 texture = ExtResource("2_texture")
-scene = ExtResource("4_world")
-map_scale = 3.0
 spawn_point = Vector2(0.45, 0.65)
-npcs = Array[ExtResource("3_npc")]([SubResource("Resource_chuanfu"), SubResource("Resource_pi0uk"), SubResource("Resource_rgkfj"), SubResource("Resource_taixu"), SubResource("Resource_piaomiao"), SubResource("Resource_zixiao"), SubResource("Resource_wanyao"), SubResource("Resource_xingluo")])
 next_id = "donghaiwan"
 exit_center = Vector2(0.62, 0.5)

@@ -3,7 +3,7 @@ class_name SkillProjectile
 
 ## 公共技能弹道 —— 所有元素共用的一条弹道。
 ## 只负责通用骨架：静态贴图（SkillData.projectile_texture）→ %Appearance 外观插槽 → 拖尾 / 飞行 / 命中爆炸 / 生命周期。
-## 元素专属的东西一律不在这里（火球的序列帧与五层粒子在 fireball_appearance.gd），本文件不该出现任何 fire 语义。
+## 元素专属的东西一律不在这里（序列帧与多层粒子放在各自的"外观包"场景里），本文件只管弹道。
 ## 用法：instantiate → add_child → setup(skill, 起点) → await fly_to(目标点)（抵达时返回）→ burst()。
 ## 外观包契约（鸭子类型，两个都可选）：setup_effect(projectile, skill) 由 setup() 调；stop_flight() 由 burst() 调。
 ## 两个都没实现也能用：那它就只是一个挂在插槽里的静态装饰。
@@ -38,7 +38,7 @@ func setup(skill: SkillData, start_pos: Vector2) -> void:
 		sprite.modulate = skill.tint
 		sprite.scale = Vector2.ONE * skill.projectile_scale
 
-	# ---- 元素外观包（可选）：火球/冰箭的视觉都在各自的外观包里 ----
+	# ---- 外观包（可选）：各技能的飞行视觉都在自己的外观包里 ----
 	_attach_appearance(skill)
 
 	# ⚠ 拖尾默认 visible = false（可见拖尾由外观包的 TrailParticles 负责）；它设了 top_level，点是世界坐标。
@@ -122,15 +122,23 @@ func burst(skip_effect := false) -> void:
 		else:
 			play_sequence_once(boom)
 
-	# 兜底层：让 Burst 粒子跟着喷一下（正常情况下命中特效已经覆盖了观感）
+	# 兜底层：让 Burst 粒子跟着喷一下。
+	# ⚠ 只有"没有专属命中特效"的技能才喷：否则专属特效播完，这层兜底粒子还在原地烧，
+	#   看起来就是"击中后残留一团尾焰"（太虚神剑/人剑合一 这类剑系技能踩过）。
+	var has_custom_hit := _skill != null \
+			and (_skill.hit_effect_scene != null or _skill.target_effect_scene != null)
 	if burst_particles != null:
-		burst_particles.modulate = tint
-		burst_particles.emitting = true
+		if has_custom_hit:
+			burst_particles.emitting = false
+			burst_particles.visible = false
+		else:
+			burst_particles.modulate = tint
+			burst_particles.emitting = true
 
 	queue_free()
 
 
-## 播放"纯序列帧"的命中特效（例如 effect_fireball_hit.tscn：只有一个 AnimatedSprite2D，没有脚本）。
+## 播放"纯序列帧"的命中特效（场景里只有一个 AnimatedSprite2D，没有脚本）。
 ## 参数 node：已 add_child 进树的特效根节点。做法：从头播一遍，按"帧数 / fps"算时长，定时停帧并 queue_free。
 ## ⚠ 不要改 anim.sprite_frames.set_animation_loop()：内嵌 SubResource 实例共享，改了会污染所有实例。
 ## 容错：找不到 AnimatedSprite2D、没有 SpriteFrames 或没有 default 动画时直接释放，不报错。

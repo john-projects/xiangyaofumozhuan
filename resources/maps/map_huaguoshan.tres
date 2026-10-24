@@ -5,7 +5,8 @@
 [ext_resource type="Texture2D" uid="uid://dqqjl5rrbsvbj" path="res://assets/map/map_huaguoshan.png" id="2_texture"]
 [ext_resource type="Script" uid="uid://c60dn4pj1cfw7" path="res://resources/items/item_base.gd" id="3_bf88h"]
 [ext_resource type="Script" uid="uid://ctu1nt07fqrnc" path="res://resources/maps/map_npc.gd" id="3_npc"]
-[ext_resource type="PackedScene" path="res://scenes/world/maps/world_huaguoshan.tscn" id="4_world"]
+[ext_resource type="PackedScene" uid="uid://cykn7ol72w0ge" path="res://scenes/world/maps/world_huaguoshan.tscn" id="4_world"]
+[ext_resource type="Script" uid="uid://b23h0s27eoug8" path="res://resources/maps/map_prop.gd" id="4_yc7y4"]
 
 [sub_resource type="Resource" id="Resource_houzi"]
 script = ExtResource("3_npc")

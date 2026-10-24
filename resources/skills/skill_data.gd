@@ -13,7 +13,7 @@ class_name SkillData
 ## ENEMY_SINGLE / ENEMY_ALL 已跑通（单体选目标 / 全体不用选，各炸一次再结算伤害）；
 ## SELF / ALLY_SINGLE 仍是占位，等 BattleUnit 有 status（增益/持续状态）系统后再做治疗与增益。
 enum TargetMode {
-	ENEMY_SINGLE,   # 选一个敌人（火球现在用这个）
+	ENEMY_SINGLE,   # 选一个敌人（大部分单体技能的默认值）
 	ENEMY_ALL,      # 全体敌人
 	SELF,           # 自己（增益，暂未实现效果）
 	ALLY_SINGLE,    # 选一个队友（治疗/增益，暂未实现效果）
@@ -42,7 +42,7 @@ enum TargetMode {
 @export var target_mode := TargetMode.ENEMY_SINGLE
 
 @export_group("门派技能")
-## 归属门派（Global.SECTS 的键）；空 = 通用技能（火球这类）。
+## 归属门派（Global.SECTS 的键）；空 = 通用技能。
 @export var sect_id: String = ""
 ## 对应 Global.SECT_SKILLS 里的技能 id：等级相关参数（目标数阈值、每级加成）都去那张表查。
 @export var sect_skill_key: String = ""
@@ -50,9 +50,19 @@ enum TargetMode {
 @export var max_targets := 1
 ## 对同一目标连续结算几次（太虚神剑 = 3 连击）。
 @export var hits := 1
+## 连击每一击的**单独倍率**（长度 = hits 时生效，空 = 每一击都用 power）。
+## 例：太虚神剑 3 击 → [0.4, 0.6, 0.8]（越打越重，总 1.8）。
+@export var hit_power: Array[float] = []
 ## true = 固定伤害：伤害 = flat_damage（不乘攻击力/法伤），缥缈剑指 / 药雾弥漫用。
 @export var fixed_damage := false
+## 1 级固定伤害基数。
 @export var flat_damage := 0.0
+## 固定伤害每级成长（战斗前按技能等级烤进副本：flat_damage + flat_per_level × (等级-1)）。
+@export var flat_per_level := 0.0
+
+## 伤害类型：物理走「攻击 vs 防御」，法术走「法伤 vs 法防」。
+enum DamageType { PHYSICAL, MAGIC }
+@export var damage_type := DamageType.PHYSICAL
 ## 封印概率（0~1）：命中时按它给目标上"封印"（跳过一次行动）。
 @export_range(0.0, 1.0) var seal_chance := 0.0
 ## 封法术概率（0~1）+ 封住几回合（缥缈仙府「封灵诀」）。
@@ -78,7 +88,7 @@ enum TargetMode {
 
 ## 元素外观包：装着"这个元素长什么样"的 Node2D 场景（序列帧、粒子层、配色…）。留空 = 只有静态贴图。
 ## 契约（鸭子类型，都可不实现）：setup_effect(projectile, skill) 由弹道 setup() 调；stop_flight() 由命中时调。
-## 火球 → scenes/effects/fireball/fireball_appearance.tscn；以后寒冰箭再写一个 ice_appearance，弹道一行都不用改。
+## 每个元素写一个外观包场景（实现 setup_effect / stop_flight 即可），弹道一行都不用改。
 @export var appearance_scene: PackedScene
 
 ## 飞行体缩放（乘在贴图原始尺寸上）。默认 1.0 = 原始大小。
@@ -86,7 +96,7 @@ enum TargetMode {
 @export var projectile_scale := 1.0
 ## 飞行速度，单位：**像素/秒**。飞行时长 = 距离 / 速度，但弹道里被 clampf(..., 0.18, 1.2) 钳过，保证战斗节奏。
 @export var projectile_speed := 900.0
-## 整体染色（乘算到 sprite 的 modulate 上）。默认 (1.0, 0.55, 0.2) 橙色专为火球调；冰系技能改偏蓝的色值。
+## 整体染色（乘算到 sprite 的 modulate 上）。每个技能按自己的系别填（火橙 / 冰蓝 / 青碧…）。
 @export var tint := Color(1.0, 0.55, 0.2)
 ## 命中时迸发的粒子数量（0 = 不放粒子，但特效节点仍会创建）。默认 24 是"看得出炸了一下"又不糊屏的量。
 @export var hit_particles := 24
@@ -96,12 +106,24 @@ enum TargetMode {
 @export var screen_shake := 7.0
 
 ## 命中爆发的特效场景。留空 = 用默认 scenes/effects/burst_effect.tscn（程序化的闪光/冲击波/火星/浓烟四层爆炸）。
-## 填了就用它，例如像素火焰序列 effect_fireball_hit.tscn（纯 AnimatedSprite2D，由 play_sequence_once() 播一次并自毁）。
+## 填了就用它（纯 AnimatedSprite2D 的序列帧场景，由 play_sequence_once() 播一次并自毁）。
 @export var hit_effect_scene: PackedScene
 
 ## true = 命中特效**贴地**播放（节点放在目标脚下的地面线），而不是放在身体中心。
 ## 适合"地面法阵 / 天降落雷"这类素材（雷动九天）；普通爆炸保持 false。
 @export var hit_effect_on_ground := false
+
+## true = **无弹道**：施法后不飞弹体，招式直接落在目标身上结算（只对单体路径生效，群体路径不受影响）。
+## 适合"天降落雷 / 从天而降的斩击"这类不合适横向飞的招式（五雷正法）；命中特效照常走 hit_effect_scene。
+@export var instant_hit := false
+
+## true = **每一段连击各播一次命中特效**（太虚神剑这种"一击一段动画"的技能）。
+## 打开后：单体的 hits 循环里每打一下就在目标脚下 new 一个 hit_effect_scene，
+## 并调它的 play_segment(hit)；最后飞行体的 burst 不再重复放特效。
+@export var hit_effect_per_hit := false
+## 连击之间的间隔（秒）。hits > 1 时用；默认 0.12 只够数字错开，
+## 要让每击看到完整动画就调大（太虚神剑三段动画 ≈ 0.9s/段）。
+@export var hit_interval := 0.12
 
 ## true = 群体技能给**每个目标**再补一朵小爆炸（默认）。
 ## 放了整屏大特效（比如雷动九天 1 秒的雷柱）时关掉，否则 3~5 份特效会叠成一团。
@@ -118,12 +140,12 @@ enum TargetMode {
 ## 场景根节点建议用 CanvasLayer，这样不受相机和震屏影响。
 @export var screen_effect_scene: PackedScene
 
-## 命中爆发的整体缩放（1.0 = 原始大小）。群体技能调大，让爆炸能盖住整个敌阵（爆裂火球用 1.8，再逐个补 0.55 倍小爆炸）。
+## 命中爆发的整体缩放（1.0 = 原始大小）。群体技能调大，让爆炸能盖住整个敌阵。
 @export var burst_scale := 1.0
 
 @export_group("视觉 · 序列帧外观")
-## 飞行体的序列帧场景（只在 projectile_texture 为空时生效）。留空 = 用外观包里的默认 effect_fireball_1。
-## 三套配色同目录 effect_fireball_1/2/3.tscn；这组字段由"序列帧类外观包"读取，换别系外观包是否生效由它决定。
+## 飞行体的序列帧场景（只在 projectile_texture 为空时生效）。留空 = 由外观包自己决定。
+## 这组字段由"序列帧类外观包"读取，别的外观包是否生效由它自己决定。
 @export var sequence_frame_scene: PackedScene
 
 ## true = 走"只有序列帧"的干净外观：按 flight_particle_ratio 压低飞行粒子强度。

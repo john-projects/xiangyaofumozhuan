@@ -23,11 +23,25 @@ class_name MapData
 @export var scene: PackedScene
 
 @export_group("探索")
-## 图片放大倍数（世界尺寸 = 图片像素 × map_scale）。默认 2.0 ≈ 横穿要十几秒；填 1.0 就是图片原始尺寸。
-@export var map_scale := 2.0
+## 图片放大倍数（世界尺寸 = 图片像素 × map_scale）。
+## ⚠ 清晰度公式：屏幕上一个贴图像素被放大的倍数 = window/stretch/scale（0.8）× map_scale。
+##   要 1:1 不糊就让它 ≈ 1.0（现在 0.8×1.25 = 1.0）；填 2.0 就是 1.6 倍放大、明显发虚。
+##   另外世界宽必须 ≥ 逻辑画布宽（1680/0.8 = 2100），否则地图盖不满屏幕。
+@export var map_scale := 1.25
+## 角色在这张图上的显示高度（世界像素）。底图画得越大，这里要按比例调大，否则人物会显得很小。
+## 195 = 老底图（1448×1086、map_scale 1.5）的基准；4350×3263 这类大图按 1.5~1.7 倍给（290~330）。
+@export var unit_height := 195.0
 ## 进入本图时的默认出生点（归一化 0~1，相对地图图片左上角）。默认 (0.5, 0.62)：水平居中、略偏下。
 ## ⚠ 从 A 图走到 B 图时，优先放在 B 图里"指向 A 的那个 NPC"旁边，只有找不到这种 NPC 才用本字段。
 @export var spawn_point := Vector2(0.5, 0.62)
+
+@export_group("图层（地表 + 物件）")
+## 物件层：房子/树/桥/摊位等独立 PNG，按接地点做 y 排序（走到后面会被挡、走到前面挡住它）。
+## 配了它就不要再把同样的东西画进 texture 里，否则会出现"双层房子"。
+@export var props: Array[MapProp] = []
+## 可行走掩膜：白(255)=可走、黑(0)=阻挡，尺寸必须和 texture 一样（mapgen.py 会生成）。
+## 留空 = 整张图都能走（老地图保持原行为）。
+@export var walk_mask: Texture2D
 
 @export_group("NPC")
 ## 本图上的固定 NPC 列表（元素类型是 MapNPC，子资源）。留空则走下面的"兜底"逻辑。

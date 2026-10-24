@@ -471,7 +471,13 @@ func _begin_target_select(skill: SkillData = null) -> void:
 	# 键盘光标默认停在第一个敌人上；鼠标点/悬停会同步它。
 	_target_index = 0
 	if skill != null:
-		info_label.text = "选择「%s」的目标（↑↓←→ 切换 · Enter/空格 确认 · 右键/ESC 取消）" % skill.display_name
+		# 多目标技能（三尺青锋）：玩家只选 1 个，其余按"离它最近"自动补齐，
+		# 提示里写清楚，免得以为技能只打一个。
+		var extra := ""
+		if skill.max_targets > 1:
+			extra = "（会自动带上最近的 %d 个敌人）" % skill.max_targets
+		info_label.text = "选择「%s」的目标%s（↑↓←→ 切换 · Enter/空格 确认 · 右键/ESC 取消）" % [
+				skill.display_name, extra]
 	else:
 		info_label.text = "选择攻击目标（↑↓←→ 切换 · Enter/空格 确认 · 右键/ESC 取消）"
 	for target in _targets:
@@ -551,8 +557,8 @@ func _on_unit_clicked(unit: BattleUnit) -> void:
 
 
 ## 普攻：冲过去 → 格挡 → 伤害/暴击 → 飘字/受击 → 停顿 → 判胜负或收尾回合（协程）。
-## 数值口径：先 try_block()（命中完全免伤、只飘 Blocked!）；否则 roll_damage()，暴击再 ×1.5 并 ceilf；
-##   防御减伤在 BattleUnit.take_damage() 内部 ×0.5。坑：校验失败也必须 _finish_turn()，否则卡死。
+## 数值口径：roll_damage() → 暴击 ×1.5 → **BattleUnit.take_damage() 内部**做防御减伤 + 格挡值固定减去，
+##   返回实际扣血量，飘字用这个值（不显示未减伤的原始伤害）。坑：校验失败也必须 _finish_turn()，否则卡死。
 func _perform_attack(attacker: BattleUnit, target: BattleUnit) -> void:
 	# 三重校验：两个节点都有效、目标还活着。
 	if not is_instance_valid(attacker) or not is_instance_valid(target) or not target.alive:
@@ -564,19 +570,16 @@ func _perform_attack(attacker: BattleUnit, target: BattleUnit) -> void:
 	# 位移演出：冲过去再退回；await 到 tween.finished 保证"先冲再打"。
 	await attacker.play_attack(target)
 
-	if target.try_block():
-		create_floating_text(target, "Blocked!", block_color)
-	else:
-		var damage := attacker.roll_damage()
-		var is_crit := attacker.roll_crit()
-		if is_crit:
-			damage = ceilf(damage * attacker.crit_multiplier())
-		target.take_damage(damage)
-		# 飘字只显示整数部分（伤害是 float），避免出现 "12.000000"。
-		create_floating_text(target, str(int(damage)), critical_color if is_crit else normal_color)
-		await target.play_hit()
+	var damage := attacker.roll_damage()
+	var is_crit := attacker.roll_crit()
+	if is_crit:
+		damage = ceilf(damage * attacker.crit_multiplier())
+	var dealt := target.take_damage(damage)
+	# 飘字只显示整数部分（伤害是 float），避免出现 "12.000000"。
+	create_floating_text(target, str(int(roundf(dealt))), critical_color if is_crit else normal_color)
+	await target.play_hit()
 
-	# 格挡与命中都要等，节奏一致观感才不忽快忽慢。
+	# 命中都要等，节奏一致观感才不忽快忽慢。
 	await get_tree().create_timer(action_delay).timeout
 	# 先判胜负：已结束就**不能**再 _finish_turn()，否则会把结束的战斗继续往下推。
 	if not _check_battle_end():
@@ -668,41 +671,54 @@ func _perform_skill(caster: BattleUnit, skill: SkillData, targets: Array[BattleU
 		if not is_instance_valid(target) or not target.alive:
 			continue
 
-		var projectile: SkillProjectile = SKILL_PROJECTILE_SCENE.instantiate() as SkillProjectile
-		fx_root.add_child(projectile)
-		# 起点/落点都用 body_center()（脚在原点，往上抬半个身高）——敌我可能挂在不同的父节点下。
-		projectile.setup(skill, caster.body_center())
-		# await 到飞体抵达目标坐标那一刻再结算。
-		await projectile.fly_to(target.body_center())
+		# 无弹道技能（instant_hit）：不飞弹体，招式直接落在目标身上（五雷正法：天降雷柱）。
+		# 弹体变量先置空，命中段按 instant_hit 分流。
+		var projectile: SkillProjectile = null
+		if not skill.instant_hit:
+			projectile = SKILL_PROJECTILE_SCENE.instantiate() as SkillProjectile
+			fx_root.add_child(projectile)
+			# 起点/落点都用 body_center()（脚在原点，往上抬半个身高）——敌我可能挂在不同的父节点下。
+			projectile.setup(skill, caster.body_center())
+			# await 到飞体抵达目标坐标那一刻再结算。
+			await projectile.fly_to(target.body_center())
 
-		# 连击（hits > 1）：同一个飞体命中后连续结算 N 次，中间留一点间隔让伤害数字错开。
+		# 连击（hits > 1）：同一个飞体命中后连续结算 N 次。
 		var times := maxi(1, skill.hits)
 		for hit in times:
 			if not is_instance_valid(target) or not target.alive:
 				break
 			# 没有伤害的技能（纯封印/封法术）只走状态，不飘伤害数字。
 			if _skill_deals_damage(skill):
-				if target.try_block():
-					create_floating_text(target, "Blocked!", block_color)
-				else:
-					# 伤害 = skill_damage()（power×攻击力 / 固定值 + 状态加成），暴击再乘 crit_multiplier()。
-					var damage := caster.skill_damage(skill)
-					var is_crit := caster.skill_crit(skill)
-					if is_crit:
-						damage = ceilf(damage * caster.crit_multiplier())
-					target.take_damage(damage)
-					# 技能普通色用 skill.tint（火球是橙色），刻意与 Battle.normal_color 不同。
-					create_floating_text(target, str(int(damage)), critical_color if is_crit else skill.tint)
-					await target.play_hit()
+				# 伤害 = skill_damage()（power×攻击力 / 固定值 + 状态加成），暴击再乘 crit_multiplier()；
+				# 防御减伤与格挡值在 take_damage() 内部结算，返回实际扣血量。
+				var damage := caster.skill_damage(skill, hit)
+				var is_crit := caster.skill_crit(skill)
+				if is_crit:
+					damage = ceilf(damage * caster.crit_multiplier())
+				var dealt := target.take_damage(damage, skill.damage_type == SkillData.DamageType.MAGIC)
+				# 技能普通色用 skill.tint，刻意与 Battle.normal_color 不同。
+				create_floating_text(target, str(int(roundf(dealt))), critical_color if is_crit else skill.tint)
+				await target.play_hit()
 			_apply_skill_statuses(caster, skill, target)
+			# 每击一段特效（太虚神剑）：这一击单独 new 一个特效，播它对应的片段。
+			if skill.hit_effect_per_hit:
+				_spawn_per_hit_effect(skill, target, hit, caster.global_position)
 			if hit < times - 1:
-				await get_tree().create_timer(0.12).timeout
+				await get_tree().create_timer(maxf(0.02, skill.hit_interval)).timeout
 
-		# burst() 内部会 queue_free 飞体本身，之后不能再碰 projectile。
-		# 贴地类特效（地面法阵）压到目标脚下再爆。
-		if skill.hit_effect_on_ground:
-			projectile.global_position = Vector2(target.global_position.x, target.global_position.y)
-		projectile.burst()
+		# 命中爆点：无弹道技能直接在目标位置放一份（逐击放过特效的就别重复放）；
+		# 有弹道的走 burst()（内部会 queue_free 飞体本身，之后不能再碰 projectile）。
+		if skill.instant_hit:
+			if not skill.hit_effect_per_hit:
+				var instant_pos: Vector2 = target.global_position if skill.hit_effect_on_ground \
+						else target.body_center()
+				_spawn_instant_burst(skill, instant_pos, caster.body_center())
+		elif projectile != null:
+			# 贴地类特效（地面法阵）压到目标脚下再爆。
+			if skill.hit_effect_on_ground:
+				projectile.global_position = Vector2(target.global_position.x, target.global_position.y)
+			# 逐击放过特效的，就别再放一次总爆点了（会多出一段重叠）
+			projectile.burst(skill.hit_effect_per_hit)
 		_play_sfx(skill.hit_sfx)
 		# screen_shake 为 0 表示不抖镜头。
 		if skill.screen_shake > 0.0:
@@ -722,7 +738,7 @@ func _perform_skill(caster: BattleUnit, skill: SkillData, targets: Array[BattleU
 func _cast_aoe(caster: BattleUnit, skill: SkillData, victims: Array[BattleUnit]) -> void:
 	var center := _group_center(victims)
 
-	# ① 一颗火球飞向敌阵中心（序列帧/粒子来自 SkillData）
+	# ① 一颗飞行体飞向敌阵中心（序列帧/粒子来自 SkillData）
 	var projectile: SkillProjectile = SKILL_PROJECTILE_SCENE.instantiate() as SkillProjectile
 	fx_root.add_child(projectile)
 	projectile.setup(skill, caster.body_center())
@@ -744,24 +760,21 @@ func _cast_aoe(caster: BattleUnit, skill: SkillData, victims: Array[BattleUnit])
 			continue
 
 		if _skill_deals_damage(skill):
-			if target.try_block():
-				create_floating_text(target, "Blocked!", block_color)
-			else:
-				var damage := caster.skill_damage(skill)
-				var is_crit := caster.skill_crit(skill)
-				if is_crit:
-					damage = ceilf(damage * caster.crit_multiplier())
-				target.take_damage(damage)
-				create_floating_text(target, str(int(damage)), critical_color if is_crit else skill.tint)
-				# 中心那朵盖不到斜排角落，所以每个敌人身上再补一朵小的。
-				# 贴地技能（群星陨落）把这份"小爆点"放到目标脚下的地面线上。
-				var burst_pos: Vector2 = target.global_position if skill.hit_effect_on_ground \
-						else target.body_center()
-				# 专属的 target_effect_scene 给足尺寸（不乘 0.55 的小爆比例）
-				var ratio := 1.0 if skill.target_effect_scene != null else AOE_TARGET_BURST_RATIO
-				# 传入施法者位置：陨石等特效据此决定"从哪边斜插过来"
-				_spawn_hit_burst(skill, burst_pos, ratio, caster.body_center())
-				target.play_hit()          # 故意不 await：要的是"同时闪红"
+			var damage := caster.skill_damage(skill)
+			var is_crit := caster.skill_crit(skill)
+			if is_crit:
+				damage = ceilf(damage * caster.crit_multiplier())
+			var dealt := target.take_damage(damage, skill.damage_type == SkillData.DamageType.MAGIC)
+			create_floating_text(target, str(int(roundf(dealt))), critical_color if is_crit else skill.tint)
+			# 中心那朵盖不到斜排角落，所以每个敌人身上再补一朵小的。
+			# 贴地技能（群星陨落）把这份"小爆点"放到目标脚下的地面线上。
+			var burst_pos: Vector2 = target.global_position if skill.hit_effect_on_ground \
+					else target.body_center()
+			# 专属的 target_effect_scene 给足尺寸（不乘 0.55 的小爆比例）
+			var ratio := 1.0 if skill.target_effect_scene != null else AOE_TARGET_BURST_RATIO
+			# 传入施法者位置：陨石等特效据此决定"从哪边斜插过来"
+			_spawn_hit_burst(skill, burst_pos, ratio, caster.body_center())
+			target.play_hit()          # 故意不 await：要的是"同时闪红"
 		_apply_skill_statuses(caster, skill, target)
 		await get_tree().create_timer(aoe_step_delay).timeout
 
@@ -801,15 +814,38 @@ func _perform_support(caster: BattleUnit, skill: SkillData, targets: Array[Battl
 	caster.spend_mana(skill.mana_cost)
 	caster.start_cooldown(skill)
 	_play_sfx(skill.cast_sfx)
+	# ⚠ 辅助/自身增益也要放 screen_effect（人剑合一就是这条路径）：
+	#   以前只在"打敌人"的分支里调，导致自身 buff 的全屏特效永远不播。
+	_spawn_screen_effect(skill, caster.global_position)
 	await caster.play_cast()
 
 	for target in allies:
 		_apply_support_to(caster, skill, target)
+		# 治疗/增益也能有专属表现：每个被照顾到的队友脚下各放一份
+		_spawn_support_effect(skill, target)
 		await get_tree().create_timer(0.08).timeout
 
 	await get_tree().create_timer(action_delay).timeout
 	if not _check_battle_end():
 		_finish_turn()
+
+
+## 辅助技能（治疗 / 增益）的"每个目标一份"表现。
+## 用 target_effect_scene，没配就退回 hit_effect_scene；两者都没有就什么都不放。
+func _spawn_support_effect(skill: SkillData, target: BattleUnit) -> void:
+	if skill == null or not is_instance_valid(target):
+		return
+	var scene: PackedScene = skill.target_effect_scene
+	if scene == null:
+		scene = skill.hit_effect_scene
+	if scene == null:
+		return
+	var fx = scene.instantiate()
+	fx_root.add_child(fx)
+	fx.global_position = target.global_position
+	fx.scale = Vector2.ONE * maxf(0.05, skill.burst_scale)
+	if fx.has_method("play"):
+		fx.play(skill.tint, skill.hit_particles)
 
 
 ## 对**单个**目标结算辅助效果（治疗 / 持续回血 / 增益），顺带飘字；不推进回合、不 await。
@@ -821,7 +857,7 @@ func _apply_support_to(caster: BattleUnit, skill: SkillData, target: BattleUnit)
 	if skill.heal_power > 0.0:
 		var amount := maxf(1.0, caster.stats.healing * skill.heal_power)
 		target.heal(amount)
-		create_floating_text(target, "+%d" % int(amount), heal_color)
+		create_floating_text(target, "+%d" % int(roundf(amount)), heal_color)
 	# 持续回血：每回合回 healing × hot_power，持续 hot_turns 回合
 	if skill.hot_turns > 0 and skill.hot_power > 0.0:
 		target.add_status("hot", 0.0, skill.hot_turns, maxf(1.0, caster.stats.healing * skill.hot_power))
@@ -922,11 +958,14 @@ func _group_ground_y(units: Array[BattleUnit]) -> float:
 
 ## 施法瞬间放一次"全屏氛围特效"（夜色压暗 / 流星雨 / 暴雨）。
 ## 场景根节点通常是 CanvasLayer，所以直接挂到 Battle 根下即可（不受相机与震屏影响）。
-func _spawn_screen_effect(skill: SkillData) -> void:
+## 参数 at：给世界坐标就摆到那里（自身增益要挂在施法者脚下）；默认 Vector2.INF = 按场景自带位置。
+func _spawn_screen_effect(skill: SkillData, at := Vector2.INF) -> void:
 	if skill == null or skill.screen_effect_scene == null:
 		return
 	var fx = skill.screen_effect_scene.instantiate()
 	add_child(fx)
+	if at != Vector2.INF and fx is Node2D:
+		(fx as Node2D).global_position = at
 
 
 ## 在指定位置补一朵（缩小版）命中爆炸，用来表现"这个敌人也被炸到了"。
@@ -951,6 +990,50 @@ func _spawn_hit_burst(skill: SkillData, pos: Vector2, scale_ratio: float,
 	if from != Vector2.INF and boom.has_method("set_impact_direction"):
 		boom.call("set_impact_direction", pos - from)
 	if boom.has_method("play"):
+		@warning_ignore("integer_division")
+		boom.play(skill.tint, maxi(8, skill.hit_particles / 2))
+	else:
+		SkillProjectile.play_sequence_once(boom)
+
+
+## 无弹道技能（instant_hit）：招式直接落在目标位置 —— 实例化 hit_effect_scene 并播放。
+## 优先 hit_effect_scene，没配退回默认程序化爆炸；缩放用 burst_scale（不乘群体小爆比例）。
+## 参数 from：施法者位置，给实现了 set_impact_direction 的特效提供方向感（同 _spawn_hit_burst）。
+func _spawn_instant_burst(skill: SkillData, pos: Vector2, from := Vector2.INF) -> void:
+	var scene: PackedScene = skill.hit_effect_scene
+	if scene == null:
+		scene = DEFAULT_BURST_EFFECT_SCENE
+	if scene == null:
+		return
+	var boom = scene.instantiate()
+	fx_root.add_child(boom)
+	boom.global_position = pos
+	boom.scale = Vector2.ONE * maxf(0.05, skill.burst_scale)
+	if from != Vector2.INF and boom.has_method("set_impact_direction"):
+		boom.call("set_impact_direction", pos - from)
+	if boom.has_method("play"):
+		boom.play(skill.tint, maxi(8, skill.hit_particles))
+	else:
+		SkillProjectile.play_sequence_once(boom)
+## 约定：特效场景实现了 play_segment(index) 就播对应片段（太虚神剑三段动画），
+##   否则退回 play(tint, count) —— 这样别的技能也能开这个开关而不报错。
+func _spawn_per_hit_effect(skill: SkillData, target: BattleUnit, hit: int,
+		source_position: Vector2 = Vector2.ZERO) -> void:
+	var scene: PackedScene = skill.hit_effect_scene
+	if scene == null:
+		scene = skill.target_effect_scene
+	if scene == null or not is_instance_valid(target):
+		return
+	var boom = scene.instantiate()
+	fx_root.add_child(boom)
+	var pos: Vector2 = target.global_position if skill.hit_effect_on_ground else target.body_center()
+	boom.global_position = pos
+	boom.scale = Vector2.ONE * maxf(0.05, skill.burst_scale)
+	if boom.has_method("set_attack_direction"):
+		boom.call("set_attack_direction", target.global_position - source_position)
+	if boom.has_method("play_segment"):
+		boom.call("play_segment", hit, skill.tint)
+	elif boom.has_method("play"):
 		@warning_ignore("integer_division")
 		boom.play(skill.tint, maxi(8, skill.hit_particles / 2))
 	else:

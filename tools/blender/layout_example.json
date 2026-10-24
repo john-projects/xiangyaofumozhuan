@@ -1,0 +1,12 @@
+﻿{
+  "map_size": [30, 20],
+  "ground_color": [0.44, 0.60, 0.36],
+  "water": [{"center": [7, 0], "size": [3.0, 20]}],
+  "roads": [{"center": [-2, 0], "size": [2.6, 20]}],
+  "assets_dir": "assets/models/players",
+  "props": [
+    {"name": "statue_a", "asset": "行修.glb", "pos": [-5, -3], "rot": 0, "scale": 1.0},
+    {"name": "statue_b", "asset": "行修.glb", "pos": [0, 3], "rot": 45, "scale": 0.8},
+    {"name": "statue_c", "asset": "行修.glb", "pos": [7, -4], "rot": 90, "scale": 1.2}
+  ]
+}

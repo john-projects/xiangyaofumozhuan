@@ -1,6 +1,7 @@
 [gd_resource type="Resource" script_class="SkillData" format=3 uid="uid://bmr2fqgndilbw"]
 
 [ext_resource type="Script" uid="uid://sbgbq3puamij" path="res://resources/skills/skill_data.gd" id="1_oy7tw"]
+[ext_resource type="PackedScene" path="res://scenes/effects/taixu/sanchi_qingfeng.tscn" id="2_fx"]
 
 [resource]
 script = ExtResource("1_oy7tw")
@@ -8,10 +9,13 @@ id = "sanchi_qingfeng"
 display_name = "三尺青锋"
 description = "剑气横扫，攻击 2 个目标；技能 30 级后攻击 3 个。"
 mana_cost = 12.0
-cooldown = 2
 power = 1.15
 crit_bonus = 0.05
 sect_id = "taixu"
 sect_skill_key = "sanchi_qingfeng"
 max_targets = 2
 tint = Color(0.75, 0.9, 1, 1)
+hit_particles = 18
+hit_effect_on_ground = true
+target_effect_scene = ExtResource("2_fx")
+burst_scale = 1.8

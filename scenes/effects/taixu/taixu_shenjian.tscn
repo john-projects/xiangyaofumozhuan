@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scenes/effects/taixu/taixu_shenjian.gd" id="1_fx"]
+
+[node name="TaixuShenjian" type="Node2D"]
+script = ExtResource("1_fx")

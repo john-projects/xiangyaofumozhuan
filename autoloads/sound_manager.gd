@@ -33,14 +33,15 @@ enum Sound {
 	UI           # 2：所有 UI 按钮点击（买/卖、选人、下一波、主菜单…）
 }
 
-## 音效表：Sound 枚举 → 真正的音频资源（用 uid 直接 preload，不走路径字符串）。
+## 音效表：Sound 枚举 → 真正的音频资源。
+## ⚠ 用**路径** preload，不要写 uid：素材被移走再放回来时 uid 会变，
+##   写死 uid 会直接让整个 SoundManager 解析失败（整个游戏起不来）。
 ## 加一种音效的步骤：在 Sound 枚举末尾补成员 → 这里补一行 preload → 调用处 play_sound(Sound.新成员)。
 ## 类型标成 Dictionary[Sound, Resource]（类型化字典），键错用其它枚举值会被类型检查拦下。
 var sound_dictionary: Dictionary[Sound, Resource] = {
-	Sound.ENEMY_HIT: preload("uid://blonjlaa37md0"),   # 命中音
-	Sound.FIRE: preload("uid://g72hyxdnaath"),         # 射击音
-	Sound.UI: preload("uid://6nolwqlami52"),           # UI 点击音
-	
+	Sound.ENEMY_HIT: preload("res://assets/audio/EnemyHit.wav"),   # 命中音
+	Sound.FIRE: preload("res://assets/audio/ShotgunFire.wav"),     # 射击音
+	Sound.UI: preload("uid://6nolwqlami52"),                       # UI 点击音
 }
 
 ## 播放器池（对象池）。实际值是 autoloads/sound_manager.tscn 里那 10 个 AudioStreamPlayer 的 NodePath 数组。

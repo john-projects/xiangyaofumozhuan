@@ -1,9 +1,11 @@
-[gd_resource type="Resource" script_class="SkillData" format=3]
+[gd_resource type="Resource" script_class="SkillData" format=3 uid="uid://ddq3kujplpnpm"]
 
-[ext_resource type="Script" path="res://resources/skills/skill_data.gd" id="1_bmcsf"]
+[ext_resource type="Script" uid="uid://sbgbq3puamij" path="res://resources/skills/skill_data.gd" id="1_bmcsf"]
+[ext_resource type="PackedScene" path="res://scenes/effects/wulei_zhengfa/wulei_zhengfa_hit.tscn" id="2_wuleihit"]
 
 [resource]
 script = ExtResource("1_bmcsf")
+damage_type = 1
 id = "wulei_zhengfa"
 display_name = "五雷正法"
 description = "引五雷轰击单个目标，法系高倍率单体伤害。"
@@ -12,3 +14,7 @@ power = 2.4
 sect_id = "zixiao"
 sect_skill_key = "wulei_zhengfa"
 tint = Color(0.75, 0.55, 1, 1)
+screen_shake = 9.0
+hit_effect_scene = ExtResource("2_wuleihit")
+instant_hit = true
+burst_scale = 1.4

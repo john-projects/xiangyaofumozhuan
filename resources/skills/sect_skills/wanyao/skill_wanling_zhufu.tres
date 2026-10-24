@@ -1,6 +1,7 @@
-[gd_resource type="Resource" script_class="SkillData" format=3]
+[gd_resource type="Resource" script_class="SkillData" format=3 uid="uid://e3oq4sojr13c"]
 
-[ext_resource type="Script" path="res://resources/skills/skill_data.gd" id="1_skn3m"]
+[ext_resource type="Script" uid="uid://sbgbq3puamij" path="res://resources/skills/skill_data.gd" id="1_skn3m"]
+[ext_resource type="PackedScene" path="res://scenes/effects/wanyao/wanling_zhufu.tscn" id="2_fx"]
 
 [resource]
 script = ExtResource("1_skn3m")
@@ -8,7 +9,6 @@ id = "wanling_zhufu"
 display_name = "万灵祝福"
 description = "全体队友获得增益：伤害与法伤提升（随技能等级成长），持续 3 回合。"
 mana_cost = 18.0
-cooldown = 4
 power = 0.0
 crit_bonus = 0.0
 target_mode = 2
@@ -20,3 +20,5 @@ buff_per_level = 1.0
 buff_turns = 3
 buff_all_allies = true
 tint = Color(0.7, 1, 0.75, 1)
+target_effect_scene = ExtResource("2_fx")
+burst_scale = 1.3

@@ -1,6 +1,7 @@
-[gd_resource type="Resource" script_class="SkillData" format=3]
+[gd_resource type="Resource" script_class="SkillData" format=3 uid="uid://x1shr4dybe1w"]
 
-[ext_resource type="Script" path="res://resources/skills/skill_data.gd" id="1_367tr"]
+[ext_resource type="Script" uid="uid://sbgbq3puamij" path="res://resources/skills/skill_data.gd" id="1_367tr"]
+[ext_resource type="PackedScene" path="res://scenes/effects/taixu/taixu_shenjian.tscn" id="2_fx"]
 
 [resource]
 script = ExtResource("1_367tr")
@@ -8,9 +9,15 @@ id = "taixu_shenjian"
 display_name = "太虚神剑"
 description = "御剑连斩，对单个目标连续攻击 3 次。"
 mana_cost = 15.0
-cooldown = 3
 power = 0.95
 sect_id = "taixu"
 sect_skill_key = "taixu_shenjian"
 hits = 3
+hit_power = Array[float]([0.4, 0.6, 0.8])
 tint = Color(0.8, 0.92, 1, 1)
+hit_particles = 40
+hit_effect_scene = ExtResource("2_fx")
+hit_effect_on_ground = true
+hit_effect_per_hit = true
+hit_interval = 1.0
+burst_scale = 2.2

@@ -3,7 +3,7 @@ class_name BurstEffect
 
 ## 命中爆炸：把 8 层特效里"命中时集中释放"的那几层组合在一起。
 ##
-## 层对应关系（参考那段"一个火球八层"的拆解）：
+## 层对应关系（参考那段"一个技能八层粒子"的拆解）：
 ##   飞行中：火核 FireCore / 拖尾 Trail / 火团 FireBlob / 火星 Sparks / 浓烟 Smoke
 ##   命中时：闪光 Flash / 冲击波 Shockwave / 火星溅射 Sparks / 浓烟 Smoke / 镜头震动（Battle 负责）
 ##
@@ -20,7 +20,7 @@ const LIFETIME := 1.6   # 最长的那层（浓烟 1.5s）+ 余量
 var _played := false
 
 
-## tint 来自 SkillData.tint，让火球整体配色跟技能资源一致
+## tint 来自 SkillData.tint，让爆炸整体配色跟技能资源一致
 ## particle_count 来自 SkillData.hit_particles，控制粒子的疏密
 func play(tint: Color = Color(1, 0.55, 0.2), particle_count: int = 26) -> void:
 	if _played:

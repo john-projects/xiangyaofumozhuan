@@ -272,6 +272,7 @@ func _rebuild() -> void:
 ## 造下半部分的固定两列表格（4 列网格：名字 / 格子 / 名字 / 格子；
 ## 每个"格子" = 值框 + 右侧按钮区，按钮区宽度固定，所以所有值框左右对齐）。
 func _build_stats_grid(character: UnitStats, derived: Dictionary) -> void:
+	# 头部两行（名称/等级、种族/门派）单独一个表格，后面还要插"基础属性"和"派生属性"两节
 	var grid := GridContainer.new()
 	grid.name = "StatsGrid"
 	grid.columns = 4
@@ -302,25 +303,40 @@ func _build_stats_grid(character: UnitStats, derived: Dictionary) -> void:
 			"等级", "%d / %d" % [level, GameRoot.MAX_LEVEL], CELL_NONE)
 	# 第 2 行：种族 / 门派
 	_add_grid_row(grid, "种族", character.race_name(), CELL_NONE, "门派", sect_text, CELL_NONE)
-	# 第 3 行：气血 / 体质（＋－）
-	_add_grid_row(grid, "气血", _stat_text(float(derived["hp"])), CELL_NONE,
-			"体质", _attr_text(0), 0, "hp")
-	# 第 4 行：魔法 / 力量（＋－）
-	_add_grid_row(grid, "魔法", _stat_text(float(derived["mana"])), CELL_NONE,
-			"力量", _attr_text(2), 2, "mana")
-	# 第 5 行：伤害 / 敏捷（＋－）
-	_add_grid_row(grid, "伤害", _stat_text(float(derived["damage"])), CELL_NONE,
-			"敏捷", _attr_text(4), 4, "damage")
-	# 第 6 行：法伤 / 魔力（＋－）
-	_add_grid_row(grid, "法伤", _fmt("spell_damage", float(derived["spell_damage"])), CELL_NONE,
-			"魔力", _attr_text(1), 1, "spell_damage")
-	# 第 7 行：防御 / 耐力（＋－）
-	_add_grid_row(grid, "防御", _stat_text(float(derived["defense"])), CELL_NONE,
-			"耐力", _attr_text(3), 3, "defense")
-	# 第 8 行：速度 / 自由点数（右边带「确认加点」）
-	var last_row := _add_grid_row(grid, "速度", _stat_text(float(derived["speed"])), CELL_NONE,
-			"自由点数", "%d 点" % _free_display(), CELL_CONFIRM, "speed")
-	_free_label = last_row[1]
+
+	# ── 五大基础属性（其它所有数值都由这五项算出来，见 GameRoot.derived_stats）──
+	stats_box.add_child(_make_section_title("基础属性（每级各 +1，另有自由点可加）"))
+	var attr_grid := GridContainer.new()
+	attr_grid.name = "AttrGrid"
+	attr_grid.columns = 4
+	attr_grid.add_theme_constant_override("h_separation", 8)
+	attr_grid.add_theme_constant_override("v_separation", GRID_V_SEPARATION)
+	stats_box.add_child(attr_grid)
+	_add_attr_row(attr_grid, 0, 1)   # 体质 / 魔力
+	_add_attr_row(attr_grid, 2, 3)   # 力量 / 耐力
+	_add_attr_row(attr_grid, 4, -1)  # 敏捷 / （空）
+	var free_row := _add_grid_row(attr_grid, "自由点数", "%d 点" % _free_display(), CELL_NONE,
+			"加点", "", CELL_CONFIRM)
+	_free_label = free_row[0]
+
+	# ── 派生数值（只读：改上面的基础属性，这里的数字就会跟着变）──
+	stats_box.add_child(_make_section_title("派生属性（由基础属性 × 种族系数算出）"))
+	var derived_grid := GridContainer.new()
+	derived_grid.name = "DerivedGrid"
+	derived_grid.columns = 4
+	derived_grid.add_theme_constant_override("h_separation", 8)
+	derived_grid.add_theme_constant_override("v_separation", GRID_V_SEPARATION)
+	stats_box.add_child(derived_grid)
+	_add_grid_row(derived_grid, "气血", _stat_text(float(derived["hp"])), CELL_NONE,
+			"魔法", _stat_text(float(derived["mana"])), CELL_NONE)
+	_add_grid_row(derived_grid, "伤害", _stat_text(float(derived["damage"])), CELL_NONE,
+			"防御", _stat_text(float(derived["defense"])), CELL_NONE)
+	_add_grid_row(derived_grid, "法伤", _fmt("spell_damage", float(derived["spell_damage"])), CELL_NONE,
+			"法防", _fmt("spell_defense", float(derived["spell_defense"])), CELL_NONE)
+	var last_row := _add_grid_row(derived_grid, "速度", _stat_text(float(derived["speed"])),
+			CELL_NONE, "", "", CELL_NONE)
+	# 速度这一格要跟着加点实时变，记进 _derived_labels
+	_derived_labels["speed"] = last_row[0]
 
 	# 经验：单独占一行（放表格里会挤掉法伤/自由点数的位置）；右边是**手动升级按钮**
 	var exp_row := HBoxContainer.new()
@@ -405,7 +421,27 @@ func _make_cell(value: String, kind: int, key := "") -> HBoxContainer:
 	return cell
 
 
-## 表格里的名字格子（固定宽度，保证两列对齐）。
+## 小节标题（"基础属性" / "派生属性"），比正文淡一点、字号小一点。
+func _make_section_title(text: String) -> Label:
+	var label := Label.new()
+	label.text = text
+	label.add_theme_font_size_override("font_size", 14)
+	label.modulate = Color(1, 1, 1, 0.55)
+	return label
+
+
+## 基础属性的一行：左边第 left_index 项、右边第 right_index 项（-1 = 右边留空）。
+## 格子里带 ＋/－，点一下只是**暂存**，要点「加点」才生效。
+func _add_attr_row(grid: GridContainer, left_index: int, right_index: int) -> void:
+	if right_index >= 0:
+		_add_grid_row(grid, GameRoot.ATTR_NAMES[left_index], _attr_text(left_index), left_index,
+				GameRoot.ATTR_NAMES[right_index], _attr_text(right_index), right_index)
+	else:
+		_add_grid_row(grid, GameRoot.ATTR_NAMES[left_index], _attr_text(left_index), left_index,
+				"", "", CELL_NONE)
+
+
+
 func _make_grid_label(text: String) -> Control:
 	var label := Label.new()
 	label.text = text
@@ -510,10 +546,10 @@ func _build_sections(character: UnitStats, derived: Dictionary) -> void:
 	_add_section_row(attack_col, "治疗量", _fmt("healing", float(derived["healing"])), "healing")
 	row.add_child(attack_col)
 
-	# 右栏：抗性（躲避/格挡率 + 四项二级防御属性）
+	# 右栏：抗性（躲避 + 四项二级防御属性）
 	var defense_col := _make_section_column("抗性")
 	_add_section_row(defense_col, "躲避", _fmt("dodge", float(derived["dodge"])), "dodge")
-	_add_section_row(defense_col, "格挡率", _fmt("block_chance", character.block_chance))
+	# 格挡只有"格挡值"（固定减伤），不再有概率格挡
 	_add_section_row(defense_col, "格挡值", _fmt("block_value", float(derived["block_value"])), "block_value")
 	_add_section_row(defense_col, "抗暴击率", _fmt("crit_resist", float(derived["crit_resist"])), "crit_resist")
 	_add_section_row(defense_col, "爆伤减免",
@@ -843,13 +879,13 @@ func _add_section_row(column: VBoxContainer, title: String, value: String, key :
 
 
 ## 二级属性的显示格式：百分数带 %，暴击伤害显示"基础 150% + 加成"，其余直接取整。
-## 参数 key：derived_stats() 的键（或 "block_chance"）；value：数值（百分数语义）。
+## 参数 key：derived_stats() 的键；value：数值（百分数语义）。
 func _fmt(key: String, value: float) -> String:
 	if key == "crit_damage_bonus":
 		# 战斗里暴击固定 ×1.5，所以"暴击伤害"显示的是 150% + 额外加成
 		return "%s%%" % _stat_text(value + 150.0)
 	if key in ["crit_rate", "seal_hit", "crit_resist", "crit_damage_resist",
-			"seal_resist", "dodge", "block_chance"]:
+			"seal_resist", "dodge"]:
 		return "%s%%" % _stat_text(value)
 	return _stat_text(value)
 

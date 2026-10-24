@@ -1,6 +1,6 @@
-[gd_scene load_steps=3 format=3]
+[gd_scene format=3 uid="uid://df5sr1ttc544e"]
 
-[ext_resource type="Script" path="res://scenes/world/world_map.gd" id="1_worldmap"]
+[ext_resource type="Script" uid="uid://dey12t2eudxfx" path="res://scenes/world/world_map.gd" id="1_worldmap"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_panel"]
 bg_color = Color(0.07058824, 0.07058824, 0.09019608, 0.94)
@@ -14,38 +14,38 @@ corner_radius_top_right = 16
 corner_radius_bottom_right = 16
 corner_radius_bottom_left = 16
 
-[node name="WorldMap" type="Node2D"]
+[node name="WorldMap" type="Node2D" unique_id=2107996951]
 y_sort_enabled = true
 script = ExtResource("1_worldmap")
 
-[node name="MapSprite" type="Sprite2D" parent="."]
+[node name="MapSprite" type="Sprite2D" parent="." unique_id=414606654]
 unique_name_in_owner = true
 centered = false
 
-[node name="Player" type="Node2D" parent="."]
+[node name="Player" type="Node2D" parent="." unique_id=1335929651]
 unique_name_in_owner = true
 
-[node name="Shadow" type="Polygon2D" parent="Player"]
+[node name="Shadow" type="Polygon2D" parent="Player" unique_id=1178234729]
 color = Color(0, 0, 0, 0.3)
 polygon = PackedVector2Array(44, 0, 38, 8, 22, 13.9, 0, 16, -22, 13.9, -38, 8, -44, 0, -38, -8, -22, -13.9, 0, -16, 22, -13.9, 38, -8)
 
-[node name="PlayerFallback" type="Polygon2D" parent="Player"]
+[node name="PlayerFallback" type="Polygon2D" parent="Player" unique_id=525021430]
 unique_name_in_owner = true
 color = Color(0.3529412, 0.6784314, 0.92156863, 1)
 polygon = PackedVector2Array(-22, -30, 22, -30, 22, 14, -22, 14)
 
-[node name="PlayerSprite" type="Sprite2D" parent="Player"]
+[node name="PlayerSprite" type="Sprite2D" parent="Player" unique_id=338531257]
 unique_name_in_owner = true
 scale = Vector2(1.3, 1.3)
 
-[node name="Camera" type="Camera2D" parent="Player"]
+[node name="Camera" type="Camera2D" parent="Player" unique_id=572735257]
 unique_name_in_owner = true
 position_smoothing_enabled = true
 position_smoothing_speed = 8.0
 
-[node name="UI" type="CanvasLayer" parent="."]
+[node name="UI" type="CanvasLayer" parent="." unique_id=1884588961]
 
-[node name="MapNameLabel" type="Label" parent="UI"]
+[node name="MapNameLabel" type="Label" parent="UI" unique_id=347715508]
 unique_name_in_owner = true
 offset_left = 36.0
 offset_top = 24.0
@@ -54,7 +54,7 @@ offset_bottom = 76.0
 theme_override_font_sizes/font_size = 40
 text = "地图"
 
-[node name="HintLabel" type="Label" parent="UI"]
+[node name="HintLabel" type="Label" parent="UI" unique_id=1238718604]
 unique_name_in_owner = true
 anchors_preset = 7
 anchor_left = 0.5
@@ -71,7 +71,7 @@ theme_override_font_sizes/font_size = 26
 text = "按 E 交谈"
 horizontal_alignment = 1
 
-[node name="BattleButton" type="Button" parent="UI"]
+[node name="BattleButton" type="Button" parent="UI" unique_id=1267528325]
 unique_name_in_owner = true
 anchors_preset = 3
 anchor_left = 1.0
@@ -87,7 +87,7 @@ grow_vertical = 0
 theme_override_font_sizes/font_size = 26
 text = "进入战斗"
 
-[node name="BackButton" type="Button" parent="UI"]
+[node name="BackButton" type="Button" parent="UI" unique_id=244709505]
 unique_name_in_owner = true
 anchors_preset = 2
 anchor_top = 1.0
@@ -100,9 +100,10 @@ grow_vertical = 0
 theme_override_font_sizes/font_size = 24
 text = "返回主菜单"
 
-[node name="TravelPanel" type="Panel" parent="UI"]
+[node name="TravelPanel" type="Panel" parent="UI" unique_id=871757517]
 unique_name_in_owner = true
 visible = false
+anchors_preset = -1
 anchor_left = 0.125
 anchor_top = 1.0
 anchor_right = 0.875
@@ -113,7 +114,7 @@ grow_horizontal = 2
 grow_vertical = 0
 theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
 
-[node name="Margin" type="MarginContainer" parent="UI/TravelPanel"]
+[node name="Margin" type="MarginContainer" parent="UI/TravelPanel" unique_id=1218847593]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -125,26 +126,26 @@ theme_override_constants/margin_top = 24
 theme_override_constants/margin_right = 28
 theme_override_constants/margin_bottom = 24
 
-[node name="VBox" type="VBoxContainer" parent="UI/TravelPanel/Margin"]
+[node name="VBox" type="VBoxContainer" parent="UI/TravelPanel/Margin" unique_id=1069877939]
 layout_mode = 2
 theme_override_constants/separation = 6
 
-[node name="PanelLine" type="HBoxContainer" parent="UI/TravelPanel/Margin/VBox"]
+[node name="PanelLine" type="HBoxContainer" parent="UI/TravelPanel/Margin/VBox" unique_id=210822474]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 64)
 layout_mode = 2
 theme_override_constants/separation = 6
 alignment = 1
 
-[node name="PanelName" type="Label" parent="UI/TravelPanel/Margin/VBox/PanelLine"]
+[node name="PanelName" type="Label" parent="UI/TravelPanel/Margin/VBox/PanelLine" unique_id=1983714334]
 unique_name_in_owner = true
+modulate = Color(1, 0.79, 0.42, 1)
 layout_mode = 2
 size_flags_vertical = 0
 theme_override_font_sizes/font_size = 26
-modulate = Color(1, 0.79, 0.42, 1)
 text = "NPC："
 
-[node name="PanelDialogue" type="Label" parent="UI/TravelPanel/Margin/VBox/PanelLine"]
+[node name="PanelDialogue" type="Label" parent="UI/TravelPanel/Margin/VBox/PanelLine" unique_id=801430115]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 64)
 layout_mode = 2
@@ -154,14 +155,14 @@ theme_override_font_sizes/font_size = 22
 text = "……"
 autowrap_mode = 3
 
-[node name="PanelButtons" type="VBoxContainer" parent="UI/TravelPanel/Margin/VBox"]
+[node name="PanelButtons" type="VBoxContainer" parent="UI/TravelPanel/Margin/VBox" unique_id=632468503]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_vertical = 3
 theme_override_constants/separation = 2
 alignment = 1
 
-[node name="CloseButton" type="Button" parent="UI/TravelPanel/Margin/VBox"]
+[node name="CloseButton" type="Button" parent="UI/TravelPanel/Margin/VBox" unique_id=1388085089]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 40)
 layout_mode = 2
@@ -170,7 +171,7 @@ theme_override_font_sizes/font_size = 22
 text = "再想想"
 alignment = 0
 
-[node name="ToastStack" type="VBoxContainer" parent="UI"]
+[node name="ToastStack" type="VBoxContainer" parent="UI" unique_id=278223182]
 unique_name_in_owner = true
 anchors_preset = 8
 anchor_left = 0.5
@@ -180,6 +181,5 @@ anchor_bottom = 0.5
 offset_left = -360.0
 offset_right = 360.0
 grow_horizontal = 2
-grow_vertical = 1
 mouse_filter = 2
 theme_override_constants/separation = 6

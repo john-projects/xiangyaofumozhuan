@@ -56,13 +56,9 @@ func _set_unit(value: UnitStats) -> void:
 	# RichTextLabel 吃 BBCode：
 	#   [code]...[/code] 用等宽字体显示（属性表对齐好看）；
 	#   [color=green]...[/color] 给数值上绿色。
-	# 五个 %s 依次吃 health / damage / speed / block_chance（数组顺序必须与占位符一一对应）。
-	# `%%` 是转义，输出一个字面百分号 —— 所以 block_chance 显示成 "25%" 这种。
-	# 单位口径（见 resources/units/unit_stats.gd）：health/damage 是普通数值，
-	#   speed 是每秒像素（默认 300），block_chance 是**百分数语义**（0~100+，直接用，不用 ×100）；
-	#   如果哪天 block_chance 改成 0~1 存法，这里必须跟着改成 `%s%%" % (value.block_chance * 100)`。
+	# 三个 %s 依次吃 health / damage / speed（数组顺序必须与占位符一一对应）。
+	# 单位口径（见 resources/units/unit_stats.gd）：health/damage 是普通数值，speed 是每秒像素（默认 300）。
 	# ⚠ 从下一行开始的续行在源码里是**顶格**的，缩进会被原样写进字符串，别顺手补 tab。
 	item_desc.text = "[code]Health: [color=green]%s[/color]
 Damage: [color=green]%s[/color]
-Speed: [color=green]%s[/color]
-Block Chance: [color=green]%s%%[/color][/code]" % [value.health, value.damage, value.speed, value.block_chance]
+Speed: [color=green]%s[/color][/code]" % [value.health, value.damage, value.speed]

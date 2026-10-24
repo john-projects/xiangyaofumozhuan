@@ -90,7 +90,11 @@ const EDGE_MARGIN := 60.0
 ## 地图上角色（玩家 + 跟随队友）的**显示高度**（像素），与贴图分辨率无关。
 ## 立绘可能是 150px 的老头像，也可能是 320px 的新立绘；都按 tex_h 反推缩放，
 ## 保证屏幕上一样大 —— 提高素材分辨率只提升清晰度，不改地图布局。
-const MAP_UNIT_HEIGHT := 195.0
+const MAP_UNIT_HEIGHT := 195.0        # 兜底：地图没配 unit_height 时的角色显示高度
+
+## 当前地图的角色显示高度（世界像素）。大尺寸底图要按比例调大，否则人物会显小。
+func _unit_height() -> float:
+	return _map.unit_height if _map != null and _map.unit_height > 0.0 else MAP_UNIT_HEIGHT
 
 ## 立绘内容在贴图里距**底边**的留白比例（实测：动画帧 20/480=4.2%，静态头像 13/320=4.1%）。
 ## 脚底锚定要用它算 offset —— 直接把半高当偏移会让角色"陷进"地面前 8px。
@@ -117,8 +121,10 @@ const TRAIL_STEP := 32
 const COMPANION_FOLLOW_SPEED := 12.0
 
 # ── 数值（可在检视面板里逐张地图微调，也可在专用子场景里覆盖）──
-## 基础移动速度（像素/秒，世界坐标，已按 map_scale 放大）。380 ≈ 4096 宽的地图 11 秒横穿。
-@export var move_speed := 380.0
+## 基础移动速度（像素/秒，世界坐标）。300 ≈ 2560 宽的地图 8.5 秒横穿。
+## 清晰度相关：屏幕上一个贴图像素的放大倍数 = window/stretch/scale(0.8) × map_scale，
+## 目前 0.8×1.25 = 1.0 = 1:1 不糊（桃花村那张小图是 1.5 → 1.2 倍，略软）。
+@export var move_speed := 300.0
 ## 按住 dash 时的速度倍率（1.9 ≈ 722 px/s，够快但仍能看清沿途）。
 @export var dash_multiplier := 1.9
 ## 交互判定半径（像素，世界坐标）。150 ≈ 3 个角色宽度，不用精确站到 NPC 身上。
@@ -165,6 +171,9 @@ var spawn_override := Vector2.INF
 
 ## 世界像素尺寸 = 图片尺寸 × map_scale，所有像素换算的唯一依据。ZERO = 没配图，_process 直接跳过。
 var _map_size := Vector2.ZERO
+## 可行走掩膜的像素图（从 MapData.walk_mask 取，缓存下来避免每帧 get_image）。
+## 白(255) 可走、黑(0) 阻挡；null = 整张图都能走。
+var _walk_image: Image = null
 ## 本次生成的 NPC 节点列表（运行时 add_child 进来的，owner 为 null）。
 var _npcs: Array[WorldNPC] = []
 ## capture_map_photo() 等 frame_post_draw 用的标志（一次性信号回调置 true）。
@@ -285,6 +294,10 @@ func _ready() -> void:
 	if _map_size == Vector2.ZERO:
 		push_warning("WorldMap: %s 没配 texture，走不动也看不到东西" % _map.display_name)
 
+	# ── 图层：物件 + 可行走掩膜 ──
+	_spawn_props()
+	_load_walk_mask()
+
 	# ── 玩家 ──
 	# 没选人时用场景里预置的蓝色方块占位，直接运行 world_map.tscn 调试也能看出玩家在哪。
 	# 若队长的 UnitStats 配了 anim_dir，就用 8 方位帧动画代替静态立绘；
@@ -297,7 +310,7 @@ func _ready() -> void:
 		var av := Model3DAvatar.new()
 		av.name = "Model3D"
 		player.add_child(av)
-		if av.setup(stats.model_glb, MAP_UNIT_HEIGHT):
+		if av.setup(stats.model_glb, _unit_height()):
 			_player_model3d = av
 			player_sprite.visible = false        # 2D 立绘让位给 3D 视口
 		else:
@@ -321,7 +334,7 @@ func _ready() -> void:
 	if tex != null and _player_model3d == null:
 		var denom := float(tex.get_height()) * player.scale.y
 		if denom > 0.0:
-			player_sprite.scale = Vector2.ONE * (MAP_UNIT_HEIGHT / denom)
+			player_sprite.scale = Vector2.ONE * (_unit_height() / denom)
 		_anchor_sprite_feet(player_sprite)     # 脚底落到原点（阴影就在脚下）
 	player_fallback.visible = icon == null and _player_anim == null and _player_model3d == null
 	player.position = _world_pos(_spawn_normalized())
@@ -451,6 +464,56 @@ func _world_pos(normalized: Vector2) -> Vector2:
 	return normalized * _map_size
 
 
+# ── 图层：物件 + 可行走掩膜 ──
+
+## 摆物件层。每个 MapProp 包成 "Node2D(接地点) + Sprite2D(贴图底部对齐原点)"：
+## 这样 WorldMap 的 y_sort 会按**接地点**排序，人走到物件后面就被挡住、走到前面就挡住物件。
+## sort_bias 只挪排序用的 y，不挪贴图（贴图用 offset 反向补偿回来）。
+func _spawn_props() -> void:
+	if _map == null or _map.props.is_empty() or _map_size == Vector2.ZERO:
+		return
+	for prop in _map.props:
+		if prop == null or prop.texture == null:
+			continue
+		var holder := Node2D.new()
+		holder.name = "Prop_%s" % prop.texture.resource_path.get_file().get_basename()
+		holder.position = prop.position * _map_size + Vector2(0.0, prop.sort_bias)
+		var spr := Sprite2D.new()
+		spr.texture = prop.texture
+		spr.centered = true
+		# 物件按"图片像素"作画：乘 map_scale 才和底图同比例（scale=1.0 ≈ 直接画进底图时那么大）
+		var world_scale := prop.scale * maxf(_map.map_scale, 0.001)
+		spr.scale = Vector2.ONE * world_scale
+		spr.flip_h = prop.flip_h
+		# 贴图底边对齐接地点；sort_bias 在图片上抵消掉，视觉不动、排序点变
+		var tex_h := float(prop.texture.get_size().y)
+		var safe_scale := maxf(world_scale, 0.001)
+		spr.offset = Vector2(0.0, -tex_h * 0.5 - prop.sort_bias / safe_scale)
+		holder.add_child(spr)
+		add_child(holder)
+
+
+## 载入并缓存掩膜像素（白=可走 / 黑=阻挡）。没有掩膜的图保持"全图可走"。
+func _load_walk_mask() -> void:
+	_walk_image = null
+	if _map == null or _map.walk_mask == null:
+		return
+	_walk_image = _map.walk_mask.get_image()
+	if _walk_image != null and _walk_image.is_compressed():
+		_walk_image.decompress()
+
+
+## 世界坐标能不能走。掩膜是"图片像素坐标系"的，所以要除以 map_scale。
+func _is_walkable(world_pos: Vector2) -> bool:
+	if _walk_image == null:
+		return true
+	var scale := maxf(_map.map_scale, 0.001)
+	var px := Vector2i(world_pos / scale)
+	if px.x < 0 or px.y < 0 or px.x >= _walk_image.get_width() or px.y >= _walk_image.get_height():
+		return false
+	return _walk_image.get_pixelv(px).r > 0.5
+
+
 ## 出生点（归一化），优先级：spawn_override（战斗回原地）> 指回 _from_map_id 的 NPC 旁 > _map.spawn_point。
 ## 站在传送 NPC 旁时 +0.04 是相对图高的偏移，避免和 NPC 完全重叠（贴图互相盖住、距离判定一开始就贴着）。
 func _spawn_normalized() -> Vector2:
@@ -566,7 +629,7 @@ func _process(delta: float) -> void:
 ## 上界写 maxf(EDGE_MARGIN, size - EDGE_MARGIN)：地图比两倍留白还小时，否则会把玩家拉到图外。
 ## 配了帧动画时改用 8 方位朝向（不再靠 flip_h 镜像），并把动作切成 run / idle。
 func _move_player(delta: float) -> void:
-	var dir := Input.get_vector("move_left", "move_right", "move_up", "move_down")
+	var dir := _read_move_input()
 	if dir == Vector2.ZERO:
 		if _player_model3d != null:
 			_player_model3d.play("idle")
@@ -574,7 +637,16 @@ func _move_player(delta: float) -> void:
 			_player_anim.play("idle")
 		return
 	var speed := move_speed * (dash_multiplier if Input.is_action_pressed("dash") else 1.0)
-	player.position += dir * speed * delta
+	# 有 walk_mask 时按掩膜走：整步走不了就分别试 x / y（贴墙滑动，不会整个人卡住）
+	var step := dir * speed * delta
+	var target := player.position + step
+	if _is_walkable(target):
+		player.position = target
+	else:
+		if _is_walkable(Vector2(target.x, player.position.y)):
+			player.position.x = target.x
+		if _is_walkable(Vector2(player.position.x, target.y)):
+			player.position.y = target.y
 	player.position.x = clampf(player.position.x, EDGE_MARGIN, maxf(EDGE_MARGIN, _map_size.x - EDGE_MARGIN))
 	player.position.y = clampf(player.position.y, EDGE_MARGIN, maxf(EDGE_MARGIN, _map_size.y - EDGE_MARGIN))
 	if _player_model3d != null:
@@ -585,6 +657,28 @@ func _move_player(delta: float) -> void:
 		_player_anim.play("run")
 	elif absf(dir.x) > 0.01:
 		player_sprite.flip_h = dir.x < 0.0
+
+
+## 读移动输入：WASD（move_*）+ 方向键（left/right/up/down）。
+## ⚠ 项目里方向键是单独定义的 left/right/up/down 动作，没有用引擎自带的 ui_*，
+## 所以只用 Input.get_vector("move_*") 的话方向键是没反应的。
+func _read_move_input() -> Vector2:
+	var x := 0.0
+	var y := 0.0
+	if _pressed("move_left") or _pressed("left"):
+		x -= 1.0
+	if _pressed("move_right") or _pressed("right"):
+		x += 1.0
+	if _pressed("move_up") or _pressed("up"):
+		y -= 1.0
+	if _pressed("move_down") or _pressed("down"):
+		y += 1.0
+	return Vector2(x, y)
+
+
+## 动作不存在时不报错（有些场景/分支没配同一套动作）。
+func _pressed(action: StringName) -> bool:
+	return InputMap.has_action(action) and Input.is_action_pressed(action)
 
 
 # ── 队伍立绘：队长名字 + 上阵队友跟随 ──
@@ -615,7 +709,7 @@ func _refresh_player_avatar() -> void:
 		var av := Model3DAvatar.new()
 		av.name = "Model3D"
 		player.add_child(av)
-		if av.setup(stats.model_glb, MAP_UNIT_HEIGHT):
+		if av.setup(stats.model_glb, _unit_height()):
 			_player_model3d = av
 			player_sprite.visible = false
 		else:
@@ -637,7 +731,7 @@ func _refresh_player_avatar() -> void:
 		if tex != null:
 			var denom := float(tex.get_height()) * player.scale.y
 			if denom > 0.0:
-				player_sprite.scale = Vector2.ONE * (MAP_UNIT_HEIGHT / denom)
+				player_sprite.scale = Vector2.ONE * (_unit_height() / denom)
 			_anchor_sprite_feet(player_sprite)
 	player_fallback.visible = icon == null and _player_anim == null and _player_model3d == null
 	_update_leader_name()
@@ -713,7 +807,7 @@ func _make_companion(stats: UnitStats) -> Node2D:
 	# 和玩家一样按贴图高度归一到 MAP_UNIT_HEIGHT（队友的 sprite 没有父级缩放，直接算）。
 	sprite.scale = Vector2(1.3, 1.3)      # 贴图为空时的兜底
 	if stats.icon != null and stats.icon.get_height() > 0:
-		sprite.scale = Vector2.ONE * (MAP_UNIT_HEIGHT / float(stats.icon.get_height()))
+		sprite.scale = Vector2.ONE * (_unit_height() / float(stats.icon.get_height()))
 	_anchor_sprite_feet(sprite)            # 和玩家一样脚底锚定，否则阴影在腰上
 	node.add_child(sprite)
 	# 和队长一致：配了 model_glb 就用 3D-in-2D（实时模型头像），2D 立绘让位。
@@ -721,7 +815,7 @@ func _make_companion(stats: UnitStats) -> Node2D:
 		var av := Model3DAvatar.new()
 		av.name = "Model3D"
 		node.add_child(av)
-		if av.setup(stats.model_glb, MAP_UNIT_HEIGHT):
+		if av.setup(stats.model_glb, _unit_height()):
 			sprite.visible = false
 		else:
 			av.queue_free()
@@ -1508,10 +1602,8 @@ func _build_recruit_buttons(data: MapNPC) -> void:
 			button.text = "%s（团队已满 %d/%d）" % [stats.name, count, GameRoot.MAX_TEAM_SIZE]
 		else:
 			button.text = "%s %s   %s" % [data.recruit_label, stats.name, _stats_digest(stats)]
-		button.tooltip_text = "%s（%s）\nHP %s / 伤害 %s / 速度 %s / 格挡 %s%%" % [
-			stats.name, stats.race_name(), Global.format_stat(stats.health),
-			Global.format_stat(stats.damage), Global.format_stat(stats.speed),
-			Global.format_stat(stats.block_chance)]
+		button.tooltip_text = "%s（%s）\n%s" % [
+			stats.name, stats.race_name(), _stats_detail(stats)]
 		button.disabled = joined or team_full
 		if not button.disabled:
 			button.pressed.connect(_on_recruit_pressed.bind(stats))
@@ -1529,11 +1621,24 @@ func _recruit_candidates(data: MapNPC) -> Array[UnitStats]:
 ## 一行属性摘要（招募按钮用）：种族 + 最影响选择的 3 项，避免按钮文字过长。
 ## 数值格式化统一走 Global.format_stat()，和队伍管理面板显示一致。
 func _stats_digest(stats: UnitStats) -> String:
+	var d := GameRoot.derived_stats(stats)
 	return "%s · HP %s · 攻 %s · 速 %s" % [
 		stats.race_name(),
-		Global.format_stat(stats.health),
-		Global.format_stat(stats.damage),
-		Global.format_stat(stats.speed),
+		Global.format_stat(d["hp"]),
+		Global.format_stat(d["damage"]),
+		Global.format_stat(d["speed"]),
+	]
+
+
+## 招募按钮的 tooltip：完整一点的派生数值（都用 GameRoot.derived_stats 的口径）。
+func _stats_detail(stats: UnitStats) -> String:
+	var d := GameRoot.derived_stats(stats)
+	return "HP %s / 伤害 %s / 防御 %s / 速度 %s / 格挡值 %s" % [
+		Global.format_stat(d["hp"]),
+		Global.format_stat(d["damage"]),
+		Global.format_stat(d["defense"]),
+		Global.format_stat(d["speed"]),
+		Global.format_stat(d["block_value"]),
 	]
 
 

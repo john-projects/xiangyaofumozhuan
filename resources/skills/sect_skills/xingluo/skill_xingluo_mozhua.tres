@@ -1,6 +1,7 @@
-[gd_resource type="Resource" script_class="SkillData" format=3]
+[gd_resource type="Resource" script_class="SkillData" format=3 uid="uid://bqe6c6s5pccdy"]
 
-[ext_resource type="Script" path="res://resources/skills/skill_data.gd" id="1_pg52r"]
+[ext_resource type="Script" uid="uid://sbgbq3puamij" path="res://resources/skills/skill_data.gd" id="1_pg52r"]
+[ext_resource type="PackedScene" path="res://scenes/effects/xingluo/xingluo_mozhua_hit.tscn" id="2_hit"]
 
 [resource]
 script = ExtResource("1_pg52r")
@@ -8,10 +9,16 @@ id = "xingluo_mozhua"
 display_name = "星罗魔爪"
 description = "对单个目标连续攻击 2 次。"
 mana_cost = 10.0
-cooldown = 2
 power = 1.05
 crit_bonus = 0.08
 sect_id = "xingluo"
 sect_skill_key = "xingluo_mozhua"
 hits = 2
+damage_type = 1
 tint = Color(0.95, 0.45, 0.8, 1)
+hit_particles = 28
+screen_shake = 5.5
+hit_effect_scene = ExtResource("2_hit")
+hit_effect_per_hit = true
+hit_interval = 0.28
+burst_scale = 1.45

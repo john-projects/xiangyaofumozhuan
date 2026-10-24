@@ -1,6 +1,7 @@
-[gd_resource type="Resource" script_class="SkillData" format=3]
+[gd_resource type="Resource" script_class="SkillData" format=3 uid="uid://bfj86ymh4mmuh"]
 
-[ext_resource type="Script" path="res://resources/skills/skill_data.gd" id="1_vstts"]
+[ext_resource type="Script" uid="uid://sbgbq3puamij" path="res://resources/skills/skill_data.gd" id="1_vstts"]
+[ext_resource type="PackedScene" path="res://scenes/effects/taixu/renjian_heyi.tscn" id="2_fx"]
 
 [resource]
 script = ExtResource("1_vstts")
@@ -8,7 +9,6 @@ id = "renjian_heyi"
 display_name = "人剑合一"
 description = "人剑合一：3 回合内自身暴击率提升（随技能等级成长）。"
 mana_cost = 10.0
-cooldown = 4
 power = 0.0
 crit_bonus = 0.0
 target_mode = 2
@@ -19,3 +19,4 @@ buff_value = 10.0
 buff_per_level = 2.0
 buff_turns = 3
 tint = Color(0.85, 0.95, 1, 1)
+screen_effect_scene = ExtResource("2_fx")

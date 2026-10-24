@@ -11,5 +11,4 @@ race = 2
 icon = ExtResource("1_6skj5")
 model_glb = "res://assets/models/players/霓裳.glb"
 health = 15.0
-block_chance = 50.0
 metadata/_custom_type_script = "uid://j6ibt5vlkg3t"

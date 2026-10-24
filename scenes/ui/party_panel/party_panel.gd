@@ -292,11 +292,12 @@ static func _contains(list: Array[UnitStats], stats: UnitStats) -> bool:
 	return _index_in(list, stats) >= 0
 
 
-## 属性文字（tooltip 用），和招募面板共用 Global.format_stat。
+## 属性文字（tooltip 用）。全部走派生值：.tres 里的旧数字在战斗副本里会被覆盖，直接读会显示过期数据。
 func _stats_text(stats: UnitStats) -> String:
-	return "气血 %s · 伤害 %s · 速度 %s · 格挡 %s%%" % [
-		Global.format_stat(stats.health),
-		Global.format_stat(stats.damage),
-		Global.format_stat(stats.speed),
-		Global.format_stat(stats.block_chance),
+	var d := GameRoot.derived_stats(stats)
+	return "气血 %s · 伤害 %s · 速度 %s · 格挡值 %s" % [
+		Global.format_stat(d["hp"]),
+		Global.format_stat(d["damage"]),
+		Global.format_stat(d["speed"]),
+		Global.format_stat(d["block_value"]),
 	]

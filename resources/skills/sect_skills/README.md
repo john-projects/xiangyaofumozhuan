@@ -93,7 +93,7 @@ resources/skills/sect_skills/
 
 - `icon` —— 技能按钮图标
 - `projectile_texture` / `appearance_scene` / `sequence_frame_scene` —— 飞行体（可复用
-  `scenes/effects/fireball/` 那套，或按门派做新的外观包）
+  `scenes/effects/` 里现成的特效场景 那套，或按门派做新的外观包）
 - `hit_effect_scene` —— 命中特效
 - `cast_sfx` / `hit_sfx` —— 施法/命中音效
 - `projectile_scale` / `projectile_speed` / `hit_particles` / `screen_shake` / `burst_scale` —— 手感微调

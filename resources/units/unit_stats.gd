@@ -18,7 +18,8 @@ enum UnitType {
 
 ## 种族（**玩家角色**的分组，决定能拜入哪些门派）：人族 HUMAN / 魔族 DEMON / 仙族 IMMORTAL。
 ## 门派归属见 Global.SECTS（太虚剑宗=人族、缥缈仙府=人族+仙族、紫霄神道教=仙族、万药谷=仙族+魔族、星罗教=魔族）。
-## ⚠ 同样写进 .tres，不要调整成员顺序；老 .tres 不写 race 就是人族（敌人的种族没人读，不影响战斗）。
+## ⚠ 同样写进 .tres，不要调整成员顺序；老 .tres 不写 race 就是人族。
+## 敌人也用它：种族决定"基础属性 → 派生值"的系数表（GameRoot.ATTR_TABLE）。
 enum Race {
 	HUMAN,      # 人族
 	DEMON,      # 魔族
@@ -29,9 +30,19 @@ enum Race {
 @export var name: String
 ## 单位类型（PLAYER / ENEMY）。默认是枚举第 0 项 PLAYER —— ⚠ 新建敌人 .tres 忘了改，它会以"我方"身份进战斗。
 @export var type: UnitType
-## 种族（Player 专属概念）。默认 HUMAN。谁读：GameRoot.join_sect()、StatsPanel、WorldMap._build_sect_buttons()。
-## 敌人的这个字段没人读，留默认即可。
+## 种族（玩家用来分门派；敌人用来选属性系数表）。默认 HUMAN。
 @export var race: Race
+
+@export_group("基础属性")
+## 五大基础属性（默认各 11 点，和玩家 1 级时一致）：
+##   体质（气血）/ 魔力（法力、治疗）/ 力量（伤害）/ 耐力（防御、格挡）/ 敏捷（速度、躲避）。
+## 最终点数 = 这里的基础值 + 等级成长（每级各 +1）+ 玩家自己加的自由点；
+## 气血/伤害/防御/速度等**全部由这五项算出来**（GameRoot.derived_stats）。
+@export var attr_con := 11
+@export var attr_mag := 11
+@export var attr_str := 11
+@export var attr_end := 11
+@export var attr_agi := 11
 ## 头像/立绘。用于选人卡片、悬浮卡、战斗头像。留空不报错，只是没图。
 @export var icon: Texture2D
 ## 动作帧目录（可选）。填了就用这套 8 方位帧动画代替静态 icon：
@@ -52,24 +63,23 @@ enum Race {
 @export var damage:= 1.0
 ## 移动速度（单位：像素/秒）。**战斗里真的在用**：Battle 每回合按 turn_speed()（speed + 扰动）排出手顺序。
 ## ⚠ 是 float 不是 int：门派被动会给 +0.5 这类小数加成，用 int 存会被静默截断、加成完全消失。
-@export var speed := 300.0
-## 格挡成功率，**百分数语义**（0~100+）：调用处 BattleUnit.roll_block() 自己先 /100，所以填 5 表示 5%。默认 0 = 永不格挡。
-## ⚠ 代码不做上限钳制，道具/升级理论上能把它堆到 100 以上（那就必定格挡了）。
-@export var block_chance:= 0.0
+@export var speed := 1.0
 
 ## 蓝量（技能消耗）。默认 20.0 是配合 SkillData.mana_cost 默认 6.0 定的 —— 一场大约够放 3 次技能。
-@export var mana := 20.0
+@export var mana := 1.0
 
-## ── 由"基础属性"派生（GameRoot.derived_stats 算好后写进战斗副本）；目前三项都只展示 ──
-## 物理防御：每点「耐力」按种族系数折算（人族 +1.5/点、仙族 +1.6、魔族 +1.4）。默认 0，也可直接从 .tres 填基数。
-## ⚠ 目前**只展示、还没参与战斗结算**（战斗里还没有"减伤"这一步）。
+## ── 由"基础属性"派生（GameRoot.derived_stats 算好后写进战斗副本）──
+## 物理防御：每点「耐力」按种族系数折算（人族 +1.5/点、仙族 +1.6、魔族 +1.4）。
+## 战斗里真在用：BattleUnit.take_damage() 按 防御/(防御+60) 的比例减伤。
 @export var defense := 0.0
 ## 躲避：每点「敏捷」+1.0（三族相同）。默认 0；UI 上按百分数语义显示（10 = 10%）。只展示，还没做命中/闪避判定。
 @export var dodge := 0.0
-## 法伤：五项基础属性都会副加（体质 +0.3、魔力 +0.7、力量 +0.4、耐力 +0.2）。原字段叫 spirit（灵力），按需求改名。只展示。
+## 法伤：法术技能的伤害基数（由 体质/魔力/力量/耐力 直接折算，见 GameRoot.ATTR_TABLE）。
 @export var spell_damage := 0.0
+## 法防：吃法术伤害时按 法防/(法防+60) 减伤。
+@export var spell_defense := 0.0
 
-## ── 战斗二级属性（输出 / 抗性）：目前都只展示，百分比字段一律是**百分数语义**（5 表示 5%，同 block_chance）──
+## ── 战斗二级属性（输出 / 抗性）：百分比字段一律是**百分数语义**（5 表示 5%）──
 ## 暴击率（%）。战斗里目前固定 10% 基础暴击（BattleUnit.roll_crit），这里填的值还没参与。
 @export var crit_rate := 0.0
 ## 暴击伤害加成（%）。战斗里暴击固定 ×1.5，这里填的是"在 150% 之上的额外加成"。

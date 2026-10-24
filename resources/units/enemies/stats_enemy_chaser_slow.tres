@@ -9,7 +9,4 @@ script = ExtResource("1_m42qi")
 name = "Chaser Mid"
 type = 1
 icon = ExtResource("1_cneyk")
-health = 8
-damage = 2.0
-block_chance = 7.0
 metadata/_custom_type_script = "uid://j6ibt5vlkg3t"

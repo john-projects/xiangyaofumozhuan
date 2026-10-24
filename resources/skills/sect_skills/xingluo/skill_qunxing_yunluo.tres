@@ -6,21 +6,21 @@
 
 [resource]
 script = ExtResource("1_ppks8")
+damage_type = 1
 id = "qunxing_yunluo"
 display_name = "群星陨落"
 description = "群星陨落：攻击 3 个目标；技能 30 级后攻击 4 个。"
 mana_cost = 16.0
-cooldown = 3
 power = 1.1
 crit_bonus = 0.05
 sect_id = "xingluo"
 sect_skill_key = "qunxing_yunluo"
 max_targets = 3
+tint = Color(0.9, 0.4, 0.75, 1)
 screen_shake = 9.0
-screen_effect_scene = ExtResource("2_screen")
-target_effect_scene = ExtResource("3_impact")
 hit_effect_on_ground = true
 hit_effect_per_target = false
+target_effect_scene = ExtResource("3_impact")
 hit_effect_center = false
+screen_effect_scene = ExtResource("2_screen")
 burst_scale = 1.4
-tint = Color(0.9, 0.4, 0.75, 1)

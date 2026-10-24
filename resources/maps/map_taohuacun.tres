@@ -1,13 +1,111 @@
-[gd_resource type="Resource" script_class="MapData" format=3]
+[gd_resource type="Resource" script_class="MapData" format=3 uid="uid://c26me0ujtjxkq"]
 
+[ext_resource type="Script" uid="uid://j6ibt5vlkg3t" path="res://resources/units/unit_stats.gd" id="1_a5pf0"]
 [ext_resource type="Script" uid="uid://v6570clid4e6" path="res://resources/maps/map_data.gd" id="1_mapdata"]
-[ext_resource type="Texture2D" path="res://assets/map/桃花村.png" id="2_texture"]
+[ext_resource type="Texture2D" uid="uid://dpx74cjide5rb" path="res://assets/map/桃花村.png" id="2_texture"]
+[ext_resource type="Script" uid="uid://c60dn4pj1cfw7" path="res://resources/items/item_base.gd" id="3_06chs"]
+[ext_resource type="Script" uid="uid://ctu1nt07fqrnc" path="res://resources/maps/map_npc.gd" id="3_npc"]
+[ext_resource type="Script" uid="uid://b23h0s27eoug8" path="res://resources/maps/map_prop.gd" id="9_props"]
+[ext_resource type="Texture2D" uid="uid://dpxw8tsbgrfse" path="res://assets/sprites/tomato/Players/Player_2.png" id="t_chuanfu"]
+[ext_resource type="Texture2D" uid="uid://dmox6e28kf6ax" path="res://assets/sprites/tomato/Players/Player_4.png" id="t_duiyou"]
+[ext_resource type="Texture2D" uid="uid://bt0lww88864ws" path="res://assets/sprites/tomato/Players/Player_5.png" id="t_shangren"]
+[ext_resource type="Texture2D" uid="uid://cproxhccob85g" path="res://assets/sprites/tomato/Players/Player_1.png" id="t_taixu"]
+[ext_resource type="Texture2D" uid="uid://dq63ocnu3lset" path="res://assets/sprites/tomato/Players/Player_3}.png" id="t_zixiao"]
+
+[sub_resource type="Resource" id="Resource_signpost"]
+script = ExtResource("3_npc")
+id = "taohuacun_signpost"
+display_name = "路牌"
+position = Vector2(0.44, 0.5)
+dialogue = "桃花村 · 往南三十里便是建邺城。（路牌上刻着几个字，被雨水磨得有些模糊）"
+destinations = Array[String](["jianyecheng"])
+teleport_label = "前往建邺城"
+
+[sub_resource type="Resource" id="Resource_chuanfu"]
+script = ExtResource("3_npc")
+id = "chuanfu"
+display_name = "船夫"
+texture = ExtResource("t_chuanfu")
+position = Vector2(0.52, 0.7)
+dialogue = "客官要出海吗？东海湾就在前头，坐我的船一会儿就到。"
+destinations = Array[String](["donghaiwan"])
+teleport_label = "出海前往"
+
+[sub_resource type="Resource" id="Resource_duiyou"]
+script = ExtResource("3_npc")
+id = "duiyou"
+display_name = "队友"
+texture = ExtResource("t_duiyou")
+position = Vector2(0.38, 0.47)
+dialogue = "需要加入队伍吗？"
+action = 3
+
+[sub_resource type="Resource" id="Resource_shangren"]
+script = ExtResource("3_npc")
+id = "shangren"
+display_name = "商人"
+texture = ExtResource("t_shangren")
+position = Vector2(0.33, 0.53)
+dialogue = "看看有没有趁手的家伙？都是现货。"
+action = 4
+
+[sub_resource type="Resource" id="Resource_taixu"]
+script = ExtResource("3_npc")
+id = "taixu_zhangmen"
+display_name = "太虚剑宗掌门"
+texture = ExtResource("t_taixu")
+position = Vector2(0.46, 0.55)
+dialogue = "剑者，心也。太虚剑宗只收人族弟子 —— 你若有这份心性，便来试剑。"
+action = 5
+sect_id = "taixu"
+
+[sub_resource type="Resource" id="Resource_piaomiao"]
+script = ExtResource("3_npc")
+id = "piaomiao_zhangmen"
+display_name = "缥缈仙府府主"
+texture = ExtResource("t_chuanfu")
+dialogue = "云海缥缈，人族与仙族皆可入我门下 —— 只看你肯不肯静心。"
+action = 5
+sect_id = "piaomiao"
+
+[sub_resource type="Resource" id="Resource_zixiao"]
+script = ExtResource("3_npc")
+id = "zixiao_zhangmen"
+display_name = "紫霄神道教道尊"
+texture = ExtResource("t_zixiao")
+position = Vector2(0.54, 0.46)
+dialogue = "雷法天授，非仙族血脉不可轻传。你是什么出身，自己清楚。"
+action = 5
+sect_id = "zixiao"
+
+[sub_resource type="Resource" id="Resource_wanyao"]
+script = ExtResource("3_npc")
+id = "wanyao_guzhu"
+display_name = "万药谷谷主"
+texture = ExtResource("t_duiyou")
+position = Vector2(0.58, 0.52)
+dialogue = "不问出身，只问药性。仙族、魔族的弟子我这儿都收。"
+action = 5
+sect_id = "wanyao"
+
+[sub_resource type="Resource" id="Resource_xingluo"]
+script = ExtResource("3_npc")
+id = "xingluo_jiaozhu"
+display_name = "星罗教教主"
+texture = ExtResource("t_shangren")
+position = Vector2(0.62, 0.57)
+dialogue = "星象已定，魔族当兴。入我星罗教，先看你命盘。"
+action = 5
+sect_id = "xingluo"
 
 [resource]
 script = ExtResource("1_mapdata")
 id = "taohuacun"
 display_name = "桃花村"
 texture = ExtResource("2_texture")
-spawn_point = Vector2(0.5, 0.62)
+map_scale = 0.8496
+unit_height = 230.0
+spawn_point = Vector2(0.4, 0.44)
+npcs = Array[ExtResource("3_npc")]([SubResource("Resource_signpost"), SubResource("Resource_chuanfu"), SubResource("Resource_duiyou"), SubResource("Resource_shangren"), SubResource("Resource_taixu"), SubResource("Resource_piaomiao"), SubResource("Resource_zixiao"), SubResource("Resource_wanyao"), SubResource("Resource_xingluo")])
 next_id = "jianyecheng"
-exit_center = Vector2(0.85, 0.5)
+exit_center = Vector2(0.62, 0.5)

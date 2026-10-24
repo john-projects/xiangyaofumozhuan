@@ -1,6 +1,7 @@
-[gd_resource type="Resource" script_class="SkillData" format=3]
+[gd_resource type="Resource" script_class="SkillData" format=3 uid="uid://ckmbb6786krbj"]
 
-[ext_resource type="Script" path="res://resources/skills/skill_data.gd" id="1_ibscm"]
+[ext_resource type="Script" uid="uid://sbgbq3puamij" path="res://resources/skills/skill_data.gd" id="1_ibscm"]
+[ext_resource type="PackedScene" path="res://scenes/effects/xingluo_shaji/xingluo_shaji_aura.tscn" id="2_shaji"]
 
 [resource]
 script = ExtResource("1_ibscm")
@@ -8,7 +9,6 @@ id = "xingluo_shaji"
 display_name = "星罗杀机"
 description = "3 回合内自身暴击伤害提升（随技能等级成长）。"
 mana_cost = 10.0
-cooldown = 4
 power = 0.0
 crit_bonus = 0.0
 target_mode = 2
@@ -19,3 +19,6 @@ buff_value = 15.0
 buff_per_level = 1.0
 buff_turns = 3
 tint = Color(0.95, 0.5, 0.85, 1)
+hit_particles = 20
+hit_effect_scene = ExtResource("2_shaji")
+burst_scale = 1.25

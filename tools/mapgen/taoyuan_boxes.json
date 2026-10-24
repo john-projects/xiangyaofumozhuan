@@ -1,0 +1,21 @@
+[
+  {"name": "house_a", "box": [28, 88, 392, 432]},
+  {"name": "house_b", "box": [328, 28, 592, 342]},
+  {"name": "house_c", "box": [552, 108, 832, 432]},
+  {"name": "tree_peach_a", "box": [66, 18, 312, 232]},
+  {"name": "tree_peach_b", "box": [688, 28, 922, 252]},
+  {"name": "tree_peach_c", "box": [928, 48, 1092, 242]},
+  {"name": "tree_peach_d", "box": [1088, 48, 1262, 242]},
+  {"name": "tree_peach_e", "box": [778, 158, 962, 362]},
+  {"name": "tree_peach_f", "box": [948, 168, 1112, 362]},
+  {"name": "tower", "box": [1238, 48, 1422, 322]},
+  {"name": "rock_waterfall", "box": [468, 368, 662, 572]},
+  {"name": "stone_stairs", "box": [108, 558, 242, 692]},
+  {"name": "stone_path_long", "box": [188, 678, 572, 802]},
+  {"name": "bridge_arch", "box": [888, 548, 1092, 672]},
+  {"name": "dock_a", "box": [1008, 688, 1302, 902]},
+  {"name": "boat_a", "box": [1248, 778, 1448, 902]},
+  {"name": "boat_b", "box": [1228, 898, 1448, 1052]},
+  {"name": "sand", "box": [418, 888, 652, 1032]},
+  {"name": "water", "box": [688, 828, 1062, 1042]}
+]

@@ -67,35 +67,59 @@ const ATTR_KEYS := ["con", "mag", "str", "end", "agi"]
 const ATTR_NAMES := ["体质", "魔力", "力量", "耐力", "敏捷"]
 ## 每升 1 级：五项基础属性**各 +本值**（自动，不受操作影响）。
 const ATTR_PER_LEVEL := 1
-## 1 级时的基础属性点数（五项各这么多）。没有它的话 1 级角色五项全是 0，属性面板看起来像坏了。
+## 1 级时的默认基础属性点数（仅作为 UnitStats 里五个 attr_* 字段的默认值参考；
+## 实际数值以每个单位 .tres 上的 attr_con/attr_mag/attr_str/attr_end/attr_agi 为准）。
 const ATTR_BASE := 11
 ## 每升 1 级：额外获得这么多点**自由属性点**，玩家自己加到任意一项上。
 const ATTR_FREE_PER_LEVEL := 5
-## 种族 × 基础属性 → 派生属性的系数表（用户给的数值，一字不改）。
-## 用法：Σ(每项基础属性点数 × 系数) + .tres 基础值；派生键含义见 derived_stats()。
-## 分表差异：人族均衡、仙族防高法强、魔族血多物理强。
+## 门派技能的伤害倍率规则（战斗前按目标数烤进技能副本）。
+## 单体 = 1.8；群体每个目标 = 1.8 × (1 − 0.12×(目标数−1))，与梦幻西游手游实测的衰减一致。
+const SKILL_SINGLE_POWER := 1.8
+const SKILL_AOE_DECAY := 0.12
+## 群体衰减系数：n 个目标时每个目标的倍率（最低 0.3，防爆）。
+static func SKILL_AOE_DECAY_STEP(n: int) -> float:
+	return maxf(0.3, 1.0 - SKILL_AOE_DECAY * float(maxi(1, n) - 1))
+
+## 种族 × 基础属性 → 派生属性的系数表（**所有数值的唯一来源**）。
+## 用法：派生值 = Σ(每项基础属性点数 × 系数)，不再叠加 .tres 里的旧基础值。
+## 数值严格按"属性点类型"表（法系两项已直接拆到法伤/法防，不再经过灵力）：
+##   体质 → 气血 / 法伤 / 法防 / 速度        魔力 → 魔法 / 法伤 / 法防
+##   力量 → 伤害 / 法伤 / 法防              耐力 → 防御 / 法伤 / 法防 / 速度
+##   敏捷 → 速度 / 躲避
+## 想调平衡只改这张表 —— 面板与战斗都读 derived_stats()。
 const ATTR_TABLE := {
 	UnitStats.Race.HUMAN: {
-		"con": {"hp": 5.0, "spell_damage": 0.3, "speed": 0.1},
-		"mag": {"mana": 3.0, "spell_damage": 0.7},
-		"str": {"damage": 0.75, "spell_damage": 0.4},
-		"end": {"defense": 1.5, "spell_damage": 0.2, "speed": 0.1},
+		"con": {"hp": 5.0, "spell_damage": 0.15, "spell_defense": 0.18, "speed": 0.1},
+		"mag": {"mana": 3.0, "spell_damage": 0.35, "spell_defense": 0.42},
+		"str": {"damage": 0.75, "spell_damage": 0.2, "spell_defense": 0.24},
+		"end": {"defense": 1.5, "spell_damage": 0.1, "spell_defense": 0.12, "speed": 0.1},
 		"agi": {"speed": 0.7, "dodge": 1.0},
 	},
 	UnitStats.Race.IMMORTAL: {
-		"con": {"hp": 4.5, "spell_damage": 0.3, "speed": 0.1},
-		"mag": {"mana": 3.5, "spell_damage": 0.7},
-		"str": {"damage": 0.65, "spell_damage": 0.4},
-		"end": {"defense": 1.6, "spell_damage": 0.2, "speed": 0.1},
+		"con": {"hp": 4.5, "spell_damage": 0.15, "spell_defense": 0.18, "speed": 0.1},
+		"mag": {"mana": 3.5, "spell_damage": 0.35, "spell_defense": 0.42},
+		"str": {"damage": 0.65, "spell_damage": 0.2, "spell_defense": 0.24},
+		"end": {"defense": 1.6, "spell_damage": 0.1, "spell_defense": 0.12, "speed": 0.1},
 		"agi": {"speed": 0.7, "dodge": 1.0},
 	},
 	UnitStats.Race.DEMON: {
-		"con": {"hp": 6.0, "spell_damage": 0.3, "speed": 0.1},
-		"mag": {"mana": 2.5, "spell_damage": 0.7},
-		"str": {"damage": 0.85, "spell_damage": 0.4},
-		"end": {"defense": 1.4, "spell_damage": 0.2, "speed": 0.1},
+		"con": {"hp": 6.0, "spell_damage": 0.15, "spell_defense": 0.18, "speed": 0.1},
+		"mag": {"mana": 2.5, "spell_damage": 0.35, "spell_defense": 0.42},
+		"str": {"damage": 0.85, "spell_damage": 0.2, "spell_defense": 0.24},
+		"end": {"defense": 1.4, "spell_damage": 0.1, "spell_defense": 0.12, "speed": 0.1},
 		"agi": {"speed": 0.7, "dodge": 1.0},
 	},
+}
+## 表外补充：这几项在原表里没写，暂按"耐力/敏捷"继续供给，想删就把对应系数去掉。
+const EXTRA_TABLE := {
+	"block_value": {"end": 0.15},
+	"crit_resist": {"end": 0.1},
+	"crit_damage_resist": {"end": 0.15},
+	"crit_rate": {"agi": 0.12},
+	"seal_resist": {"agi": 0.08},
+	"healing": {"mag": 0.35},
+	"seal_hit": {"mag": 0.15},
+	"crit_damage_bonus": {"str": 0.3},
 }
 ## 开局队长；留空用 DEFAULT_LEADER。想临时试别的角色/敌人，填这里最省事。
 @export var default_leader: UnitStats
@@ -218,14 +242,19 @@ static func exp_of(character: UnitStats) -> int:
 
 ## 五项基础属性总点数（1 级基础 + 自动成长 + 自由分配），顺序同 ATTR_KEYS。
 ## 自动成长按 (等级-1) 现算而不落库，永远与等级一致。
+## 基础值来自 UnitStats 的五个 attr_* 字段（默认各 11），所以每个单位都能在 .tres 里单独配。
 static func attribute_points(character: UnitStats) -> Array[int]:
 	var out: Array[int] = [0, 0, 0, 0, 0]
 	if character == null:
 		return out
-	var auto_points := ATTR_BASE + maxi(0, level_of(character) - 1) * ATTR_PER_LEVEL
+	var base := [
+		character.attr_con, character.attr_mag, character.attr_str,
+		character.attr_end, character.attr_agi,
+	]
+	var growth := maxi(0, level_of(character) - 1) * ATTR_PER_LEVEL
 	var alloc := _attr_alloc(character)
 	for i in ATTR_KEYS.size():
-		out[i] = auto_points + int(alloc[i])
+		out[i] = maxi(0, int(base[i])) + growth + int(alloc[i])
 	return out
 
 
@@ -295,40 +324,38 @@ static func apply_attr_deltas(character: UnitStats, deltas: Array) -> String:
 	return ""
 
 
-## 按种族系数把基础属性折算成派生属性（战斗/面板用的最终值）。
-## 返回 hp/mana/damage/defense/speed/dodge/spell_damage + 二级属性（二级项目前只读 .tres 原值）。
+## 五大基础属性 → 派生属性（面板/战斗的唯一口径）。
+## 规则：**完全由基础属性算出来**（Σ 点数 × 种族系数），不再读 .tres 里的旧基础值；
+##   等级的影响通过"每级五项各 +1"体现，门派被动在 _apply_sect_passives 里叠加。
 ## ⚠ 纯函数：只读 Global 与 character，不写状态。
 static func derived_stats(character: UnitStats) -> Dictionary:
 	var out := {
 		"hp": 0.0, "mana": 0.0, "damage": 0.0, "defense": 0.0,
-		"speed": 0.0, "dodge": 0.0, "spell_damage": 0.0,
+		"speed": 0.0, "dodge": 0.0,
+		"spell_damage": 0.0, "spell_defense": 0.0,
 		"crit_rate": 0.0, "crit_damage_bonus": 0.0, "seal_hit": 0.0, "healing": 0.0,
-		"crit_resist": 0.0, "crit_damage_resist": 0.0, "seal_resist": 0.0, "block_value": 0.0,
+		"crit_resist": 0.0, "crit_damage_resist": 0.0, "seal_resist": 0.0,
+		"block_value": 0.0,
 	}
 	if character == null:
 		return out
-	out["hp"] = character.health
-	out["mana"] = character.mana
-	out["damage"] = character.damage
-	out["speed"] = character.speed
-	out["defense"] = character.defense
-	out["dodge"] = character.dodge
-	out["spell_damage"] = character.spell_damage
-	out["crit_rate"] = character.crit_rate
-	out["crit_damage_bonus"] = character.crit_damage_bonus
-	out["seal_hit"] = character.seal_hit
-	out["healing"] = character.healing
-	out["crit_resist"] = character.crit_resist
-	out["crit_damage_resist"] = character.crit_damage_resist
-	out["seal_resist"] = character.seal_resist
-	out["block_value"] = character.block_value
 	var race: int = character.race
 	var table: Dictionary = ATTR_TABLE.get(race, ATTR_TABLE[UnitStats.Race.HUMAN])
 	var points := attribute_points(character)
+	# ① 主表：体质/魔力/力量/耐力/敏捷 → 气血/魔法/伤害/防御/速度/躲避/法伤/法防
 	for i in ATTR_KEYS.size():
 		var coef: Dictionary = table.get(ATTR_KEYS[i], {})
 		for key in coef:
-			out[key] += float(coef[key]) * points[i]
+			out[key] = float(out.get(key, 0.0)) + float(coef[key]) * points[i]
+	# ② 表外补充项（暴击、治疗、格挡值等，原表未列）
+	for key in EXTRA_TABLE:
+		var by_attr: Dictionary = EXTRA_TABLE[key]
+		for attr in by_attr:
+			var idx := ATTR_KEYS.find(attr)
+			if idx >= 0:
+				out[key] = float(out.get(key, 0.0)) + float(by_attr[attr]) * points[idx]
+	# 气血至少 1，避免"属性全 0"时开局被判死
+	out["hp"] = maxf(1.0, float(out["hp"]))
 	return out
 
 
@@ -1331,6 +1358,7 @@ func _make_player_team() -> Array[UnitStats]:
 		copy.defense = float(d["defense"])
 		copy.dodge = float(d["dodge"])
 		copy.spell_damage = float(d["spell_damage"])
+		copy.spell_defense = float(d["spell_defense"])
 		copy.crit_rate = float(d["crit_rate"])
 		copy.crit_damage_bonus = float(d["crit_damage_bonus"])
 		copy.seal_hit = float(d["seal_hit"])
@@ -1371,6 +1399,17 @@ static func _attach_sect_skills(copy: UnitStats, source: UnitStats) -> void:
 		# 目标数阈值（30/60/25/50/75 级那些）在 Global 表里；-1 = "全体"（由 target_mode=ENEMY_ALL 表达）
 		var targets := Global.sect_skill_targets(entry, level)
 		baked.max_targets = targets if targets > 0 else 1
+		var n := baked.max_targets
+		# 伤害倍率：单体 1.8；群体按"每多一个目标 -12% 单体倍率"衰减（梦幻西游手游实测）。
+		# 连击技能：总倍率拆到每一击；配了 hit_power 曲线的（太虚神剑）原样保留。
+		if baked.hits > 1 and not baked.hit_power.is_empty():
+			pass
+		elif baked.fixed_damage:
+			baked.flat_damage = (baked.flat_damage + baked.flat_per_level * float(level - 1)) \
+					* SKILL_AOE_DECAY_STEP(n)
+		elif baked.power > 0.0:
+			var total := SKILL_SINGLE_POWER * SKILL_AOE_DECAY_STEP(n)
+			baked.power = total / float(maxi(1, baked.hits))
 		# 状态（buff）数值也按等级烤：buff_value 是 1 级基线，buff_per_level 是每级增量
 		if not baked.buff_stat.is_empty():
 			baked.buff_value = baked.buff_value + baked.buff_per_level * float(level - 1)
@@ -1427,7 +1466,24 @@ func _make_enemy_team() -> Array[UnitStats]:
 		if base == null:
 			continue
 		var scaled := base.duplicate() as UnitStats
-		scaled.health = maxf(1.0, base.health * scale)
-		scaled.damage = maxf(1.0, base.damage * scale)
+		# 敌人也走同一套"基础属性 → 派生值"：.tres 里配 attributes，这里算成实际数值。
+		# 地图难度缩放作用在派生结果上（难度越高，敌人整体越强）。
+		var d := derived_stats(scaled)
+		scaled.health = maxf(1.0, float(d["hp"]) * scale)
+		scaled.damage = maxf(1.0, float(d["damage"]) * scale)
+		scaled.mana = float(d["mana"])
+		scaled.defense = float(d["defense"])
+		scaled.speed = maxf(1.0, float(d["speed"]))
+		scaled.dodge = float(d["dodge"])
+		scaled.spell_damage = float(d["spell_damage"])
+		scaled.spell_defense = float(d["spell_defense"])
+		scaled.crit_rate = float(d["crit_rate"])
+		scaled.crit_damage_bonus = float(d["crit_damage_bonus"])
+		scaled.seal_hit = float(d["seal_hit"])
+		scaled.healing = float(d["healing"])
+		scaled.crit_resist = float(d["crit_resist"])
+		scaled.crit_damage_resist = float(d["crit_damage_resist"])
+		scaled.seal_resist = float(d["seal_resist"])
+		scaled.block_value = float(d["block_value"])
 		out.append(scaled)
 	return out
