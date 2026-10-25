@@ -105,10 +105,13 @@ func step_player(step: int) -> void:
 ## 副作用：只改本节点的显示，不碰游戏数据。
 func refresh() -> void:
 	var character := current_character()
-	var icon: Texture2D = character.icon if character != null else null
-	player_view.texture = icon
-	player_view.visible = icon != null
-	player_fallback.visible = icon == null
+	# 形象优先：竖版全身立绘（portrait）；没有就退回方形头像（icon）
+	var art: Texture2D = null
+	if character != null:
+		art = character.portrait if character.portrait != null else character.icon
+	player_view.texture = art
+	player_view.visible = art != null
+	player_fallback.visible = art == null
 	player_fallback.text = "（团队里没有人）" if _party.is_empty() else "（未选角色）"
 	name_label.text = character.name if character != null else ""
 	var switchable := _party.size() > 1

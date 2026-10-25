@@ -83,15 +83,18 @@ const PLATE_BAR_H := 22.0         # 每条血/蓝条的高度
 const PLATE_NAME_BAR_GAP := 0.0   # 名字和血条之间（0 = 紧贴）
 const PLATE_HEAD_GAP := -10.0     # 蓝条底边相对头顶（负数 = 往下沉，贴着头顶；3D 立绘上部有透明留白）
 
-# ── 轮廓配色 ──
-# 与 %Selection 色块是两套：色块铺脚下，轮廓贴剪影描实色边（%Outline），都不带 alpha。
-
-## 我方行动者：青色。
-const OUTLINE_ALLY_COLOR := Color(0.35, 0.85, 1.0)
-## 敌方行动者：橙红，与青色成对。
-const OUTLINE_ENEMY_COLOR := Color(1.0, 0.38, 0.30)
-## 键盘/悬停选中的目标：金色（配头顶箭头）。金=这一下打谁；青/橙红=现在轮到谁。
-const OUTLINE_TARGET_COLOR := Color(1.0, 0.85, 0.35)
+# ── 高亮配色（脚下光环）──
+# 不再用"描边"：描边会把立绘边缘糊成一圈、和技能特效打架，所以改成脚下光环 + 呼吸脉动。
+# 光环由 _build_rings() 在运行期用 Line2D 生成（两圈：内圈实、外圈柔光），不用任何贴图。
+## 行动者光环：暖金。
+const RING_SELECT := Color(1.0, 0.86, 0.35, 1.0)
+## 待选目标光环：红。
+const RING_TARGET := Color(1.0, 0.35, 0.35, 1.0)
+## 悬停（只是鼠标停上去，还没选）：淡白。
+const RING_HOVER := Color(1.0, 1.0, 1.0, 0.75)
+## 光环椭圆半径（贴合 %Selection 那个扁圆：横向 58、纵向 17）。
+const RING_RX := 58.0
+const RING_RY := 17.0
 
 # ── 数据源与运行时数值 ──
 
@@ -152,9 +155,11 @@ var _model3d: Model3DAvatar = null
 @onready var click_area: Area2D = %ClickArea
 ## 选中轮廓层：Sprite 的子节点（show_behind_parent），同贴图 + 描边 shader 往外扩一圈实色。
 ## 挂成 Sprite 子节点是为了自动继承本体位置/缩放——play_cast() 会 tween sprite.scale，兄弟节点会错位。
-@onready var outline: Sprite2D = %Outline
 ## 头顶小箭头（Polygon2D 纯几何）。只在 set_focused(true) 时显示并上下浮动。
 @onready var target_arrow: Polygon2D = %TargetArrow
+## 脚下高亮光环（运行期由 _build_rings() 生成，不需要在 .tscn 里摆）。
+var _ring_core: Line2D
+var _ring_glow: Line2D
 
 
 # ── 生命周期与初始化 ──
@@ -164,8 +169,9 @@ var _model3d: Model3DAvatar = null
 func _ready() -> void:
 	_base_scale = sprite.scale
 	_arrow_base_y = target_arrow.position.y
-	# 箭头浮动是"每帧"的事，只对光标目标有意义；默认关，set_focused() 里再开。
+	# 箭头浮动 + 光环呼吸是"每帧"的事；默认关，set_focused()/_update_selection() 里再开。
 	set_process(false)
+	_build_rings()
 	click_area.input_event.connect(_on_click_area_input_event)
 	click_area.mouse_entered.connect(_on_mouse_entered)
 	click_area.mouse_exited.connect(_on_mouse_exited)
@@ -173,6 +179,53 @@ func _ready() -> void:
 	_ignore_mouse(health_bar)
 	_ignore_mouse(mana_bar)
 	_ignore_mouse(name_label)
+
+
+## 造脚下的高亮光环：两圈 Line2D（外圈粗而淡 = 柔光，内圈细而实 = 亮边）。
+## 不用贴图、不用 shader，纯代码生成椭圆点集；颜色和可见性由 _update_selection() 控制。
+func _build_rings() -> void:
+	# ⚠ 两个坑：
+	#   ① 不能用负 z_index 藏到立绘下面 —— z_index 是全局排序，负值会连战斗背景一起盖住（背景 z=0），
+	#      光环直接看不见；
+	#   ② 也不能画在立绘之前 —— 敌人的贴图一直画到脚底，会把光环整圈盖掉。
+	#   所以：z=1 且追加在 Sprite 之后（画在上层），靠半透明让它像"地面上的光"。
+	_ring_glow = _make_ring(RING_RX * 1.05, RING_RY * 1.12, 11.0)
+	_ring_glow.z_index = 1
+	add_child(_ring_glow)
+	_ring_core = _make_ring(RING_RX, RING_RY, 3.0)
+	_ring_core.z_index = 1
+	add_child(_ring_core)
+
+
+## 生成一圈椭圆 Line2D（closed = 首尾自动闭合）。
+func _make_ring(rx: float, ry: float, width: float) -> Line2D:
+	var ring := Line2D.new()
+	ring.width = width
+	ring.antialiased = true
+	ring.closed = true
+	ring.joint_mode = Line2D.LINE_JOINT_ROUND
+	ring.begin_cap_mode = Line2D.LINE_CAP_ROUND
+	ring.end_cap_mode = Line2D.LINE_CAP_ROUND
+	var points := PackedVector2Array()
+	var segments := 48
+	for i in segments:
+		var angle := TAU * float(i) / float(segments)
+		points.append(Vector2(cos(angle) * rx, sin(angle) * ry))
+	ring.points = points
+	ring.visible = false
+	return ring
+
+
+## 开关光环并染色。show_it=false 时两圈一起隐藏。
+func _set_ring(color: Color, show_it: bool) -> void:
+	for ring in [_ring_glow, _ring_core]:
+		if ring == null:
+			continue
+		ring.visible = show_it
+	if not show_it:
+		return
+	_ring_core.default_color = Color(color.r, color.g, color.b, 0.95)
+	_ring_glow.default_color = Color(color.r, color.g, color.b, 0.28)
 
 
 ## 把自身及所有 Control 子节点设成不接收鼠标事件（递归，因为血条内部还嵌着 ProgressBar/Label）。
@@ -248,15 +301,10 @@ func _setup_model3d() -> void:
 	_model3d.play("idle", 0.0)
 
 
-## 帧动画换帧时同步轮廓：轮廓是同一张贴图的 Sprite 子节点，
-## 不同步 region 的话描边会一直停在第一帧的剪影上（选中框跟人错位）。
+## 帧动画换帧钩子：以前用来同步"描边"的 region；高亮改成脚下光环后不再需要，
+## 保留空实现只因为 AnimationPlayer/帧动画那边可能连着它（删掉连线会静默断）。
 func _on_anim_frame() -> void:
-	if not outline.visible:
-		return
-	if outline.texture != sprite.texture:
-		outline.texture = sprite.texture
-	outline.region_enabled = sprite.region_enabled
-	outline.region_rect = sprite.region_rect
+	pass
 
 
 func _refresh_visuals() -> void:
@@ -314,13 +362,19 @@ func _refresh_visuals() -> void:
 	# 敌人翻转：flip_h 只影响绘制，不改坐标/碰撞，点击区域不受影响。
 	# 有帧动画时朝向已经画在图里了（我方朝左、敌朝右），再 flip 会镜像回去，所以跳过。
 	sprite.flip_h = (not is_player) and _anim == null
-	health_bar.self_modulate = Color(1, 1, 1) if is_player else Color(1, 0.72, 0.72)
-	# 没蓝的单位不显示蓝条，省得所有敌人都挂着一条空槽。
-	mana_bar.visible = max_mp > 0.0
-	mana_bar.self_modulate = Color(1, 1, 1) if is_player else Color(0.85, 0.85, 1)
+	# 敌方血条染红（直接换 fill 颜色，不只是 modulate 一下）；我方保持绿色。
+	health_bar.self_modulate = Color(1, 1, 1)
+	if not is_player:
+		health_bar.set_fill_color(ENEMY_HP_COLOR)
+	# 蓝条只给我方看：敌人不显示蓝条（也省得一排空槽）。
+	mana_bar.visible = is_player and max_mp > 0.0
+	mana_bar.self_modulate = Color(1, 1, 1)
 	_refresh_hp()
 	_refresh_mana()
 
+
+## 敌人血条颜色（红）。只在 _apply_layout() 里用一次，改这里就能统一换色。
+const ENEMY_HP_COLOR := Color(0.86, 0.24, 0.22, 1)
 
 ## 身体中心（世界坐标）：立绘脚在原点，往上抬半个身高。弹道落点、命中爆炸、飘字都用它。
 func body_center() -> Vector2:
@@ -592,51 +646,30 @@ func skill_crit(skill: SkillData) -> bool:
 # ── 选中 / 目标高亮 ──
 # 只做"标记 + 重算颜色"，不动任何战斗数值。
 
-## 设置"当前行动者"高亮：写 _selected，重算色块与轮廓（我方青/敌方橙红）。不改战斗数据。
+## 设置"当前行动者"高亮：写 _selected，重算光环。不改战斗数据。
 ## 谁用：Battle._begin_turn() 点亮、_finish_turn()/_finish_battle() 熄灭。
 func set_selected(value: bool) -> void:
 	_selected = value
 	_update_selection()
-	_refresh_outline()
 
 
-## 设置"可被选为目标"红圈。只管视觉，不影响点击能不能被接收——
+## 设置"可被选为目标"光环。只管视觉，不影响点击能不能被接收——
 ## 真正决定"点了有没有用"的是 Battle 的 state 与 _targets.has(unit)。
 func set_targetable(value: bool) -> void:
 	_targetable = value
 	_update_selection()
 
 
-## 把键盘目标光标放到本单位：显示轮廓 + 头顶箭头并开启每帧浮动。死人一律不显示（尸体不顶箭头）。
-## 副作用：写 _focused、开关 %Outline/%TargetArrow 的 visible 与 _process、同步轮廓的贴图/翻转。
+## 把键盘目标光标放到本单位：显示光环 + 头顶箭头并开启每帧浮动。死人一律不显示（尸体不顶箭头）。
+## 副作用：写 _focused、开关 %TargetArrow 的 visible 与 _process、重算光环颜色。
 func set_focused(value: bool) -> void:
 	_focused = value
 	var show_it := value and alive
 	target_arrow.visible = show_it
-	set_process(show_it)
 	if not show_it:
 		target_arrow.position.y = _arrow_base_y
-	_refresh_outline()
+	_update_selection()
 	_refresh_name_color()          # 被选为攻击目标 -> 名字变红
-
-
-## 底层接口：直接开关轮廓并指定颜色（不参与优先级判断）。显示时同步本体的贴图与翻转。
-## 写的是自己那份 ShaderMaterial（场景里 resource_local_to_scene=true，每个单位一份，不会串色）。
-func set_outline(active: bool, color: Color) -> void:
-	var show_it := active and alive
-	if show_it:
-		outline.texture = sprite.texture
-		outline.flip_h = sprite.flip_h
-		# 帧动画模式下轮廓也要跟着当前帧的 region，否则描边是整张条带图的剪影。
-		outline.region_enabled = sprite.region_enabled
-		outline.region_rect = sprite.region_rect
-		# ⚠ 轮廓是 Sprite 的子节点，但它自己也要画一遍贴图：父节点的 offset 不会传给子节点，
-		# 不跟着平移就会整体错开半个身高（描边跑到腰/腿上）。
-		outline.offset = sprite.offset
-		var mat := outline.material as ShaderMaterial
-		if mat != null:
-			mat.set_shader_parameter("outline_color", color)
-	outline.visible = show_it
 
 
 ## 名字颜色的唯一出口：被选为攻击目标（键盘/鼠标光标停在它身上）时红色，否则绿色。
@@ -648,36 +681,41 @@ func _refresh_name_color() -> void:
 	name_label.add_theme_constant_override("outline_size", 4)
 
 
-## 轮廓的唯一真相出口：优先级 键盘光标（金+箭头）> 行动者（青/橙红）> 不显示。
-## 不叠加：轮廓只有一圈，两种状态同时成立时"打谁"比"谁在行动"更重要。
-func _refresh_outline() -> void:
-	if _focused and alive:
-		set_outline(true, OUTLINE_TARGET_COLOR)
-	elif _selected and alive:
-		set_outline(true, OUTLINE_ALLY_COLOR if is_player else OUTLINE_ENEMY_COLOR)
-	else:
-		set_outline(false, Color.WHITE)
-
-
-## 每帧让头顶箭头正弦浮动（只在 set_focused(true) 期间运行）。用 _process 而非 Tween：
-## Tween 要管换目标时的 kill 与重复创建，开关 _process 更简单也不易出错。
+## 每帧：头顶箭头正弦浮动 + 脚下光环呼吸（只在有高亮/聚焦时运行）。
+## 用 _process 而非 Tween：Tween 要管换目标时的 kill 与重复创建，开关 _process 更简单也不易出错。
 func _process(_delta: float) -> void:
-	target_arrow.position.y = _arrow_base_y + sin(float(Time.get_ticks_msec()) / 260.0) * 7.0
+	var seconds := float(Time.get_ticks_msec()) / 1000.0
+	target_arrow.position.y = _arrow_base_y + sin(seconds * 3.85) * 7.0
+	if _ring_core != null and _ring_core.visible:
+		# 呼吸：半径 ±4%、亮度 0.72~1.0 之间来回，像"心跳"而不是闪光灯。
+		var pulse := 0.5 + 0.5 * sin(seconds * 3.2)
+		var twist := 1.0 + pulse * 0.04
+		_ring_core.scale = Vector2(twist, twist)
+		_ring_glow.scale = Vector2(1.0 + pulse * 0.07, 1.0 + pulse * 0.07)
+		_ring_core.modulate.a = 0.72 + pulse * 0.28
+		_ring_glow.modulate.a = 0.45 + pulse * 0.35
 
 
-## 按三个标记重算 %Selection 的可见性与颜色（唯一"高亮真相"出口）。
-## 优先级：键盘/悬停的红色目标 > _selected 暖黄 > 悬停白。
-## ⚠ `_targetable` 只表示"能被点"，不再直接显示红框：
-##   否则进入选目标时，所有敌人会同时被红框标成"已选中"（之前就是这样）。
+## 按三个标记重算高亮（唯一"高亮真相"出口）：脚下扁圆 + 光环。
+## 优先级：键盘/悬停的红色目标 > _selected 暖金 > 悬停白。
+## ⚠ `_targetable` 只表示"能被点"，不再直接显示红圈：
+##   否则进入选目标时，所有敌人会同时被标红（之前就是这样）。
 func _update_selection() -> void:
 	var aiming := _targetable and (_focused or _hovered)
-	selection.visible = alive and (aiming or _selected or _hovered)
+	var show_it := alive and (aiming or _selected or _hovered)
+	selection.visible = show_it
+	var ring_color := RING_HOVER
 	if aiming:
 		selection.color = TARGET_COLOR
+		ring_color = RING_TARGET
 	elif _selected:
 		selection.color = SELECT_COLOR
+		ring_color = RING_SELECT
 	else:
 		selection.color = HOVER_COLOR
+	_set_ring(ring_color, show_it)
+	# 只有需要动的东西才开 _process（箭头浮动 / 光环呼吸）。
+	set_process(show_it or target_arrow.visible)
 
 
 ## 设置/取消防御姿态：true 时 Sprite 渐变淡蓝，false 时回纯白；到期由 Battle._begin_turn() 取消。

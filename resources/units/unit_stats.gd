@@ -44,7 +44,13 @@ enum Race {
 @export var attr_end := 11
 @export var attr_agi := 11
 ## 头像/立绘。用于选人卡片、悬浮卡、战斗头像。留空不报错，只是没图。
+## ⚠ 它同时被当作**战斗立绘**和**世界地图精灵**用（BattleUnit / WorldMap 都按它的高度缩放），
+##   所以这里应放全身立绘；只是个小方头像的话，战斗里会变成一张被拉高的脸。
 @export var icon: Texture2D
+## 小头像（方形，可选）。出手顺序、队伍列表这类**小格子**优先用它，没有就退回 icon。
+@export var avatar: Texture2D
+## 形象立绘（可选，竖版全身图）。战斗外的人物面板优先用它，没有则退回 icon。
+@export var portrait: Texture2D
 ## 动作帧目录（可选）。填了就用这套 8 方位帧动画代替静态 icon：
 ## 目录下应有 idle_<方位>.png / run_<方位>.png / attack_<方位>.png / cast_<方位>.png，
 ## 每张是横向序列帧条带（帧宽 384、高 576）。方位共 8 个：

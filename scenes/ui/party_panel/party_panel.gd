@@ -156,7 +156,8 @@ func _make_slot(stats: UnitStats, slot_size: Vector2, icon_size: float) -> Butto
 	box.add_theme_constant_override("separation", 2)
 
 	var icon := TextureRect.new()
-	icon.texture = stats.icon
+	# 队伍格是小的方形格，优先用方形头像；没配就退回 icon（全身立绘）。
+	icon.texture = stats.avatar if stats.avatar != null else stats.icon
 	icon.custom_minimum_size = Vector2(icon_size, icon_size)
 	icon.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	# ⚠ 必须 IGNORE_SIZE：否则 TextureRect 的最小尺寸会跟着贴图原始尺寸（150px）走，
@@ -168,6 +169,7 @@ func _make_slot(stats: UnitStats, slot_size: Vector2, icon_size: float) -> Butto
 
 	var name_label := Label.new()
 	name_label.text = stats.name
+	name_label.add_theme_color_override("font_color", Color(0.95, 0.92, 0.85, 1))
 	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	name_label.add_theme_font_size_override("font_size", 17 if icon_size > 70.0 else 14)
 	name_label.mouse_filter = Control.MOUSE_FILTER_IGNORE

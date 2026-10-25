@@ -1,14 +1,18 @@
 [gd_resource type="Resource" script_class="UnitStats" format=3 uid="uid://ckl8xxcrmuxtq"]
 
-[ext_resource type="Texture2D" path="res://assets/sprites/units/players/Player_nichang.png" id="1_6skj5"]
 [ext_resource type="Script" uid="uid://j6ibt5vlkg3t" path="res://resources/units/unit_stats.gd" id="1_g5q6j"]
 [ext_resource type="Script" uid="uid://sbgbq3puamij" path="res://resources/skills/skill_data.gd" id="3_8eowt"]
+
+[ext_resource type="Texture2D" uid="uid://5ca1e4h0cn6g" path="res://assets/sprites/units/players/portraits/霓裳.png" id="1_avatar"]
+
+[ext_resource type="Texture2D" uid="uid://d1puu45si0gvv" path="res://assets/sprites/units/players/fullbody/霓裳.png" id="2_portrait"]
 
 [resource]
 script = ExtResource("1_g5q6j")
 name = "霓裳"
 race = 2
-icon = ExtResource("1_6skj5")
+icon = ExtResource("1_avatar")
 model_glb = "res://assets/models/players/霓裳.glb"
+portrait = ExtResource("2_portrait")
 health = 15.0
 metadata/_custom_type_script = "uid://j6ibt5vlkg3t"

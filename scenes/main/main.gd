@@ -1310,7 +1310,7 @@ static func sect_skill_summary(character: UnitStats) -> String:
 static func sect_skill_details(character: UnitStats) -> String:
 	var sect_id := sect_of(character)
 	if sect_id.is_empty():
-		return "还没有门派 —— 去建邺城找五位掌门拜师。"
+		return "还没有门派 —— 去桃花村找五位掌门拜师。"
 	var lines: Array[String] = []
 	for skill in Global.sect_passives(sect_id):
 		var level := sect_skill_level(character, String(skill["id"]))

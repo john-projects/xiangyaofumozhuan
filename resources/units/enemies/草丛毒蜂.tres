@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="UnitStats" format=3]
+
+[ext_resource type="Script" path="res://resources/units/unit_stats.gd" id="1_stats"]
+[ext_resource type="Texture2D" path="res://assets/sprites/enemies/草丛毒蜂_立绘.png" id="2_icon"]
+[ext_resource type="Texture2D" path="res://assets/sprites/enemies/草丛毒蜂_头像.png" id="3_avatar"]
+
+[resource]
+script = ExtResource("1_stats")
+name = "草丛毒蜂"
+type = 1
+race = 1
+attr_con = 6
+attr_mag = 7
+attr_str = 7
+attr_end = 5
+attr_agi = 14
+icon = ExtResource("2_icon")
+avatar = ExtResource("3_avatar")

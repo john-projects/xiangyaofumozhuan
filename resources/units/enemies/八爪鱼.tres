@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="UnitStats" format=3]
+
+[ext_resource type="Script" path="res://resources/units/unit_stats.gd" id="1_stats"]
+[ext_resource type="Texture2D" path="res://assets/sprites/enemies/八爪鱼_立绘.png" id="2_icon"]
+[ext_resource type="Texture2D" path="res://assets/sprites/enemies/八爪鱼_头像.png" id="3_avatar"]
+
+[resource]
+script = ExtResource("1_stats")
+name = "八爪鱼"
+type = 1
+race = 1
+attr_con = 15
+attr_mag = 9
+attr_str = 10
+attr_end = 9
+attr_agi = 6
+icon = ExtResource("2_icon")
+avatar = ExtResource("3_avatar")

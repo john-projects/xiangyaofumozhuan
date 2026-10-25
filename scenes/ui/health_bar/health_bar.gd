@@ -34,12 +34,21 @@ func _ready() -> void:
 	progress_bar.add_theme_stylebox_override("background", back_style)
 	progress_bar.add_theme_stylebox_override("fill", fill_style)
 
+## 运行期改进度条颜色（battle_unit 给敌人血条染红用；_ready 之后才调得到）。
+## 副作用：只改本实例 progress_bar 的 "fill" 覆盖，不动 _ready 里已设好的槽底。
+func set_fill_color(color: Color) -> void:
+	fill_color = color
+	var fill_style := progress_bar.get_theme_stylebox("fill").duplicate()
+	fill_style.bg_color = color
+	progress_bar.add_theme_stylebox_override("fill", fill_style)
+
 ## 刷新血条（对外主入口，battle_unit.gd 也直接调）。
-## 参数 value：0.0~1.0 的**比例**（max_value = 1.0，传血量本身会一直满）；health：中间显示的具体数值，原样 str()。
+## 参数 value：0.0~1.0 的**比例**（max_value = 1.0，传血量本身会一直满）；health：中间显示的具体数值。
+## 显示一律取整（format_stat 四舍五入），内部数值仍保留小数。
 ## 副作用：只写 progress_bar.value 与 health_amount.text，不 emit 信号、不读写 Global。
 func update_bar(value: float, health: float) -> void:
 	progress_bar.value = value
-	health_amount.text = str(health)
+	health_amount.text = Global.format_stat(health)
 
 ## HealthComponent.on_health_changed 的回调（旧链路已随竞技场移除，保留成通用入口）。
 ## 参数 current：当前血量；max_value：最大血量。副作用：转调 update_bar()，不改任何游戏状态。

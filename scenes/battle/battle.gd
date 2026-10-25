@@ -49,11 +49,11 @@ const DEMO_PLAYERS := [
 ]
 # 敌方演示队伍：与 DEMO_PLAYERS 一一对应，站 Stage/EnemySlots 的 Marker2D。
 const DEMO_ENEMIES := [
-	"res://resources/units/enemies/stats_enemy_chaser_slow.tres",
-	"res://resources/units/enemies/stats_enemy_chaser_mid.tres",
-	"res://resources/units/enemies/stats_enemy_chaser_fast.tres",
-	"res://resources/units/enemies/stats_enemy_charger.tres",
-	"res://resources/units/enemies/stats_enemy_shooter.tres",
+	"res://resources/units/enemies/虾精.tres",
+	"res://resources/units/enemies/蟹怪.tres",
+	"res://resources/units/enemies/草丛毒蜂.tres",
+	"res://resources/units/enemies/偷桃毛猴.tres",
+	"res://resources/units/enemies/顽石精怪.tres",
 ]
 
 # ── 战斗状态机 ──
@@ -83,9 +83,9 @@ enum State { IDLE, INTRO, TURN_START, COMMAND, TARGET_SELECT, EXECUTE, TURN_END,
 # 只用于 create_floating_text() 的 modulate，与 SkillData.tint（飞行体/爆炸染色）无关。
 @export_group("飘字颜色")
 ## 普通伤害：近纯白略偏暖，避免纯白在亮背景上"发死"。
-@export var normal_color := Color(0.98, 0.98, 0.99)
+@export var normal_color := Color(1.0, 0.28, 0.24)
 ## 暴击伤害：金黄，与普通白形成强对比。
-@export var critical_color := Color(1.0, 0.80, 0.35)
+@export var critical_color := Color(1.0, 0.38, 0.30)
 ## 格挡/防御提示：橙红，表示"这一下被卸掉了、不疼"。
 @export var block_color := Color(1.0, 0.55, 0.35)
 ## 治疗数字：绿色（治疗技能未实现，先备着）。
@@ -697,7 +697,7 @@ func _perform_skill(caster: BattleUnit, skill: SkillData, targets: Array[BattleU
 					damage = ceilf(damage * caster.crit_multiplier())
 				var dealt := target.take_damage(damage, skill.damage_type == SkillData.DamageType.MAGIC)
 				# 技能普通色用 skill.tint，刻意与 Battle.normal_color 不同。
-				create_floating_text(target, str(int(roundf(dealt))), critical_color if is_crit else skill.tint)
+				create_floating_text(target, str(int(roundf(dealt))), critical_color if is_crit else normal_color)
 				await target.play_hit()
 			_apply_skill_statuses(caster, skill, target)
 			# 每击一段特效（太虚神剑）：这一击单独 new 一个特效，播它对应的片段。
@@ -765,7 +765,7 @@ func _cast_aoe(caster: BattleUnit, skill: SkillData, victims: Array[BattleUnit])
 			if is_crit:
 				damage = ceilf(damage * caster.crit_multiplier())
 			var dealt := target.take_damage(damage, skill.damage_type == SkillData.DamageType.MAGIC)
-			create_floating_text(target, str(int(roundf(dealt))), critical_color if is_crit else skill.tint)
+			create_floating_text(target, str(int(roundf(dealt))), critical_color if is_crit else normal_color)
 			# 中心那朵盖不到斜排角落，所以每个敌人身上再补一朵小的。
 			# 贴地技能（群星陨落）把这份"小爆点"放到目标脚下的地面线上。
 			var burst_pos: Vector2 = target.global_position if skill.hit_effect_on_ground \

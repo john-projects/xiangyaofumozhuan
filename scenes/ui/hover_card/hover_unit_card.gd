@@ -61,4 +61,8 @@ func _set_unit(value: UnitStats) -> void:
 	# ⚠ 从下一行开始的续行在源码里是**顶格**的，缩进会被原样写进字符串，别顺手补 tab。
 	item_desc.text = "[code]Health: [color=green]%s[/color]
 Damage: [color=green]%s[/color]
-Speed: [color=green]%s[/color][/code]" % [value.health, value.damage, value.speed]
+Speed: [color=green]%s[/color][/code]" % [
+		Global.format_stat(value.health),
+		Global.format_stat(value.damage),
+		Global.format_stat(value.speed),
+	]

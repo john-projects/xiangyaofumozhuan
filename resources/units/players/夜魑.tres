@@ -1,14 +1,18 @@
 [gd_resource type="Resource" script_class="UnitStats" format=3 uid="uid://ckn4x2cq26fjk"]
 
-[ext_resource type="Texture2D" uid="uid://52wneml663gr" path="res://assets/sprites/units/players/Player_yechi.png" id="1_ywjqh"]
 [ext_resource type="Script" uid="uid://j6ibt5vlkg3t" path="res://resources/units/unit_stats.gd" id="2_lu0qv"]
 [ext_resource type="Script" uid="uid://sbgbq3puamij" path="res://resources/skills/skill_data.gd" id="3_fs1jk"]
+
+[ext_resource type="Texture2D" uid="uid://bspn27djk5jtm" path="res://assets/sprites/units/players/portraits/夜魑.png" id="1_avatar"]
+
+[ext_resource type="Texture2D" uid="uid://dwq6o58q5wcj8" path="res://assets/sprites/units/players/fullbody/夜魑.png" id="2_portrait"]
 
 [resource]
 script = ExtResource("2_lu0qv")
 name = "夜魑"
 race = 1
-icon = ExtResource("1_ywjqh")
+icon = ExtResource("1_avatar")
 model_glb = "res://assets/models/players/夜魑.glb"
+portrait = ExtResource("2_portrait")
 health = 15.0
 metadata/_custom_type_script = "uid://j6ibt5vlkg3t"

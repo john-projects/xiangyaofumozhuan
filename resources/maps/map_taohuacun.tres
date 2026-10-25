@@ -17,9 +17,9 @@ script = ExtResource("3_npc")
 id = "taohuacun_signpost"
 display_name = "路牌"
 position = Vector2(0.44, 0.5)
-dialogue = "桃花村 · 往南三十里便是建邺城。（路牌上刻着几个字，被雨水磨得有些模糊）"
-destinations = Array[String](["jianyecheng"])
-teleport_label = "前往建邺城"
+dialogue = "桃花村 · 村口的路牌。（牌上原刻着往南的旧路名，字迹已被雨水磨平）"
+destinations = Array[String]([])
+teleport_label = ""
 
 [sub_resource type="Resource" id="Resource_chuanfu"]
 script = ExtResource("3_npc")
@@ -27,9 +27,9 @@ id = "chuanfu"
 display_name = "船夫"
 texture = ExtResource("t_chuanfu")
 position = Vector2(0.52, 0.7)
-dialogue = "客官要出海吗？东海湾就在前头，坐我的船一会儿就到。"
-destinations = Array[String](["donghaiwan"])
-teleport_label = "出海前往"
+dialogue = "客官要出海吗？近来风浪大，渡船都歇在滩上了。"
+destinations = Array[String]([])
+teleport_label = ""
 
 [sub_resource type="Resource" id="Resource_duiyou"]
 script = ExtResource("3_npc")
@@ -107,5 +107,5 @@ map_scale = 0.8496
 unit_height = 230.0
 spawn_point = Vector2(0.4, 0.44)
 npcs = Array[ExtResource("3_npc")]([SubResource("Resource_signpost"), SubResource("Resource_chuanfu"), SubResource("Resource_duiyou"), SubResource("Resource_shangren"), SubResource("Resource_taixu"), SubResource("Resource_piaomiao"), SubResource("Resource_zixiao"), SubResource("Resource_wanyao"), SubResource("Resource_xingluo")])
-next_id = "jianyecheng"
+next_id = ""
 exit_center = Vector2(0.62, 0.5)

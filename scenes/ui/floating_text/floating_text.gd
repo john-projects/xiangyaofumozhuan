@@ -57,40 +57,26 @@ func setup(value: String, color: Color) -> void:
 	modulate = color
 	scale = Vector2.ZERO
 	
-	# 随机微旋转：让飘字歪着出现，避免同屏多个完全平行而显得呆板。
-	# deg_to_rad() 把角度换成弧度（Node2D.rotation 的单位是弧度），这里范围是 -10° ~ +10°。
-	rotation = deg_to_rad(randf_range(-10, 10))
-	# 随机"目标倍率"：0.8~1.6 倍。第一条 tween 就是放大到它，最后一条再缩回 1.0，形成回弹感。
-	var random_scale := randf_range(0.8, 1.6)
+	# 不旋转：数字歪着显示会看不清，统一水平摆放（同屏多个靠位置和缩放错开就够）。
+	rotation = 0.0
+	# 随机"目标倍率"：0.9~1.35 倍。第一条 tween 就是放大到它，后面再缩回 1.0，形成回弹感。
+	var random_scale := randf_range(0.9, 1.35)
 	
 	# create_tween() 是 Node 的方法：tween 由本节点驱动，节点没了 tween 自动失效，
-	# 不需要手动 kill。它不受任何"全局暂停"开关影响（现在工程里已经没有那个开关了），
-	# 飘字会照常播完、照常自毁。
+	# 不需要手动 kill；飘字会照常播完、照常自毁。
+	# 时序（全部用 chain() 明确切成四段，别再用 parallel() 猜语义）：
+	#   ① 0~0.22s  弹入：scale 0 → random_scale、同时上浮 18px
+	#   ② 0.22~0.34s 回弹：scale → 1.0
+	#   ③ 0.34~0.72s 停留：满不透明度、不再移动（⚠ 这段是"看得清"的关键，删了数字会一闪就没）
+	#   ④ 0.72~0.95s 淡出：alpha → 0，然后自毁
 	var tween := create_tween()
-	tween.parallel().tween_property(self, "scale", random_scale * Vector2.ONE, 0.4)
-	tween.parallel().tween_property(self, "global_position", global_position + Vector2.UP * 15, 0.4)
+	tween.tween_property(self, "scale", random_scale * Vector2.ONE, 0.22)
+	tween.parallel().tween_property(self, "global_position", global_position + Vector2.UP * 18.0, 0.22)
+	tween.tween_property(self, "scale", Vector2.ONE, 0.12)
+	tween.tween_interval(0.38)
+	tween.tween_property(self, "modulate:a", 0.0, 0.23)
 	
-	tween.tween_interval(0.5)
-	
-	# 归一化到 1.0 倍 —— 也就是"弹回来"，和上面的 0.8~1.6 倍形成回弹感
-	# ⚠ 下面这一段 tween 的时序**与肉眼读代码的直觉不同**，改动前务必看完：
-	#   Godot 4 的 Tween 把 tweener 分"步"（step）执行：一步里的 tweener 同时跑、一步全部结束才进下一步，
-	#   一步的时长 = 该步里最长的那个 tweener。
-	#   · 调一次 tween.parallel() 只作用于**紧接着的下一个** tween_*：把它并进"当前步"（不新建步）；
-	#   · 不调 parallel() 直接就 tween_*，则新开一步（current_step += 1）。
-	#   套到这段代码（current_step 从 -1 起步）：
-	#     第 0 步：parallel()+scale、parallel()+global_position → 两条并行，0.4 秒（放大 + 上浮）；
-	#     第 1 步：tween_interval(0.5) 前面没有 parallel()，所以**新开了一步**；
-	#             紧随其后的两条又各自带了 parallel()，于是它们被并进**同一步**（不是第三步！），
-	#             即"缩回 1.0 倍(0.4s)"和"淡出到全透明(0.4s)"在第 0 步结束的那一刻同时开始，
-	#             而这一步整体长 0.5 秒（取 interval 的 0.5）—— 末尾约 0.1 秒是已全透明但还没结束的空转。
-	#   所以总时长 ≈ 0.4 + 0.5 = 0.9 秒（不是 1.3 秒），await tween.finished 等到的就是这个 0.9 秒。
-	#   若哪天想让淡出真的"停 0.5 秒后再开始"，正确写法是在最后两条前调一次 tween.chain()（强制切开新步），
-	#   或者干脆把 interval 挪到最后 —— 现在这版是靠 parallel() 恰好并进 interval 那一步的。
-	tween.parallel().tween_property(self, "scale", Vector2.ONE, 0.4)
-	tween.parallel().tween_property(self, "modulate:a", 0.0, 0.4)
-	
-	# await 等的是整个 tween（全部步跑完）的 finished 信号，不是某一步；等到之后本节点已经没人引用，
+	# await 等的是整个 tween 的 finished 信号；等到之后本节点已经没人引用，
 	# 直接 queue_free() 自毁 —— 这是本文件唯一的"销毁"动作，调用方无需回收。
 	# 注意：await 之后函数才真正结束；在它之前本节点都还活着（可以再被外部访问），之后就是野引用了。
 	await tween.finished

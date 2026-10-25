@@ -1,13 +1,17 @@
 [gd_resource type="Resource" script_class="UnitStats" format=3 uid="uid://kaab4dwrqh3e"]
 
-[ext_resource type="Texture2D" uid="uid://desnfnkaa20bu" path="res://assets/sprites/units/players/Player_yanruyi.png" id="1_ujefh"]
 [ext_resource type="Script" uid="uid://j6ibt5vlkg3t" path="res://resources/units/unit_stats.gd" id="2_xvmk0"]
 [ext_resource type="Script" uid="uid://sbgbq3puamij" path="res://resources/skills/skill_data.gd" id="3_xvmk0"]
+
+[ext_resource type="Texture2D" uid="uid://e35eona6jfe1" path="res://assets/sprites/units/players/portraits/燕如意.png" id="1_avatar"]
+
+[ext_resource type="Texture2D" uid="uid://bj03182dmp72f" path="res://assets/sprites/units/players/fullbody/燕如意.png" id="2_portrait"]
 
 [resource]
 script = ExtResource("2_xvmk0")
 name = "燕如意"
-icon = ExtResource("1_ujefh")
+icon = ExtResource("1_avatar")
 model_glb = "res://assets/models/players/燕如意.glb"
+portrait = ExtResource("2_portrait")
 speed = 340.0
 metadata/_custom_type_script = "uid://j6ibt5vlkg3t"

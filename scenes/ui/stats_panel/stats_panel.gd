@@ -12,10 +12,12 @@ class_name StatsPanel
 ##   点已穿的装备栏 = 请求脱下（emit unequip_requested，判定仍在 GameRoot.unequip_slot）。
 ##
 ## ── 下半部分：两列表格（固定位置，仿"人物属性"面板）──
-##   左列：名称 / 种族 / 气血 / 伤害 / 速度 / 魔法 / 防御 / 法伤
-##   右列：等级 / 门派 / 体质 / 力量 / 敏捷 / 魔力 / 耐力 / 自由点数
-##   然后「经验」**单独占一行**，再下面是直接展示的 输出 / 抗性 两栏。
-##   （基础属性刻意排在右列，和参考图一致；气血/伤害/速度 旁边就是对应的体质/力量/敏捷。）
+##   左列：名称 / 种族 / 气血 / 魔法 / 伤害 / 防御 / 速度 / 法伤 / 法防
+##   右列：等级 / 门派 / 体质 / 魔力 / 力量 / 耐力 / 敏捷 / 自由点数+确认加点 / （空）
+##   然后「经验」**单独占一整行**（长条顶到右边，升级按钮在长条内部右侧），
+##   再下面是直接展示的 输出 / 抗性 两栏。
+##   （布局固定：**左列是派生值，右列是能加点的五项基础属性**；
+##     气血↔体质 / 魔法↔魔力 / 伤害↔力量 / 防御↔耐力 / 速度↔敏捷，法伤·法防单独一行。）
 ##
 ## ── 加点流程（先暂存，再确认）──
 ##   「＋/－」只改**面板里的暂存差值**（_pending），不写 Global：
@@ -304,48 +306,70 @@ func _build_stats_grid(character: UnitStats, derived: Dictionary) -> void:
 	# 第 2 行：种族 / 门派
 	_add_grid_row(grid, "种族", character.race_name(), CELL_NONE, "门派", sect_text, CELL_NONE)
 
-	# ── 五大基础属性（其它所有数值都由这五项算出来，见 GameRoot.derived_stats）──
-	stats_box.add_child(_make_section_title("基础属性（每级各 +1，另有自由点可加）"))
+	# ── 属性区：**每个能加点的属性固定放右列**，左列是对应的派生值 ──
+	# 左：由基础属性算出来的结果；右：五项基础属性（带 ＋/−）。
+	# 五行的配对固定为 气血↔体质 / 魔法↔魔力 / 伤害↔力量 / 防御↔耐力 / 速度↔敏捷。
 	var attr_grid := GridContainer.new()
 	attr_grid.name = "AttrGrid"
 	attr_grid.columns = 4
 	attr_grid.add_theme_constant_override("h_separation", 8)
 	attr_grid.add_theme_constant_override("v_separation", GRID_V_SEPARATION)
 	stats_box.add_child(attr_grid)
-	_add_attr_row(attr_grid, 0, 1)   # 体质 / 魔力
-	_add_attr_row(attr_grid, 2, 3)   # 力量 / 耐力
-	_add_attr_row(attr_grid, 4, -1)  # 敏捷 / （空）
-	var free_row := _add_grid_row(attr_grid, "自由点数", "%d 点" % _free_display(), CELL_NONE,
-			"加点", "", CELL_CONFIRM)
-	_free_label = free_row[0]
 
-	# ── 派生数值（只读：改上面的基础属性，这里的数字就会跟着变）──
-	stats_box.add_child(_make_section_title("派生属性（由基础属性 × 种族系数算出）"))
-	var derived_grid := GridContainer.new()
-	derived_grid.name = "DerivedGrid"
-	derived_grid.columns = 4
-	derived_grid.add_theme_constant_override("h_separation", 8)
-	derived_grid.add_theme_constant_override("v_separation", GRID_V_SEPARATION)
-	stats_box.add_child(derived_grid)
-	_add_grid_row(derived_grid, "气血", _stat_text(float(derived["hp"])), CELL_NONE,
-			"魔法", _stat_text(float(derived["mana"])), CELL_NONE)
-	_add_grid_row(derived_grid, "伤害", _stat_text(float(derived["damage"])), CELL_NONE,
-			"防御", _stat_text(float(derived["defense"])), CELL_NONE)
-	_add_grid_row(derived_grid, "法伤", _fmt("spell_damage", float(derived["spell_damage"])), CELL_NONE,
-			"法防", _fmt("spell_defense", float(derived["spell_defense"])), CELL_NONE)
-	var last_row := _add_grid_row(derived_grid, "速度", _stat_text(float(derived["speed"])),
-			CELL_NONE, "", "", CELL_NONE)
-	# 速度这一格要跟着加点实时变，记进 _derived_labels
-	_derived_labels["speed"] = last_row[0]
+	var pairings := [
+		["hp", "气血", 0],          # 体质
+		["mana", "魔法", 1],        # 魔力
+		["damage", "伤害", 2],      # 力量
+		["defense", "防御", 3],     # 耐力
+		["speed", "速度", 4],       # 敏捷
+	]
+	for row in pairings:
+		var row_labels := _add_grid_row(attr_grid, String(row[1]),
+				_stat_text(float(derived[row[0]])), CELL_NONE,
+				GameRoot.ATTR_NAMES[int(row[2])], _attr_text(int(row[2])), int(row[2]),
+				String(row[0]), "")
+		_derived_labels[String(row[0])] = row_labels[0]
 
-	# 经验：单独占一行（放表格里会挤掉法伤/自由点数的位置）；右边是**手动升级按钮**
+	# 法伤（左） / 自由点数 + 确认加点（右）
+	var spell_row := _add_grid_row(attr_grid, "法伤",
+			_fmt("spell_damage", float(derived["spell_damage"])), CELL_NONE,
+			"自由点数", "%d 点" % _free_display(), CELL_CONFIRM,
+			"spell_damage", "")
+	_derived_labels["spell_damage"] = spell_row[0]
+	_free_label = spell_row[1]
+
+	# 法防（左） / 右侧留空（不放值框，避免多一个空盒子）
+	attr_grid.add_child(_make_grid_label("法防"))
+	var def_cell := _make_cell(_fmt("spell_defense", float(derived["spell_defense"])),
+			CELL_NONE, "spell_defense")
+	attr_grid.add_child(def_cell)
+	attr_grid.add_child(_make_grid_label(""))
+	var def_spacer := Control.new()
+	def_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	attr_grid.add_child(def_spacer)
+
+	# 经验：单独一整行，**几何上和上面的 4 列表格对齐**：
+	#   左边从"左列数值框"的起点开始，右端停在"右列数值框"的右缘（= 面板宽 − ACTION_WIDTH）。
+	#   做法：separation 0 + 手动 8px 间隔（对齐表格的 h_separation）+ 右侧留 ACTION_WIDTH 给升级按钮。
+	# ⚠ 按钮必须在长条**外面**：直接塞进表格里会被 ＋/－ 的按钮区挤短。
 	var exp_row := HBoxContainer.new()
 	exp_row.name = "ExpRow"
-	exp_row.add_theme_constant_override("separation", 8)
+	exp_row.add_theme_constant_override("separation", 0)
 	exp_row.add_child(_make_grid_label("经验"))
-	var exp_box := _make_grid_value(exp_text)
-	exp_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	exp_row.add_child(exp_box)
+	var gap := Control.new()
+	gap.custom_minimum_size = Vector2(8, 0)
+	exp_row.add_child(gap)
+	var exp_bar := PanelContainer.new()
+	exp_bar.name = "ExpBar"
+	exp_bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	exp_bar.custom_minimum_size = Vector2(0, VALUE_HEIGHT)
+	exp_bar.add_theme_stylebox_override("panel", _value_style())
+	var exp_label := Label.new()
+	exp_label.text = exp_text
+	exp_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	exp_label.add_theme_font_size_override("font_size", 17)
+	exp_bar.add_child(exp_label)
+	exp_row.add_child(exp_bar)
 	exp_row.add_child(_make_level_up_button(character))
 	stats_box.add_child(exp_row)
 
@@ -356,7 +380,7 @@ func _make_level_up_button(character: UnitStats) -> Button:
 	var button := Button.new()
 	button.name = "LevelUpButton"
 	button.text = "升级"
-	button.custom_minimum_size = Vector2(96, VALUE_HEIGHT)
+	button.custom_minimum_size = Vector2(ACTION_WIDTH, VALUE_HEIGHT)
 	button.add_theme_font_size_override("font_size", 14)
 	var why := GameRoot.upgrade_level_why(character)
 	button.disabled = not why.is_empty()
@@ -430,15 +454,7 @@ func _make_section_title(text: String) -> Label:
 	return label
 
 
-## 基础属性的一行：左边第 left_index 项、右边第 right_index 项（-1 = 右边留空）。
-## 格子里带 ＋/－，点一下只是**暂存**，要点「加点」才生效。
-func _add_attr_row(grid: GridContainer, left_index: int, right_index: int) -> void:
-	if right_index >= 0:
-		_add_grid_row(grid, GameRoot.ATTR_NAMES[left_index], _attr_text(left_index), left_index,
-				GameRoot.ATTR_NAMES[right_index], _attr_text(right_index), right_index)
-	else:
-		_add_grid_row(grid, GameRoot.ATTR_NAMES[left_index], _attr_text(left_index), left_index,
-				"", "", CELL_NONE)
+
 
 
 
@@ -499,7 +515,7 @@ func _make_confirm_button() -> Button:
 	button.custom_minimum_size = Vector2(ACTION_WIDTH, VALUE_HEIGHT)
 	button.add_theme_font_size_override("font_size", 13)
 	button.clip_text = true
-	button.tooltip_text = "把加减后的点数确认加到角色属性上"
+	button.tooltip_text = "把 ＋/－ 暂存的点数真正加到角色身上"
 	button.pressed.connect(_on_confirm_pressed)
 	_confirm_button = button
 	return button
@@ -567,7 +583,7 @@ func _build_skills_page(character: UnitStats) -> void:
 	var sect_id := GameRoot.sect_of(character)
 	if sect_id.is_empty():
 		_add_skills_header("门派技能")
-		_add_skills_note("还没有拜入门派 —— 去建邺城找五位掌门拜师，入门即学会本门 5 个技能。")
+		_add_skills_note("还没有拜入门派 —— 去桃花村找五位掌门拜师，入门即学会本门 5 个技能。")
 		# 面板默认看队长；队长没拜师时，提示"队里谁拜了师、用 ▶ 切过去"，否则玩家会以为没有升级入口
 		var hint := _party_member_with_sect()
 		if not hint.is_empty():

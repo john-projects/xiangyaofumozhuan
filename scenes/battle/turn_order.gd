@@ -88,7 +88,10 @@ func _make_icon(unit: BattleUnit, is_current: bool) -> Control:
 
 	var tex := TextureRect.new()
 	# stats 可能没配（null），这里兜底成空贴图而不是报错。
-	tex.texture = unit.stats.icon if unit.stats != null else null
+	# 小格子优先用方形头像；没配头像就退回 icon（全身立绘）。
+	tex.texture = null
+	if unit.stats != null:
+		tex.texture = unit.stats.avatar if unit.stats.avatar != null else unit.stats.icon
 	tex.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	tex.mouse_filter = Control.MOUSE_FILTER_IGNORE

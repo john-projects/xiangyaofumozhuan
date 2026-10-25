@@ -340,15 +340,18 @@ func current_character() -> UnitStats:
 	return _default_character()
 
 
-## 刷新形象 / 名字 / 箭头可用状态。贴图取 UnitStats.icon，与地图一致；不改任何游戏数据。
+## 刷新形象 / 名字 / 箭头可用状态。
+## 形象优先用 UnitStats.portrait（竖版全身立绘），没有就退回 icon（方头像）；不改任何游戏数据。
 func _refresh_player_view() -> void:
 	if player_view == null or player_fallback == null:
 		return
 	var stats := current_character()
-	var icon: Texture2D = stats.icon if stats != null else null
-	player_view.texture = icon
-	player_view.visible = icon != null
-	player_fallback.visible = icon == null
+	var art: Texture2D = null
+	if stats != null:
+		art = stats.portrait if stats.portrait != null else stats.icon
+	player_view.texture = art
+	player_view.visible = art != null
+	player_fallback.visible = art == null
 	player_fallback.text = "（团队里没有人）" if _party.is_empty() else "（未选角色）"
 	if player_name != null:
 		if stats != null and _party.size() > 1:

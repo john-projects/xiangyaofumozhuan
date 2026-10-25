@@ -3,8 +3,8 @@
 [ext_resource type="Script" uid="uid://b81k0hi2o8wt7" path="res://scenes/ui/floating_text/floating_text.gd" id="1_32222"]
 
 [sub_resource type="LabelSettings" id="LabelSettings_pi0uk"]
-font_size = 32
-outline_size = 10
+font_size = 48
+outline_size = 14
 outline_color = Color(0.013495938, 0.008235714, 0.0055628726, 1)
 
 [node name="FloatingText" type="Node2D" unique_id=523653774]
