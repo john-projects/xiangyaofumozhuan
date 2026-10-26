@@ -14,9 +14,9 @@ class_name TurnOrder
 const PLAYER_BORDER := Color(0.35, 0.85, 0.45)
 ## 敌方边框色。
 const ENEMY_BORDER := Color(0.95, 0.42, 0.42)
-## 当前出手者边框色（同时更粗、图标更大）。
-const CURRENT_BORDER := Color(1.0, 0.85, 0.3)
-## 阵亡单位整体透明度（panel.modulate.a）。
+## 「下一个出手」箭头色。
+const NEXT_ARROW := Color(1.0, 0.85, 0.3)
+## 阵亡单位整体透明度（panel.modulate.a）。阵亡的已从队列剔除，这里只是兜底。
 const DEAD_ALPHA := 0.3
 
 # ── 节点引用与运行时状态 ──
@@ -44,6 +44,14 @@ func set_current(unit: BattleUnit) -> void:
 	_rebuild()
 
 
+## 一次设好「轮转后的队列 + 当前出手者」，只重建一次（每回合每个人都会调）。
+## units 必须已经是"当前出手者排最前"的顺序 —— 排序由 Battle 负责，这里不排。
+func update_turn(units: Array, current: BattleUnit) -> void:
+	_queue = units
+	_current = current
+	_rebuild()
+
+
 ## 取消高亮（战斗结束）；_current 置 null 并重建。
 func clear_current() -> void:
 	_current = null
@@ -59,14 +67,40 @@ func _rebuild() -> void:
 		icons.remove_child(child)
 		child.queue_free()
 
+	# 当前出手者永远排第一，其余保持队列原有次序 —— 所以第二格天然就是"下一个出手的人"。
+	# （_current 已阵亡/已释放时不同前置顶，直接按原队列显示。）
+	var ordered: Array = []
+	if _current != null and is_instance_valid(_current) and _queue.has(_current):
+		ordered.append(_current)
 	for unit in _queue:
 		if not is_instance_valid(unit):
 			continue
+		if unit == _current:
+			continue
+		ordered.append(unit)
+
+	for i in ordered.size():
+		# 第一格和第二格之间插一个右向箭头，表示"他出完手 → 轮到下一个"。
+		if i == 1:
+			icons.add_child(_make_arrow())
 		# `unit == _current` 是引用比较，判断"这个是不是当前出手的人"。
-		icons.add_child(_make_icon(unit, unit == _current))
+		icons.add_child(_make_icon(ordered[i], ordered[i] == _current))
 
 
-## 生成一个单位图标（Panel + 铺满的贴图）。is_current 决定 64/52 尺寸、3/2 边框与金黄描边。
+## 第一、二格之间的右向箭头（纯装饰，不占点击区域）。
+func _make_arrow() -> Control:
+	var arrow := Label.new()
+	arrow.text = "▶"
+	arrow.add_theme_font_size_override("font_size", 16)
+	arrow.add_theme_color_override("font_color", NEXT_ARROW)
+	arrow.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	arrow.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	arrow.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	return arrow
+
+
+## 生成一个单位图标（Panel + 铺满的贴图）。is_current 只影响尺寸 64/52 与边框粗细 3/2，
+## **不改边框颜色**（颜色永远代表阵营）。
 ## 所有 mouse_filter 都设 IGNORE：顺序条盖在战场上，STOP 会挡住下面单位的点击区域（父子层都要设）。
 ## StyleBox 每次 new（共享 Resource 就地改色会污染他人）；贴图在 add_child 后设锚点，stats 为 null 要兜底。
 func _make_icon(unit: BattleUnit, is_current: bool) -> Control:
@@ -81,9 +115,10 @@ func _make_icon(unit: BattleUnit, is_current: bool) -> Control:
 	style.bg_color = Color(0.10, 0.10, 0.12, 0.92)
 	style.set_corner_radius_all(10)
 	style.set_border_width_all(3 if is_current else 2)
-	# 颜色优先级：当前出手者 > 阵营。注意这里读的是 unit.is_player（BattleUnit 的运行时属性），
-	# 而不是 unit.stats 里的东西 —— 同一个 .tres 可以被配成敌方，阵营只看实例上的标记。
-	style.border_color = CURRENT_BORDER if is_current else (PLAYER_BORDER if unit.is_player else ENEMY_BORDER)
+	# 边框颜色只表达阵营，**当前出手者不改色**：高亮只靠"放大一点 + 边框略粗"。
+	# 阵营看的是 unit.is_player（BattleUnit 的运行时属性），不是 stats 里的东西 ——
+	# 同一个 .tres 可以被配成敌方，阵营只看实例上的标记。
+	style.border_color = PLAYER_BORDER if unit.is_player else ENEMY_BORDER
 	panel.add_theme_stylebox_override("panel", style)
 
 	var tex := TextureRect.new()

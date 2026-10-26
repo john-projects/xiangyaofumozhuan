@@ -95,6 +95,8 @@ const RING_HOVER := Color(1.0, 1.0, 1.0, 0.75)
 ## 光环椭圆半径（贴合 %Selection 那个扁圆：横向 58、纵向 17）。
 const RING_RX := 58.0
 const RING_RY := 17.0
+## 光环整体下移的像素：让角色遮住后半圈、脚边只露一圈，避免线条横穿身体。
+const RING_DROP := 7.0
 
 # ── 数据源与运行时数值 ──
 
@@ -184,17 +186,21 @@ func _ready() -> void:
 ## 造脚下的高亮光环：两圈 Line2D（外圈粗而淡 = 柔光，内圈细而实 = 亮边）。
 ## 不用贴图、不用 shader，纯代码生成椭圆点集；颜色和可见性由 _update_selection() 控制。
 func _build_rings() -> void:
-	# ⚠ 两个坑：
-	#   ① 不能用负 z_index 藏到立绘下面 —— z_index 是全局排序，负值会连战斗背景一起盖住（背景 z=0），
-	#      光环直接看不见；
-	#   ② 也不能画在立绘之前 —— 敌人的贴图一直画到脚底，会把光环整圈盖掉。
-	#   所以：z=1 且追加在 Sprite 之后（画在上层），靠半透明让它像"地面上的光"。
+	# ⚠ 三个坑：
+	#   ① 不能用负 z_index 藏到立绘下面 —— z_index 是全局排序，负值会连战斗背景一起盖住（背景 z=0）；
+	#   ② 也不能画在立绘**上面** —— 那圈线会横穿角色身体，看起来像"穿模"；
+	#   ③ 纯排在 Sprite 之前又会被长裙/大触手整圈盖掉。
+	# 正确做法：靠**树的顺序**排到 Sprite 前面（同级按顺序绘制，不碰 z_index），
+	# 再把整圈往下挪 RING_DROP 像素 —— 角色遮住后半圈，脚边一圈露出来，才像"地上的光圈"。
 	_ring_glow = _make_ring(RING_RX * 1.05, RING_RY * 1.12, 11.0)
-	_ring_glow.z_index = 1
 	add_child(_ring_glow)
 	_ring_core = _make_ring(RING_RX, RING_RY, 3.0)
-	_ring_core.z_index = 1
 	add_child(_ring_core)
+	# 索引 0 留给 Shadow（场景里预置）；两圈排在它后面、Sprite 前面。
+	move_child(_ring_glow, 1)
+	move_child(_ring_core, 2)
+	_ring_glow.position.y = RING_DROP
+	_ring_core.position.y = RING_DROP
 
 
 ## 生成一圈椭圆 Line2D（closed = 首尾自动闭合）。

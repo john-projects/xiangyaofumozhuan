@@ -5,7 +5,9 @@
 ## 「谁穿着什么」不在本类里：存在 Global.equipment_by_character（每个角色一套），背包内容在 Global.equipped_weapons。
 ## equip_type 从 ItemBase 继承，每个 .tres 必须填对（NONE = 不能装备，equip_item() 会拒绝）。
 ## 属性口径与 UnitStats 一致：attack / defense / health / speed 是整数直接加；crit_chance 是**百分数语义**（5 = +5%）。
-## 目前这些数值只展示、还没参与战斗结算（战斗读的是 UnitStats），接加成时按上面口径直接加即可。
+## **已接入**：GameRoot.derived_stats() 会把身上所有装备累加进派生值（面板与战斗都读它）。
+##   attack 会 **1:1 同时加到「伤害」和「法伤」**两栏；defense/health/speed/crit_chance 各加各的。
+##   加新字段时：ItemEquipment 加 @export + derived_stats() 里对应叠加 + equipment_bonus() 里累加，三处都要改。
 extends ItemBase
 class_name ItemEquipment
 

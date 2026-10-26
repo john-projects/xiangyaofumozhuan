@@ -636,6 +636,8 @@ func _move_player(delta: float) -> void:
 		elif _player_anim != null:
 			_player_anim.play("idle")
 		return
+	# 贴图朝向：移动仍是 8 向，但只取 4 个斜向（见 FACE_ONLY_DIAGONAL）。
+	var face_dir := _facing_dir(dir)
 	var speed := move_speed * (dash_multiplier if Input.is_action_pressed("dash") else 1.0)
 	# 有 walk_mask 时按掩膜走：整步走不了就分别试 x / y（贴墙滑动，不会整个人卡住）
 	var step := dir * speed * delta
@@ -650,13 +652,35 @@ func _move_player(delta: float) -> void:
 	player.position.x = clampf(player.position.x, EDGE_MARGIN, maxf(EDGE_MARGIN, _map_size.x - EDGE_MARGIN))
 	player.position.y = clampf(player.position.y, EDGE_MARGIN, maxf(EDGE_MARGIN, _map_size.y - EDGE_MARGIN))
 	if _player_model3d != null:
-		_player_model3d.face_from_vector(dir)     # 3D 模式下直接转模型，不用 8 套贴图
+		_player_model3d.face_from_vector(face_dir)     # 3D 模式下直接转模型，不用 8 套贴图
 		_player_model3d.play("run")
 	elif _player_anim != null:
-		_player_anim.set_facing(_player_anim.facing_from_vector(dir))
+		_player_anim.set_facing(_player_anim.facing_from_vector(face_dir))
 		_player_anim.play("run")
 	elif absf(dir.x) > 0.01:
 		player_sprite.flip_h = dir.x < 0.0
+
+
+## 实验开关：**移动仍然自由 8 向**，但角色的贴图朝向只取 4 个斜向（正45/背45 + 镜像）。
+## true  = 只用 4 套斜向动画（省 3/4 资源，走直线时人物会斜着）
+## false = 恢复 8 方位朝向
+## ⚠ 只影响朝向，不动移动方向和任何动画资源。
+const FACE_ONLY_DIAGONAL := true
+## 吸附朝向时，纯上/下输入要靠记忆补左右；纯左/右输入要靠记忆补上下，否则会抖。
+var _face_x_sign := 1.0
+var _face_y_sign := 1.0
+
+
+## 把移动方向转成「贴图朝向」：开 FACE_ONLY_DIAGONAL 时压成 4 个斜向之一。
+## 位移仍用原始 dir，所以轨迹是直的，只是人物斜着走。
+func _facing_dir(v: Vector2) -> Vector2:
+	if not FACE_ONLY_DIAGONAL:
+		return v
+	if absf(v.x) > 0.01:
+		_face_x_sign = signf(v.x)
+	if absf(v.y) > 0.01:
+		_face_y_sign = signf(v.y)
+	return Vector2(_face_x_sign, _face_y_sign)
 
 
 ## 读移动输入：WASD（move_*）+ 方向键（left/right/up/down）。

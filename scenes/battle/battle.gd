@@ -109,7 +109,7 @@ enum State { IDLE, INTRO, TURN_START, COMMAND, TARGET_SELECT, EXECUTE, TURN_END,
 @onready var turn_order: TurnOrder = $UI/TurnOrder
 ## 指令菜单；_ready() 里连它的两个信号，绝不反向让它引用 Battle。
 @onready var command_menu: CommandMenu = $UI/CommandMenu
-## 信息栏（"第 N 回合""某某的回合"、伤害播报等）。
+## 信息栏（伤害播报、状态提示），空字符串表示不显示。
 @onready var info_label: Label = $UI/InfoLabel
 ## 地图截图当背景：Backdrop 是独立 CanvasLayer（layer = -1，画在所有单位和 UI 下面），
 ## Photo 铺满屏幕（cover 裁剪），Dim 是压暗蒙层；没截图时整个 Backdrop 隐藏，用场景自带绿底。
@@ -294,6 +294,23 @@ func _next_round() -> void:
 	_begin_turn()
 
 
+## 出手顺序条要显示的是**轮转队列**：当前出手者排最前，已经出过手的都排到队尾
+## （即"出完手回到队末尾"）。这里只做纯旋转，不动 turn_queue 本身的排序和游标。
+## 阵亡/已释放的单位直接从条上剔除（死了就不该再排位）。
+func _turn_display() -> Array:
+	if turn_queue.is_empty():
+		return []
+	var n := turn_queue.size()
+	var i := clampi(turn_index, 0, n - 1)
+	var out: Array = []
+	for k in n:
+		var u: BattleUnit = turn_queue[(i + k) % n]
+		if u == null or not is_instance_valid(u) or not u.alive:
+			continue
+		out.append(u)
+	return out
+
+
 ## 进入 turn_queue[turn_index] 的回合；敌方顺带跑完 AI。整个流程主要停在这里等输入。
 ## 副作用：改写 actor/state/turn_index/info_label；emit turn_started（我方还 emit command_requested）。
 ## 跳过阵亡/空位用自调用而非 while（队伍只有个位数，优先可读性）；队列走完交给 _next_round()。
@@ -320,7 +337,7 @@ func _begin_turn() -> void:
 	if sealed:
 		actor.set_selected(true)
 		state = State.TURN_START
-		turn_order.set_current(actor)
+		turn_order.update_turn(_turn_display(), actor)
 		info_label.text = "%s 被封印，跳过行动" % actor.stats.name
 		create_floating_text(actor, "封印", block_color)
 		await get_tree().create_timer(0.45).timeout
@@ -332,9 +349,10 @@ func _begin_turn() -> void:
 	# 点亮行动者轮廓：我方青 / 敌方橙红（见 BattleUnit.OUTLINE_*）。
 	actor.set_selected(true)
 	state = State.TURN_START
-	turn_order.set_current(actor)
+	turn_order.update_turn(_turn_display(), actor)
 	turn_started.emit(actor)
-	info_label.text = "%s 的回合" % actor.stats.name
+	# 不再播报"某某的回合"：当前出手者已在顺序条第一格高亮，信息栏留给伤害/状态播报。
+	info_label.text = ""
 	await get_tree().create_timer(0.15).timeout
 
 	if actor.is_player:
@@ -453,7 +471,8 @@ func _begin_ally_select(skill: SkillData) -> void:
 		return
 	state = State.TARGET_SELECT
 	_target_index = 0
-	info_label.text = "选择「%s」的目标队友（↑↓←→ 切换 · Enter/空格 确认 · 右键/ESC 取消）" % skill.display_name
+	# 同样不写提示文案：选队友的高亮就是反馈（与选敌人保持一致）。
+	info_label.text = ""
 	for target in _targets:
 		target.set_targetable(true)
 	_refresh_target_focus()
@@ -470,16 +489,8 @@ func _begin_target_select(skill: SkillData = null) -> void:
 	state = State.TARGET_SELECT
 	# 键盘光标默认停在第一个敌人上；鼠标点/悬停会同步它。
 	_target_index = 0
-	if skill != null:
-		# 多目标技能（三尺青锋）：玩家只选 1 个，其余按"离它最近"自动补齐，
-		# 提示里写清楚，免得以为技能只打一个。
-		var extra := ""
-		if skill.max_targets > 1:
-			extra = "（会自动带上最近的 %d 个敌人）" % skill.max_targets
-		info_label.text = "选择「%s」的目标%s（↑↓←→ 切换 · Enter/空格 确认 · 右键/ESC 取消）" % [
-				skill.display_name, extra]
-	else:
-		info_label.text = "选择攻击目标（↑↓←→ 切换 · Enter/空格 确认 · 右键/ESC 取消）"
+	# 不再写"选择攻击目标…"的提示文案：目标高亮 + 键盘光标本身就是反馈，信息栏留给战斗播报。
+	info_label.text = ""
 	for target in _targets:
 		target.set_targetable(true)
 	_refresh_target_focus()
@@ -1071,7 +1082,8 @@ func _shake_camera(amount: float) -> void:
 ## 有单位阵亡（BattleUnit.died）时刷新出手顺序条；**不动 turn_queue/turn_index**。
 ## 死掉的那个会在 _begin_turn() 轮到时被跳过，所以本回合不会出现下标错位。
 func _on_unit_died(_unit: BattleUnit) -> void:
-	turn_order.update_order(_alive(_all_units()))
+	# 用轮转后的队列刷新，否则顺序条会跳回"速度排序"，和玩家看到的"出完手到队尾"对不上。
+	turn_order.update_turn(_turn_display(), actor)
 
 
 # ── 胜负 / 飘字 / 工具 ──

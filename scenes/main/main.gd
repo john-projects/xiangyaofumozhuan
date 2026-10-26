@@ -354,8 +354,37 @@ static func derived_stats(character: UnitStats) -> Dictionary:
 			var idx := ATTR_KEYS.find(attr)
 			if idx >= 0:
 				out[key] = float(out.get(key, 0.0)) + float(by_attr[attr]) * points[idx]
+	# ③ 装备加成：直接加到派生值上。武器攻击 1:1 同时加「伤害」和「法伤」（这个 1:1 只在这里做，
+	#    equipment_bonus() 只负责累加，换个地方再乘一次就会翻倍）。
+	var eq := equipment_bonus(character)
+	out["hp"] = float(out["hp"]) + float(eq["health"])
+	out["damage"] = float(out["damage"]) + float(eq["attack"])
+	out["spell_damage"] = float(out["spell_damage"]) + float(eq["attack"])
+	out["defense"] = float(out["defense"]) + float(eq["defense"])
+	out["speed"] = float(out["speed"]) + float(eq["speed"])
+	out["crit_rate"] = float(out["crit_rate"]) + float(eq["crit_chance"])
 	# 气血至少 1，避免"属性全 0"时开局被判死
 	out["hp"] = maxf(1.0, float(out["hp"]))
+	return out
+
+
+## 汇总某角色身上所有装备的加成（纯累加，不做任何换算）。
+## 返回：{attack, defense, health, speed, crit_chance}，全 float；没穿装备时全 0。
+## ⚠ 「武器攻击 1:1 同时加伤害与法伤」的口径写在 derived_stats() 里，本函数只累加原值，别在这里再乘。
+## 只读 Global.equipment_by_character，纯函数、无副作用。
+static func equipment_bonus(character: UnitStats) -> Dictionary:
+	var out := {"attack": 0.0, "defense": 0.0, "health": 0.0, "speed": 0.0, "crit_chance": 0.0}
+	if character == null:
+		return out
+	for item in equipment_of(character).values():
+		var eq := item as ItemEquipment
+		if eq == null:
+			continue
+		out["attack"] += float(eq.attack)
+		out["defense"] += float(eq.defense)
+		out["health"] += float(eq.health)
+		out["speed"] += float(eq.speed)
+		out["crit_chance"] += float(eq.crit_chance)
 	return out
 
 

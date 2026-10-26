@@ -9,6 +9,10 @@ radius = 110.0
 [node name="BattleUnit" type="Node2D"]
 script = ExtResource("1_unit")
 
+[node name="Shadow" type="Polygon2D" parent="."]
+color = Color(0, 0, 0, 0.26)
+polygon = PackedVector2Array(46, 0, 44.43, 3.88, 39.84, 7.5, 32.53, 10.61, 23, 12.99, 11.9, 14.49, 0, 15, -11.9, 14.49, -23, 12.99, -32.53, 10.61, -39.84, 7.5, -44.43, 3.88, -46, 0, -44.43, -3.88, -39.84, -7.5, -32.53, -10.61, -23, -12.99, -11.9, -14.49, 0, -15, 11.9, -14.49, 23, -12.99, 32.53, -10.61, 39.84, -7.5, 44.43, -3.88)
+
 [node name="Selection" type="Polygon2D" parent="."]
 unique_name_in_owner = true
 visible = false
