@@ -3,15 +3,15 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://cnjo0exfwjh5h"
-path="res://.godot/imported/00-世界地图_降妖伏魔传.png-56544cffa40307d1fc0953776dde85fb.ctex"
+path="res://.godot/imported/00-世界地图_降妖伏魔传.png-41156f23b6f31f7b1f07a76e7134c486.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/map/00-世界地图_降妖伏魔传.png"
-dest_files=["res://.godot/imported/00-世界地图_降妖伏魔传.png-56544cffa40307d1fc0953776dde85fb.ctex"]
+source_file="res://docs/00-世界地图_降妖伏魔传.png"
+dest_files=["res://.godot/imported/00-世界地图_降妖伏魔传.png-41156f23b6f31f7b1f07a76e7134c486.ctex"]
 
 [params]
 
