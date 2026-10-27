@@ -1,14 +1,14 @@
 [gd_resource type="Resource" script_class="SkillData" format=3 uid="uid://bwvkju04o3l7k"]
 
 [ext_resource type="Script" uid="uid://sbgbq3puamij" path="res://resources/skills/skill_data.gd" id="1_o0a36"]
-[ext_resource type="PackedScene" path="res://scenes/effects/piaomiao/piaomiao_jianzhi.tscn" id="2_fx"]
+[ext_resource type="PackedScene" path="res://scenes/effects/skill_seq/piaomiao_jianzhi_seq.tscn" id="9_seq"]
 
 [resource]
 script = ExtResource("1_o0a36")
 id = "piaomiao_jianzhi"
 display_name = "缥缈剑指"
 description = "剑指连点，造成固定伤害；攻击 2 个目标，30 级后 3 个。"
-mana_cost = 12.0
+mana_cost = 5.0
 power = 0.0
 crit_bonus = 0.05
 sect_id = "piaomiao"
@@ -19,5 +19,7 @@ flat_damage = 12.0
 flat_per_level = 1.6
 tint = Color(0.85, 0.8, 1, 1)
 hit_effect_on_ground = true
-target_effect_scene = ExtResource("2_fx")
+hit_effect_per_target = false
+hit_effect_center = false
+screen_effect_scene = ExtResource("9_seq")
 burst_scale = 2.2

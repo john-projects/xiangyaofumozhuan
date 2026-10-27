@@ -1417,32 +1417,56 @@ static func _attach_sect_skills(copy: UnitStats, source: UnitStats) -> void:
 	var merged: Array[SkillData] = []
 	merged.assign(copy.skills)
 	for entry in Global.sect_actives(sect_id):
-		var skill_id := String(entry["id"])
-		var level := sect_skill_level(source, skill_id)
-		if level <= 0:
-			continue
-		var resource := Global.sect_skill_resource(skill_id)
-		if resource == null:
-			continue
-		var baked := resource.duplicate() as SkillData
-		# 目标数阈值（30/60/25/50/75 级那些）在 Global 表里；-1 = "全体"（由 target_mode=ENEMY_ALL 表达）
-		var targets := Global.sect_skill_targets(entry, level)
-		baked.max_targets = targets if targets > 0 else 1
-		var n := baked.max_targets
-		# 伤害倍率：单体 1.8；群体按"每多一个目标 -12% 单体倍率"衰减（梦幻西游手游实测）。
-		# 连击技能：总倍率拆到每一击；配了 hit_power 曲线的（太虚神剑）原样保留。
-		if baked.hits > 1 and not baked.hit_power.is_empty():
-			pass
-		elif baked.fixed_damage:
-			baked.flat_damage = (baked.flat_damage + baked.flat_per_level * float(level - 1)) \
-					* SKILL_AOE_DECAY_STEP(n)
-		elif baked.power > 0.0:
-			var total := SKILL_SINGLE_POWER * SKILL_AOE_DECAY_STEP(n)
-			baked.power = total / float(maxi(1, baked.hits))
-		# 状态（buff）数值也按等级烤：buff_value 是 1 级基线，buff_per_level 是每级增量
-		if not baked.buff_stat.is_empty():
-			baked.buff_value = baked.buff_value + baked.buff_per_level * float(level - 1)
-		merged.append(baked)
+		var baked := _bake_sect_skill(entry, sect_skill_level(source, String(entry["id"])))
+		if baked != null:
+			merged.append(baked)
+	copy.skills = merged
+
+
+## 按技能等级烤一份门派主动技能副本（.tres 只存 1 级基线）。
+## 参数 entry：Global.sect_actives() 的一项；level：1 起，0 = 没学会。
+## 返回 null 表示不挂（等级 0 / 资源缺失），调用方直接跳过。
+## ⚠ 目标数阈值（30/60 级）、AoE 衰减、buff 成长都在这里算死，别在别处再乘一遍。
+static func _bake_sect_skill(entry: Dictionary, level: int) -> SkillData:
+	if level <= 0:
+		return null
+	var resource := Global.sect_skill_resource(String(entry["id"]))
+	if resource == null:
+		return null
+	var baked := resource.duplicate() as SkillData
+	# 目标数阈值（30/60/25/50/75 级那些）在 Global 表里；-1 = "全体"（由 target_mode=ENEMY_ALL 表达）
+	var targets := Global.sect_skill_targets(entry, level)
+	baked.max_targets = targets if targets > 0 else 1
+	var n := baked.max_targets
+	# 伤害倍率：单体 1.8；群体按"每多一个目标 -12% 单体倍率"衰减（梦幻西游手游实测）。
+	# 连击技能：总倍率拆到每一击；配了 hit_power 曲线的（太虚神剑）原样保留。
+	if baked.hits > 1 and not baked.hit_power.is_empty():
+		pass
+	elif baked.fixed_damage:
+		baked.flat_damage = (baked.flat_damage + baked.flat_per_level * float(level - 1)) \
+				* SKILL_AOE_DECAY_STEP(n)
+	elif baked.power > 0.0:
+		var total := SKILL_SINGLE_POWER * SKILL_AOE_DECAY_STEP(n)
+		baked.power = total / float(maxi(1, baked.hits))
+	# 状态（buff）数值也按等级烤：buff_value 是 1 级基线，buff_per_level 是每级增量
+	if not baked.buff_stat.is_empty():
+		baked.buff_value = baked.buff_value + baked.buff_per_level * float(level - 1)
+	return baked
+
+
+## 给一只敌怪挂某个门派的主动技能（只用战斗副本，**不写 Global**）。
+## 为什么不复用 _attach_sect_skills：那套要读 Global.sect_by_character + 技能等级表，
+## 怪物两个都不在；而且怪物是 DEMON 族，按 Global.SECTS 的种族限制根本入不了门 ——
+## 这里刻意忽略种族，当作"魔修学了别派残招"的设定。
+static func attach_enemy_sect_skills(copy: UnitStats, sect_id: String, level: int) -> void:
+	if copy == null or sect_id.is_empty():
+		return
+	var merged: Array[SkillData] = []
+	merged.assign(copy.skills)
+	for entry in Global.sect_actives(sect_id):
+		var baked := _bake_sect_skill(entry, level)
+		if baked != null:
+			merged.append(baked)
 	copy.skills = merged
 
 
@@ -1488,7 +1512,9 @@ func _make_enemy_team() -> Array[UnitStats]:
 		return out
 
 	var difficulty := map_difficulty()
-	var count := clampi(deployed_count(deployed) + randi_range(-1, 1), 1, MAX_ENEMY_COUNT)
+	# 数量 = 上阵人数 或 上阵人数 +1（以前是 ±1，会出现敌人比玩家人少的情况）。
+	# 上限 MAX_ENEMY_COUNT = 5：敌方战场只有 5 个站位，5 人队时就是 5 打 5。
+	var count := clampi(deployed_count(deployed) + randi_range(0, 1), 1, MAX_ENEMY_COUNT)
 	var scale: float = 1.0 + (difficulty - 1) * enemy_scale_per_map
 	for i in count:
 		var base: UnitStats = pool[i % pool.size()]
@@ -1514,5 +1540,12 @@ func _make_enemy_team() -> Array[UnitStats]:
 		scaled.crit_damage_resist = float(d["crit_damage_resist"])
 		scaled.seal_resist = float(d["seal_resist"])
 		scaled.block_value = float(d["block_value"])
+		# 随机入一个门派：怪物也会门派招式（战斗里靠 Battle._enemy_act 放）。
+		# 等级跟着地图难度走：1 级图给 1 级技能（单体），高难度图能拿到群体那几档。
+		var sect_ids := Global.SECTS.keys()
+		if not sect_ids.is_empty():
+			var sect_id := String(sect_ids[randi() % sect_ids.size()])
+			var skill_level := clampi(1 + int(round((difficulty - 1.0) * 3.0)), 1, 6)
+			attach_enemy_sect_skills(scaled, sect_id, skill_level)
 		out.append(scaled)
 	return out

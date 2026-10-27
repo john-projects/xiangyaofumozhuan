@@ -3,6 +3,7 @@
 [ext_resource type="Script" uid="uid://sbgbq3puamij" path="res://resources/skills/skill_data.gd" id="1_ppks8"]
 [ext_resource type="PackedScene" path="res://scenes/effects/qunxing_yunluo/qunxing_screen.tscn" id="2_screen"]
 [ext_resource type="PackedScene" path="res://scenes/effects/qunxing_yunluo/qunxing_impact.tscn" id="3_impact"]
+[ext_resource type="PackedScene" path="res://scenes/effects/skill_seq/qunxing_yunluo_seq.tscn" id="9_seq"]
 
 [resource]
 script = ExtResource("1_ppks8")
@@ -10,7 +11,7 @@ damage_type = 1
 id = "qunxing_yunluo"
 display_name = "群星陨落"
 description = "群星陨落：攻击 3 个目标；技能 30 级后攻击 4 个。"
-mana_cost = 16.0
+mana_cost = 5.0
 power = 1.1
 crit_bonus = 0.05
 sect_id = "xingluo"
@@ -20,7 +21,6 @@ tint = Color(0.9, 0.4, 0.75, 1)
 screen_shake = 9.0
 hit_effect_on_ground = true
 hit_effect_per_target = false
-target_effect_scene = ExtResource("3_impact")
 hit_effect_center = false
-screen_effect_scene = ExtResource("2_screen")
+screen_effect_scene = ExtResource("9_seq")
 burst_scale = 1.4

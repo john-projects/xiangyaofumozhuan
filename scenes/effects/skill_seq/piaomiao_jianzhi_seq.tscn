@@ -1,0 +1,14 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scenes/effects/skill_seq/skill_seq.gd" id="1_seq"]
+[ext_resource type="Texture2D" path="res://assets/sprites/skills/piaomiao_jianzhi_seq.png" id="2_sheet"]
+
+[node name="SkillSeq_缥缈_缥缈剑指" type="Node2D"]
+script = ExtResource("1_seq")
+sheet = ExtResource("2_sheet")
+frames = 62
+cols = 8
+fps = 24
+scale_mul = 2.2
+autoplay = true
+segments = 1

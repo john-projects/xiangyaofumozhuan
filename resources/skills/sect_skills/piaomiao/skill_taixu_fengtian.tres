@@ -1,14 +1,14 @@
 [gd_resource type="Resource" script_class="SkillData" format=3 uid="uid://dis20xp6ipmpb"]
 
 [ext_resource type="Script" uid="uid://sbgbq3puamij" path="res://resources/skills/skill_data.gd" id="1_2iahc"]
-[ext_resource type="PackedScene" path="res://scenes/effects/piaomiao/taixu_fengtian.tscn" id="2_fx"]
+[ext_resource type="PackedScene" path="res://scenes/effects/skill_seq/taixu_fengtian_seq.tscn" id="9_seq"]
 
 [resource]
 script = ExtResource("1_2iahc")
 id = "taixu_fengtian"
 display_name = "太虚封天"
 description = "封天诀：对全体敌人各判定一次封印。"
-mana_cost = 20.0
+mana_cost = 5.0
 power = 0.0
 crit_bonus = 0.0
 target_mode = 1
@@ -16,6 +16,6 @@ sect_id = "piaomiao"
 sect_skill_key = "taixu_fengtian"
 seal_chance = 0.6
 tint = Color(0.8, 0.75, 1, 1)
-hit_effect_scene = ExtResource("2_fx")
 hit_effect_on_ground = true
+screen_effect_scene = ExtResource("9_seq")
 burst_scale = 1.8

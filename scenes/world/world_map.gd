@@ -133,10 +133,18 @@ const COMPANION_FOLLOW_SPEED := 12.0
 @export var result_toast_time := 3.0
 ## 普通「一行弹窗」停留时间（秒）：扫一眼就走，不打断操作。
 const TOAST_TIME := 1.5
-## 弹窗条的宽度（像素）。屏幕居中，太长会换行，所以给一个够读一行中文的宽度。
+## 弹窗条的宽度上限（像素）。底板按内容收缩，超过这个宽度才换行。
 const TOAST_WIDTH := 720.0
 ## 弹窗淡出动画时长（秒）。
 const TOAST_FADE_TIME := 0.35
+## 弹窗整体上移的距离（像素）：屏幕正中会挡住角色，抬高一点更像"提示"而不是"对话框"。
+const TOAST_RISE := 150.0
+## 弹窗文字色：暖金，不刺眼。
+## ⚠ 别直接调低文字 alpha —— 花纹地图上会糊掉，要"更淡"请调底板 alpha，文字靠黑色描边兜住。
+const TOAST_TEXT_COLOR := Color(1.0, 0.88, 0.60, 1.0)
+## 弹窗文字描边（保证底板变透之后仍然清晰）。
+const TOAST_OUTLINE_COLOR := Color(0.03, 0.02, 0.01, 0.9)
+const TOAST_OUTLINE_SIZE := 4
 
 # ── 运行时状态（换图 = 换节点，全部重新来）──
 ## 本屏幕要渲染的那张地图的配置。由 setup() 注入；_ready() 里若为 null 会直接 return。
@@ -415,7 +423,11 @@ func _add_toast_line(text: String, seconds: float) -> void:
 	label.text = text
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	label.add_theme_font_size_override("font_size", 22)
+	label.add_theme_font_size_override("font_size", 20)
+	# 金色文字 + 黑色描边：底板调透之后仍然清楚，只是整体"轻"了。
+	label.add_theme_color_override("font_color", TOAST_TEXT_COLOR)
+	label.add_theme_color_override("font_outline_color", TOAST_OUTLINE_COLOR)
+	label.add_theme_constant_override("outline_size", TOAST_OUTLINE_SIZE)
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	box.add_child(label)
 	toast_stack.add_child(box)
@@ -438,21 +450,24 @@ func _layout_toast_stack() -> void:
 		return
 	toast_stack.offset_left = -TOAST_WIDTH * 0.5
 	toast_stack.offset_right = TOAST_WIDTH * 0.5
-	toast_stack.offset_top = 0.0
-	toast_stack.offset_bottom = toast_stack.get_combined_minimum_size().y
+	# 锚点在屏幕正中（0.5/0.5），整体上移 TOAST_RISE，别压在角色身上。
+	toast_stack.offset_top = -TOAST_RISE
+	toast_stack.offset_bottom = toast_stack.get_combined_minimum_size().y - TOAST_RISE
 
 
-## 弹窗底板：较实的黑底 + 金边 + 圆角。⚠ alpha 别调太低（0.88），花纹地图上会看不清字。
+## 弹窗底板：半透深色 + 细金边 + 圆角。
+## 调色思路：整块调透比"字调透"安全 —— 字淡了在花纹地图上直接读不出，底板淡了只是"轻"。
+## alpha 0.72 是折中：足够压住底下的花纹，又不会像对话框那样怼在脸上。
 func _toast_style() -> StyleBoxFlat:
 	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.03, 0.03, 0.05, 0.88)
-	style.border_color = Color(0.90, 0.78, 0.45, 1.0)
-	style.set_border_width_all(2)
-	style.set_corner_radius_all(8)
-	style.content_margin_left = 18
-	style.content_margin_right = 18
-	style.content_margin_top = 7
-	style.content_margin_bottom = 7
+	style.bg_color = Color(0.04, 0.035, 0.03, 0.72)
+	style.border_color = Color(0.78, 0.64, 0.34, 0.85)
+	style.set_border_width_all(1)
+	style.set_corner_radius_all(10)
+	style.content_margin_left = 16
+	style.content_margin_right = 16
+	style.content_margin_top = 6
+	style.content_margin_bottom = 6
 	return style
 
 

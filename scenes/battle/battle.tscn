@@ -4,22 +4,20 @@
 [ext_resource type="Texture2D" uid="uid://ov4fmsbglo55" path="res://assets/sprites/tomato/Map.png" id="2_bg"]
 [ext_resource type="PackedScene" path="res://scenes/battle/turn_order.tscn" id="3_turnorder"]
 [ext_resource type="PackedScene" path="res://scenes/battle/command_menu.tscn" id="4_command"]
-[ext_resource type="Script" uid="uid://sbgbq3puamij" path="res://resources/skills/skill_data.gd" id="5_skilldata"]
 
 [node name="Battle" type="Node2D" unique_id=1765388522]
 script = ExtResource("1_battle")
-default_skills = Array[ExtResource("5_skilldata")]([])
 
 [node name="Background" type="Sprite2D" parent="." unique_id=204072474]
 scale = Vector2(2.2, 2.368)
 texture = ExtResource("2_bg")
 
-[node name="Backdrop" type="CanvasLayer" parent="."]
+[node name="Backdrop" type="CanvasLayer" parent="." unique_id=25318733]
 unique_name_in_owner = true
-visible = false
 layer = -1
+visible = false
 
-[node name="Photo" type="TextureRect" parent="Backdrop"]
+[node name="Photo" type="TextureRect" parent="Backdrop" unique_id=1632751702]
 unique_name_in_owner = true
 anchors_preset = 15
 anchor_right = 1.0
@@ -29,7 +27,7 @@ grow_vertical = 2
 expand_mode = 1
 stretch_mode = 6
 
-[node name="Dim" type="ColorRect" parent="Backdrop"]
+[node name="Dim" type="ColorRect" parent="Backdrop" unique_id=843862785]
 unique_name_in_owner = true
 anchors_preset = 15
 anchor_right = 1.0
@@ -46,11 +44,11 @@ position = Vector2(0, 120)
 [node name="PlayerSlots" type="Node2D" parent="Stage" unique_id=942225505]
 unique_name_in_owner = true
 
-[node name="Front1" type="Marker2D" parent="Stage/PlayerSlots" unique_id=2134681543]
-position = Vector2(400, 175)
-
-[node name="Front2" type="Marker2D" parent="Stage/PlayerSlots" unique_id=1117295865]
+[node name="Front1" type="Marker2D" parent="Stage/PlayerSlots" unique_id=1117295865]
 position = Vector2(550, 0)
+
+[node name="Front2" type="Marker2D" parent="Stage/PlayerSlots" unique_id=2134681543]
+position = Vector2(400, 175)
 
 [node name="Front3" type="Marker2D" parent="Stage/PlayerSlots" unique_id=810898511]
 position = Vector2(250, 350)
@@ -73,11 +71,11 @@ position = Vector2(-650, -175)
 [node name="Front3" type="Marker2D" parent="Stage/EnemySlots" unique_id=1891586887]
 position = Vector2(-250, -350)
 
-[node name="Front2" type="Marker2D" parent="Stage/EnemySlots" unique_id=704680627]
-position = Vector2(-550, 0)
-
-[node name="Front1" type="Marker2D" parent="Stage/EnemySlots" unique_id=1210383374]
+[node name="Front2" type="Marker2D" parent="Stage/EnemySlots" unique_id=1210383374]
 position = Vector2(-400, -175)
+
+[node name="Front1" type="Marker2D" parent="Stage/EnemySlots" unique_id=704680627]
+position = Vector2(-550, 0)
 
 [node name="Units" type="Node2D" parent="Stage" unique_id=422389222]
 unique_name_in_owner = true

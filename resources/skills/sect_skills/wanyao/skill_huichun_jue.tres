@@ -2,13 +2,14 @@
 
 [ext_resource type="Script" uid="uid://sbgbq3puamij" path="res://resources/skills/skill_data.gd" id="1_d7tyq"]
 [ext_resource type="PackedScene" path="res://scenes/effects/wanyao/huichun_jue.tscn" id="2_fx"]
+[ext_resource type="PackedScene" path="res://scenes/effects/skill_seq/huichun_jue_seq.tscn" id="9_seq"]
 
 [resource]
 script = ExtResource("1_d7tyq")
 id = "huichun_jue"
 display_name = "回春诀"
 description = "为 2 名队友回复气血，并附加持续回血（1 级 2 回合，每 20 级 +1 回合）；25/50/75 级目标数 3/4/5。"
-mana_cost = 14.0
+mana_cost = 5.0
 power = 0.0
 crit_bonus = 0.0
 target_mode = 3
@@ -19,5 +20,5 @@ heal_power = 1.0
 hot_turns = 3
 hot_power = 0.35
 tint = Color(0.55, 1, 0.65, 1)
-target_effect_scene = ExtResource("2_fx")
+target_effect_scene = ExtResource("9_seq")
 burst_scale = 1.4

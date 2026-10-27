@@ -1,0 +1,152 @@
+[
+  {
+    "key": "sanchi_qingfeng",
+    "name": "太虚_三尺青锋",
+    "frames": 62,
+    "cols": 8,
+    "rows": 8,
+    "frame_w": 768,
+    "frame_h": 443,
+    "fps": 24
+  },
+  {
+    "key": "taixu_shenjian",
+    "name": "太虚_太虚神剑",
+    "frames": 62,
+    "cols": 8,
+    "rows": 8,
+    "frame_w": 384,
+    "frame_h": 222,
+    "fps": 24
+  },
+  {
+    "key": "renjian_heyi",
+    "name": "太虚_人剑合一",
+    "frames": 62,
+    "cols": 8,
+    "rows": 8,
+    "frame_w": 384,
+    "frame_h": 222,
+    "fps": 24
+  },
+  {
+    "key": "taixu_fengtian",
+    "name": "缥缈_太虚封天",
+    "frames": 62,
+    "cols": 8,
+    "rows": 8,
+    "frame_w": 768,
+    "frame_h": 443,
+    "fps": 24
+  },
+  {
+    "key": "fengling_jue",
+    "name": "缥缈_封灵诀",
+    "frames": 62,
+    "cols": 8,
+    "rows": 8,
+    "frame_w": 384,
+    "frame_h": 222,
+    "fps": 24
+  },
+  {
+    "key": "piaomiao_jianzhi",
+    "name": "缥缈_缥缈剑指",
+    "frames": 62,
+    "cols": 8,
+    "rows": 8,
+    "frame_w": 768,
+    "frame_h": 443,
+    "fps": 24
+  },
+  {
+    "key": "wulei_zhengfa",
+    "name": "紫霄_五雷正法",
+    "frames": 60,
+    "cols": 8,
+    "rows": 8,
+    "frame_w": 384,
+    "frame_h": 216,
+    "fps": 24
+  },
+  {
+    "key": "leidong_jiutian",
+    "name": "紫霄_雷动九天",
+    "frames": 60,
+    "cols": 8,
+    "rows": 8,
+    "frame_w": 768,
+    "frame_h": 432,
+    "fps": 24
+  },
+  {
+    "key": "zixiao_ningshen",
+    "name": "紫霄_紫霄凝神",
+    "frames": 60,
+    "cols": 8,
+    "rows": 8,
+    "frame_w": 384,
+    "frame_h": 216,
+    "fps": 24
+  },
+  {
+    "key": "huichun_jue",
+    "name": "万药_回春诀",
+    "frames": 60,
+    "cols": 8,
+    "rows": 8,
+    "frame_w": 384,
+    "frame_h": 216,
+    "fps": 24
+  },
+  {
+    "key": "yaowu_miman",
+    "name": "万药_药雾弥漫",
+    "frames": 60,
+    "cols": 8,
+    "rows": 8,
+    "frame_w": 768,
+    "frame_h": 432,
+    "fps": 24
+  },
+  {
+    "key": "wanling_zhufu",
+    "name": "万药_万灵祝福",
+    "frames": 60,
+    "cols": 8,
+    "rows": 8,
+    "frame_w": 768,
+    "frame_h": 432,
+    "fps": 24
+  },
+  {
+    "key": "xingluo_mozhua",
+    "name": "星罗_星罗魔爪",
+    "frames": 60,
+    "cols": 8,
+    "rows": 8,
+    "frame_w": 384,
+    "frame_h": 216,
+    "fps": 24
+  },
+  {
+    "key": "qunxing_yunluo",
+    "name": "星罗_群星陨落",
+    "frames": 60,
+    "cols": 8,
+    "rows": 8,
+    "frame_w": 768,
+    "frame_h": 432,
+    "fps": 24
+  },
+  {
+    "key": "xingluo_shaji",
+    "name": "星罗_星罗杀机",
+    "frames": 60,
+    "cols": 8,
+    "rows": 8,
+    "frame_w": 384,
+    "frame_h": 216,
+    "fps": 24
+  }
+]

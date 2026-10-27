@@ -36,6 +36,9 @@ const SKILL_PROJECTILE_SCENE := preload("res://scenes/effects/projectile/skill_p
 const DEFAULT_BURST_EFFECT_SCENE := preload("res://scenes/effects/burst_effect.tscn")
 ## 群体技能里每人补的小爆炸相对 skill.burst_scale 的比例。
 const AOE_TARGET_BURST_RATIO := 0.55
+## 敌方每回合放门派技能的概率（其余回合普攻）。
+## 别调太高：怪物全员每回合甩技能，会显得玩家"人多也没优势"。
+const ENEMY_SKILL_CHANCE := 0.7
 
 # ── 演示队伍（只用于直接 F6 运行本场景）──
 # const 装不了 Resource，只存路径，由 _load_demo() 现场 load()。
@@ -387,8 +390,44 @@ func _enemy_act() -> void:
 	if targets.is_empty():
 		_check_battle_end()
 		return
+	# 每只怪开战时会随机进一个门派（GameRoot._make_enemy_team），这里按概率放它的门派招式；
+	# 没蓝/在冷却/掷骰没中就普攻。_perform_skill 内部会处理扣蓝、冷却、群体演出和收尾回合。
+	var skill := _pick_enemy_skill()
+	if skill != null:
+		await _perform_skill(actor, skill, _enemy_skill_targets(skill, targets))
+		return
 	# TODO: 更聪明的 AI（优先残血、优先给己方加血/护盾）在这里替换
 	await _perform_attack(actor, targets[randi() % targets.size()])
+
+
+## 敌方 AI 挑一个本回合能放的门派技能；null = 这回合普攻。
+func _pick_enemy_skill() -> SkillData:
+	if actor == null or actor.stats == null:
+		return null
+	var usable: Array[SkillData] = []
+	for s in actor.available_skills:
+		if s != null and actor.can_use_skill(s):
+			usable.append(s)
+	if usable.is_empty() or randf() > ENEMY_SKILL_CHANCE:
+		return null
+	return usable[randi() % usable.size()]
+
+
+## 从**敌方视角**给技能选目标：ENEMY_* 打我方，SELF / ALLY_SINGLE 落在敌方自己人身上。
+func _enemy_skill_targets(skill: SkillData, foes: Array[BattleUnit]) -> Array[BattleUnit]:
+	var out: Array[BattleUnit] = []
+	match skill.target_mode:
+		SkillData.TargetMode.SELF:
+			out.append(actor)
+		SkillData.TargetMode.ALLY_SINGLE:
+			var allies := _alive(_enemies)
+			if not allies.is_empty():
+				out.append(allies[randi() % allies.size()])
+		SkillData.TargetMode.ENEMY_ALL:
+			out.assign(foes)
+		_:
+			out.append(foes[randi() % foes.size()])
+	return out
 
 
 # ── 指令 → 目标 → 结算 ──
@@ -590,8 +629,8 @@ func _perform_attack(attacker: BattleUnit, target: BattleUnit) -> void:
 	create_floating_text(target, str(int(roundf(dealt))), critical_color if is_crit else normal_color)
 	await target.play_hit()
 
-	# 命中都要等，节奏一致观感才不忽快忽慢。
-	await get_tree().create_timer(action_delay).timeout
+	# 命中都要等，节奏一致观感才不忽快忽慢（还要等本轮特效播完）。
+	await _wait_action_end()
 	# 先判胜负：已结束就**不能**再 _finish_turn()，否则会把结束的战斗继续往下推。
 	if not _check_battle_end():
 		_finish_turn()
@@ -660,7 +699,8 @@ func _perform_skill(caster: BattleUnit, skill: SkillData, targets: Array[BattleU
 	caster.spend_mana(skill.mana_cost)
 	caster.start_cooldown(skill)
 	_play_sfx(skill.cast_sfx)
-	_spawn_screen_effect(skill)
+	# 把"被打的那一组"传下去：敌方施法时动画要盖在我方身上，不能按技能类型猜。
+	_spawn_screen_effect(skill, Vector2.INF, victims)
 	await caster.play_cast()
 
 	# 多目标（max_targets > 1）或全体技能：走**群体演出**——
@@ -698,7 +738,14 @@ func _perform_skill(caster: BattleUnit, skill: SkillData, targets: Array[BattleU
 		for hit in times:
 			if not is_instance_valid(target) or not target.alive:
 				break
-			# 没有伤害的技能（纯封印/封法术）只走状态，不飘伤害数字。
+			# ① 先把这一击的动画放出去（多段技能各自一段）。
+			#    顺序很重要：动画 → 等它播完 → 再跳伤害数字，就是打完才出伤害。
+			var seg_fx: Node = null
+			if skill.hit_effect_per_hit:
+				seg_fx = _spawn_per_hit_effect(skill, target, hit, caster.global_position)
+			var seg_waits: bool = seg_fx != null and is_instance_valid(seg_fx) \
+					and seg_fx.has_signal("finished")
+			# ② 结算（没有伤害的技能只走状态，不飘伤害数字）
 			if _skill_deals_damage(skill):
 				# 伤害 = skill_damage()（power×攻击力 / 固定值 + 状态加成），暴击再乘 crit_multiplier()；
 				# 防御减伤与格挡值在 take_damage() 内部结算，返回实际扣血量。
@@ -707,13 +754,15 @@ func _perform_skill(caster: BattleUnit, skill: SkillData, targets: Array[BattleU
 				if is_crit:
 					damage = ceilf(damage * caster.crit_multiplier())
 				var dealt := target.take_damage(damage, skill.damage_type == SkillData.DamageType.MAGIC)
-				# 技能普通色用 skill.tint，刻意与 Battle.normal_color 不同。
+				# ③ 等这一段动画播完再跳数字
+				if seg_waits:
+					await seg_fx.finished
 				create_floating_text(target, str(int(roundf(dealt))), critical_color if is_crit else normal_color)
 				await target.play_hit()
+			elif seg_waits:
+				await seg_fx.finished
 			_apply_skill_statuses(caster, skill, target)
-			# 每击一段特效（太虚神剑）：这一击单独 new 一个特效，播它对应的片段。
-			if skill.hit_effect_per_hit:
-				_spawn_per_hit_effect(skill, target, hit, caster.global_position)
+			# 段与段之间留一点呼吸（动画本身已经占时，这里只要一点点）
 			if hit < times - 1:
 				await get_tree().create_timer(maxf(0.02, skill.hit_interval)).timeout
 
@@ -734,8 +783,8 @@ func _perform_skill(caster: BattleUnit, skill: SkillData, targets: Array[BattleU
 		# screen_shake 为 0 表示不抖镜头。
 		if skill.screen_shake > 0.0:
 			_shake_camera(skill.screen_shake)
-		# 每个目标之间也留一个 action_delay。
-		await get_tree().create_timer(action_delay).timeout
+		# 每个目标之间也留一个 action_delay，并且等这一段的特效播完。
+		await _wait_action_end()
 
 	# 先判胜负，没结束才收尾回合。
 	if not _check_battle_end():
@@ -781,15 +830,19 @@ func _cast_aoe(caster: BattleUnit, skill: SkillData, victims: Array[BattleUnit])
 			# 贴地技能（群星陨落）把这份"小爆点"放到目标脚下的地面线上。
 			var burst_pos: Vector2 = target.global_position if skill.hit_effect_on_ground \
 					else target.body_center()
-			# 专属的 target_effect_scene 给足尺寸（不乘 0.55 的小爆比例）
-			var ratio := 1.0 if skill.target_effect_scene != null else AOE_TARGET_BURST_RATIO
-			# 传入施法者位置：陨石等特效据此决定"从哪边斜插过来"
-			_spawn_hit_burst(skill, burst_pos, ratio, caster.body_center())
+			# 逐目标小爆点：只有"本来就配了逐目标特效"或显式打开逐目标开关的技能才放。
+			# 为什么加这个判断：只靠全屏序列帧动画的技能（群星陨落/雷动九天/缥缈剑指/药雾弥漫）
+			# 如果这里再补一发兜底的程序化爆炸，看起来就是"素材动画之后又冒出一段不是素材的东西"。
+			if skill.hit_effect_per_target or skill.target_effect_scene != null:
+				# 专属的 target_effect_scene 给足尺寸（不乘 0.55 的小爆比例）
+				var ratio := 1.0 if skill.target_effect_scene != null else AOE_TARGET_BURST_RATIO
+				# 传入施法者位置：陨石等特效据此决定"从哪边斜插过来"
+				_spawn_hit_burst(skill, burst_pos, ratio, caster.body_center())
 			target.play_hit()          # 故意不 await：要的是"同时闪红"
 		_apply_skill_statuses(caster, skill, target)
 		await get_tree().create_timer(aoe_step_delay).timeout
 
-	await get_tree().create_timer(action_delay).timeout
+	await _wait_action_end()
 
 
 ## 技能附带的状态：封印（下回合跳过）/ 封法术（N 回合不能放技能）。
@@ -827,7 +880,7 @@ func _perform_support(caster: BattleUnit, skill: SkillData, targets: Array[Battl
 	_play_sfx(skill.cast_sfx)
 	# ⚠ 辅助/自身增益也要放 screen_effect（人剑合一就是这条路径）：
 	#   以前只在"打敌人"的分支里调，导致自身 buff 的全屏特效永远不播。
-	_spawn_screen_effect(skill, caster.global_position)
+	_spawn_screen_effect(skill, caster.global_position, allies)
 	await caster.play_cast()
 
 	for target in allies:
@@ -836,7 +889,7 @@ func _perform_support(caster: BattleUnit, skill: SkillData, targets: Array[Battl
 		_spawn_support_effect(skill, target)
 		await get_tree().create_timer(0.08).timeout
 
-	await get_tree().create_timer(action_delay).timeout
+	await _wait_action_end()
 	if not _check_battle_end():
 		_finish_turn()
 
@@ -857,6 +910,7 @@ func _spawn_support_effect(skill: SkillData, target: BattleUnit) -> void:
 	fx.scale = Vector2.ONE * maxf(0.05, skill.burst_scale)
 	if fx.has_method("play"):
 		fx.play(skill.tint, skill.hit_particles)
+	_track_fx(fx)
 
 
 ## 对**单个**目标结算辅助效果（治疗 / 持续回血 / 增益），顺带飘字；不推进回合、不 await。
@@ -929,17 +983,20 @@ func _expand_targets(victims: Array[BattleUnit], count: int) -> Array[BattleUnit
 	if out.is_empty() or count <= 1:
 		return out
 	var anchor := out[0]
+	# 在**被打的那一方**里补目标：原来的实现写死 _enemies，
+	# 敌方放多目标技能时会把自己人一起算进去（自己打自己）。
+	var pool: Array[BattleUnit] = _alive(_players) if anchor.is_player else _alive(_enemies)
 	var candidates: Array[BattleUnit] = []
-	for enemy in _alive(_enemies):
-		if not out.has(enemy):
-			candidates.append(enemy)
+	for unit in pool:
+		if not out.has(unit):
+			candidates.append(unit)
 	candidates.sort_custom(func(a: BattleUnit, b: BattleUnit) -> bool:
 		return a.global_position.distance_to(anchor.global_position) \
 				< b.global_position.distance_to(anchor.global_position))
-	for enemy in candidates:
+	for unit in candidates:
 		if out.size() >= count:
 			break
-		out.append(enemy)
+		out.append(unit)
 	return out
 
 
@@ -970,13 +1027,51 @@ func _group_ground_y(units: Array[BattleUnit]) -> float:
 ## 施法瞬间放一次"全屏氛围特效"（夜色压暗 / 流星雨 / 暴雨）。
 ## 场景根节点通常是 CanvasLayer，所以直接挂到 Battle 根下即可（不受相机与震屏影响）。
 ## 参数 at：给世界坐标就摆到那里（自身增益要挂在施法者脚下）；默认 Vector2.INF = 按场景自带位置。
-func _spawn_screen_effect(skill: SkillData, at := Vector2.INF) -> void:
+## 参数 targets：这一发**打的是谁**。实现了 fit_units() 的序列帧特效据此决定铺在哪一方 ——
+##   ⚠ 必须看"目标是谁"而不是"技能是什么类型"：敌方放攻击技能时，动画要盖在我方身上。
+func _spawn_screen_effect(skill: SkillData, at := Vector2.INF, targets: Array = []) -> void:
 	if skill == null or skill.screen_effect_scene == null:
 		return
 	var fx = skill.screen_effect_scene.instantiate()
 	add_child(fx)
-	if at != Vector2.INF and fx is Node2D:
+	# fit_units 优先：序列帧全屏动画从该方阵型的锚点起铺、盖住整队。
+	# 老的程序化全屏特效没有这个方法，走 at 分支。
+	if fx.has_method("fit_units"):
+		var group: Array[BattleUnit] = _alive(targets)
+		if group.is_empty():
+			# 没传目标（或已全灭）时按技能类型兜底，至少别铺错边。
+			group = _alive(_players if _skill_targets_allies(skill) else _enemies)
+		if group.is_empty():
+			group = _alive(_all_units())
+		if not group.is_empty():
+			# 阵营直接看单位自己的标记，不看技能/施法者 —— 这样敌方放技能也一定铺对边。
+			fx.fit_units(group, _screen_effect_anchor(group[0].is_player))
+	elif at != Vector2.INF and fx is Node2D:
 		(fx as Node2D).global_position = at
+	_track_fx(fx)
+
+
+## 这个技能是"打我方的"吗：给自己加 buff / 全体队友 / 选一个队友，都算。
+func _skill_targets_allies(skill: SkillData) -> bool:
+	if skill == null:
+		return false
+	if skill.buff_all_allies:
+		return true
+	return skill.target_mode == SkillData.TargetMode.SELF \
+			or skill.target_mode == SkillData.TargetMode.ALLY_SINGLE
+
+
+## 全屏序列帧动画的原点站位（世界坐标）：
+##   打敌方 → EnemySlots/Back2（敌方后排，从后往前铺满整片敌阵）
+##   打我方 → PlayerSlots/Front1（我方前排，Buff 从最前面的队友起罩住全队）
+## 站位是 battle.tscn 里 Stage/{PlayerSlots,EnemySlots}/<名字> 的 Marker2D；
+## 找不到就返回 INF —— fit_units() 会退回"取阵型包围盒中点"。
+func _screen_effect_anchor(ally: bool) -> Vector2:
+	var root: Node2D = player_slots if ally else enemy_slots
+	if root == null:
+		return Vector2.INF
+	var marker := root.get_node_or_null("Front1" if ally else "Back2") as Node2D
+	return marker.global_position if marker != null else Vector2.INF
 
 
 ## 在指定位置补一朵（缩小版）命中爆炸，用来表现"这个敌人也被炸到了"。
@@ -1026,15 +1121,16 @@ func _spawn_instant_burst(skill: SkillData, pos: Vector2, from := Vector2.INF) -
 		boom.play(skill.tint, maxi(8, skill.hit_particles))
 	else:
 		SkillProjectile.play_sequence_once(boom)
+	_track_fx(boom)
 ## 约定：特效场景实现了 play_segment(index) 就播对应片段（太虚神剑三段动画），
 ##   否则退回 play(tint, count) —— 这样别的技能也能开这个开关而不报错。
 func _spawn_per_hit_effect(skill: SkillData, target: BattleUnit, hit: int,
-		source_position: Vector2 = Vector2.ZERO) -> void:
+		source_position: Vector2 = Vector2.ZERO) -> Node:
 	var scene: PackedScene = skill.hit_effect_scene
 	if scene == null:
 		scene = skill.target_effect_scene
 	if scene == null or not is_instance_valid(target):
-		return
+		return null
 	var boom = scene.instantiate()
 	fx_root.add_child(boom)
 	var pos: Vector2 = target.global_position if skill.hit_effect_on_ground else target.body_center()
@@ -1049,6 +1145,37 @@ func _spawn_per_hit_effect(skill: SkillData, target: BattleUnit, hit: int,
 		boom.play(skill.tint, maxi(8, skill.hit_particles / 2))
 	else:
 		SkillProjectile.play_sequence_once(boom)
+	_track_fx(boom)
+	return boom
+
+
+# ── 特效时长追踪：让下一个行动等动画播完再开始 ──
+
+## 本轮动作放出去的特效什么时候播完（秒，以 Time.get_ticks_msec 为基准）。
+## 只有实现了 duration() 的序列帧特效才计入；程序化特效没有这个方法，等于 0（行为不变）。
+var _fx_until := 0.0
+
+
+## 单调时钟（秒）。用 ticks 而不是 get_unix_time —— 后者精度只有 1 秒。
+func _now_sec() -> float:
+	return float(Time.get_ticks_msec()) / 1000.0
+
+
+## 登记一个特效的播放时长。没有 duration() 的（程序化爆炸/老特效）直接忽略。
+func _track_fx(fx: Node) -> void:
+	if fx == null or not is_instance_valid(fx) or not fx.has_method("duration"):
+		return
+	_fx_until = maxf(_fx_until, _now_sec() + float(fx.call("duration")))
+
+
+## 动作收尾：先等 action_delay，再等本轮特效播完。
+## 为什么必须等：技能动画有 2.5 秒，不等的话下一个人已经出手、上一段的特效还在放，
+## 屏幕上会同时叠两段技能动画。
+func _wait_action_end() -> void:
+	await get_tree().create_timer(action_delay).timeout
+	while _now_sec() < _fx_until:
+		await get_tree().create_timer(0.05).timeout
+	_fx_until = 0.0
 
 
 ## 播一个一次性音效：new AudioStreamPlayer 挂 Battle 根节点（不是 %Fx），播完自动 queue_free。

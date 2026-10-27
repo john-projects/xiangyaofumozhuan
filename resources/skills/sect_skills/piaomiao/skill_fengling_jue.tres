@@ -1,14 +1,14 @@
 [gd_resource type="Resource" script_class="SkillData" format=3 uid="uid://br4utwyseb4tt"]
 
 [ext_resource type="Script" uid="uid://sbgbq3puamij" path="res://resources/skills/skill_data.gd" id="1_8hg4r"]
-[ext_resource type="PackedScene" path="res://scenes/effects/piaomiao/fengling_jue.tscn" id="2_fx"]
+[ext_resource type="PackedScene" path="res://scenes/effects/skill_seq/fengling_jue_seq.tscn" id="9_seq"]
 
 [resource]
 script = ExtResource("1_8hg4r")
 id = "fengling_jue"
 display_name = "封灵诀"
 description = "封住单个目标的法术 2 回合，使其无法施法。"
-mana_cost = 14.0
+mana_cost = 5.0
 power = 0.0
 crit_bonus = 0.0
 sect_id = "piaomiao"
@@ -16,5 +16,5 @@ sect_skill_key = "fengling_jue"
 silence_chance = 0.75
 silence_turns = 2
 tint = Color(0.78, 0.72, 1, 1)
-hit_effect_scene = ExtResource("2_fx")
+hit_effect_scene = ExtResource("9_seq")
 burst_scale = 2.6

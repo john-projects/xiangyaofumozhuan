@@ -2,6 +2,7 @@
 
 [ext_resource type="Script" uid="uid://sbgbq3puamij" path="res://resources/skills/skill_data.gd" id="1_knp7q"]
 [ext_resource type="PackedScene" path="res://scenes/effects/wanyao/yaowu_miman.tscn" id="2_fx"]
+[ext_resource type="PackedScene" path="res://scenes/effects/skill_seq/yaowu_miman_seq.tscn" id="9_seq"]
 
 [resource]
 script = ExtResource("1_knp7q")
@@ -9,7 +10,7 @@ damage_type = 1
 id = "yaowu_miman"
 display_name = "药雾弥漫"
 description = "药雾化毒，造成固定伤害；攻击 2 个目标，30 级 3 个、60 级 4 个。"
-mana_cost = 12.0
+mana_cost = 5.0
 power = 0.0
 crit_bonus = 0.0
 sect_id = "wanyao"
@@ -20,5 +21,7 @@ flat_damage = 10.0
 flat_per_level = 1.3
 tint = Color(0.6, 1, 0.7, 1)
 hit_effect_on_ground = true
-target_effect_scene = ExtResource("2_fx")
 burst_scale = 1.6
+screen_effect_scene = ExtResource("9_seq")
+hit_effect_per_target = false
+hit_effect_center = false
