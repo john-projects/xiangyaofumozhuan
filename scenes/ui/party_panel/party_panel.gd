@@ -33,21 +33,30 @@ signal close_requested
 
 ## 第一排坑位数量 = 上阵上限。
 const TEAM_SLOTS := 5
-## 第二排坑位数量 = 未上阵展示位。
+## 第二排坑位数量 = 未上阵展示位（5 列 × 2 行，列数在场景里配）。
 const RESERVE_SLOTS := 10
 
-## 坑位尺寸（第一排大一点，第二排紧凑些）。
-const TEAM_SLOT_SIZE := Vector2(96, 132)
-const RESERVE_SLOT_SIZE := Vector2(78, 106)
-const TEAM_ICON := 84.0
-const RESERVE_ICON := 66.0
+## 坑位尺寸 —— **两排一致**（未上阵也是同样大的框，只是排成两行）。
+const SLOT_SIZE := Vector2(96, 150)
+const SLOT_ICON := 88.0
+
+# ── 选中态配色 ──
+# 用样式盒明确定义，而不是吃主题默认的 pressed 样式：
+#   默认主题的按下态只比 normal 亮一点点，重建坑位后焦点一丢就完全看不出来了。
+const SLOT_BG := Color(1, 1, 1, 0.05)
+const SLOT_BORDER := Color(1, 1, 1, 0.14)
+const SLOT_BG_HOVER := Color(1, 1, 1, 0.12)
+const SLOT_BORDER_HOVER := Color(1, 0.95, 0.8, 0.45)
+const SLOT_BG_SELECTED := Color(1.0, 0.82, 0.35, 0.20)
+const SLOT_BORDER_SELECTED := Color(1.0, 0.84, 0.42, 1.0)
 
 @onready var title_label: Label = %TitleLabel
 @onready var message_label: Label = %MessageLabel
 @onready var team_title: Label = %TeamTitle
 @onready var team_row: HBoxContainer = %TeamRow
 @onready var reserve_title: Label = %ReserveTitle
-@onready var reserve_row: HBoxContainer = %ReserveRow
+## 未上阵那一块：GridContainer（5 列 × 2 行），不是单行 HBox。
+@onready var reserve_row: Container = %ReserveRow
 @onready var deploy_button: Button = %DeployButton
 @onready var undeploy_button: Button = %UndeployButton
 @onready var remove_button: Button = %RemoveButton
@@ -79,19 +88,32 @@ func show_party(team: Array[UnitStats], deployed: Array[UnitStats]) -> void:
 	_team = team
 	_deployed = deployed
 	show()
-	title_label.text = "团队管理　　上阵 %d/%d · 团队 %d 人" % [
-		GameRoot.party_count(deployed), GameRoot.MAX_DEPLOYED, GameRoot.party_count(team)]
-	team_title.text = "队伍中（上阵 %d/%d）" % [GameRoot.party_count(deployed), GameRoot.MAX_DEPLOYED]
-	var reserved := _reserved_members()
-	reserve_title.text = "未上阵（%d 人）" % GameRoot.party_count(reserved)
+	# 标题固定不带人数（上阵/团队人数由下面的两排直接看出来，别在标题里再报一遍）。
+	title_label.text = "团队管理"
+	team_title.text = "队伍中"
+	reserve_title.text = "未上阵"
 
 	# 选中的人还在就保留，否则默认选第一个上阵成员
 	if _selected == null or not _contains(team, _selected):
 		_selected = deployed[0] if not deployed.is_empty() else (team[0] if not team.is_empty() else null)
 
-	_rebuild_row(team_row, deployed, TEAM_SLOTS, TEAM_SLOT_SIZE, TEAM_ICON)
-	_rebuild_row(reserve_row, reserved, RESERVE_SLOTS, RESERVE_SLOT_SIZE, RESERVE_ICON)
+	var reserved := _reserved_members()
+	_rebuild_row(team_row, deployed, TEAM_SLOTS, SLOT_SIZE, SLOT_ICON)
+	_rebuild_row(reserve_row, reserved, RESERVE_SLOTS, SLOT_SIZE, SLOT_ICON)
 	_refresh_buttons()
+	# 重建后把焦点还给选中的坑位：否则坑位全被换掉，焦点落空，键盘方向键会失效。
+	_focus_selected.call_deferred()
+
+
+## 把焦点还给「当前选中」的那个坑位（重建坑位后调用）。
+func _focus_selected() -> void:
+	if not visible:
+		return
+	for row in [team_row, reserve_row]:
+		for child in row.get_children():
+			if child is Button and (child as Button).button_pressed:
+				(child as Button).grab_focus()
+				return
 
 
 ## 在面板上显示一句提示（"XXX 已上阵。" / "至少要留 1 人上阵。" 等）。
@@ -120,9 +142,9 @@ func focus_ring() -> Array[Control]:
 
 
 ## 重建一排坑位。
-## 参数 row：目标 HBox；members：这一排要展示的人；slots：坑位总数；
-## slot_size / icon_size：这一排的格子/头像尺寸。
-func _rebuild_row(row: HBoxContainer, members: Array[UnitStats], slots: int,
+## 参数 row：目标容器（第一排 HBox / 第二排 GridContainer）；members：这一排要展示的人；
+## slots：坑位总数；slot_size / icon_size：格子/头像尺寸（两排一致）。
+func _rebuild_row(row: Container, members: Array[UnitStats], slots: int,
 		slot_size: Vector2, icon_size: float) -> void:
 	for child in row.get_children():
 		row.remove_child(child)
@@ -134,7 +156,9 @@ func _rebuild_row(row: HBoxContainer, members: Array[UnitStats], slots: int,
 			row.add_child(_make_empty_slot(slot_size))
 
 
-## 造一个成员坑位：纵向（头像在上、名字在下），点一下选中。
+## 造一个成员坑位：纵向（头像 → 名字 → 门派），点一下选中。
+## 选中态用样式盒明确定义（见 SLOT_BG_SELECTED），不依赖主题的 pressed 样式和焦点圈 ——
+## 否则坑位一重建、焦点一丢，选中框就"消失"了。
 func _make_slot(stats: UnitStats, slot_size: Vector2, icon_size: float) -> Button:
 	var slot := Button.new()
 	slot.name = "Slot_%s" % GameRoot.character_key(stats)
@@ -143,14 +167,22 @@ func _make_slot(stats: UnitStats, slot_size: Vector2, icon_size: float) -> Butto
 	slot.focus_mode = Control.FOCUS_ALL
 	slot.tooltip_text = "%s　%s" % [stats.name, _stats_text(stats)]
 	slot.button_pressed = _selected != null and GameRoot.character_key(_selected) == GameRoot.character_key(stats)
+	slot.set_meta("char_key", GameRoot.character_key(stats))
+	slot.add_theme_stylebox_override("normal", _slot_style(SLOT_BG, SLOT_BORDER, 1))
+	slot.add_theme_stylebox_override("hover", _slot_style(SLOT_BG_HOVER, SLOT_BORDER_HOVER, 2))
+	slot.add_theme_stylebox_override("pressed", _slot_style(SLOT_BG_SELECTED, SLOT_BORDER_SELECTED, 2))
+	slot.add_theme_stylebox_override("hover_pressed", _slot_style(SLOT_BG_SELECTED, SLOT_BORDER_SELECTED, 2))
+	# 焦点圈：**向外**扩 3px 画一圈细白线（expand_margin），不盖住选中态的金框。
+	# 之前设成 StyleBoxEmpty，方向键移动时完全看不出光标在哪 —— 这就是"移动选择框消失了"。
+	slot.add_theme_stylebox_override("focus", _focus_style())
 	slot.pressed.connect(_on_slot_pressed.bind(stats))
 
 	var box := VBoxContainer.new()
 	box.set_anchors_preset(Control.PRESET_FULL_RECT)
 	box.offset_left = 4
-	box.offset_top = 6
+	box.offset_top = 8
 	box.offset_right = -4
-	box.offset_bottom = -4
+	box.offset_bottom = -6
 	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	box.alignment = BoxContainer.ALIGNMENT_CENTER
 	box.add_theme_constant_override("separation", 2)
@@ -171,12 +203,51 @@ func _make_slot(stats: UnitStats, slot_size: Vector2, icon_size: float) -> Butto
 	name_label.text = stats.name
 	name_label.add_theme_color_override("font_color", Color(0.95, 0.92, 0.85, 1))
 	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	name_label.add_theme_font_size_override("font_size", 17 if icon_size > 70.0 else 14)
+	name_label.add_theme_font_size_override("font_size", 17)
 	name_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	box.add_child(name_label)
 
+	# 门派：挂在名字下面一行，淡金色，和名字拉开层次。
+	var sect_label := Label.new()
+	sect_label.text = _sect_name(stats)
+	sect_label.add_theme_color_override("font_color", Color(0.96, 0.84, 0.55, 0.85))
+	sect_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	sect_label.add_theme_font_size_override("font_size", 13)
+	sect_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.add_child(sect_label)
+
 	slot.add_child(box)
 	return slot
+
+
+## 坑位样式盒（每次 new：共享 Resource 就地改色会污染其它坑位）。
+func _slot_style(bg: Color, border: Color, width: int) -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	style.bg_color = bg
+	style.border_color = border
+	style.set_border_width_all(width)
+	style.set_corner_radius_all(8)
+	return style
+
+
+## 焦点圈：透明底 + 1px 白边，并向外扩 3px。
+## 向外扩是为了和"选中"的金框错开 —— 同一个坑位既可能被选中、又可能正好有键盘焦点。
+func _focus_style() -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0, 0, 0, 0)
+	style.border_color = Color(1, 1, 1, 0.9)
+	style.set_border_width_all(1)
+	style.set_corner_radius_all(10)
+	style.set_expand_margin_all(3)
+	return style
+
+
+## 角色的门派显示名；没拜师显示"散修"（团队里全是玩家角色，不会是魔物）。
+func _sect_name(stats: UnitStats) -> String:
+	var id := GameRoot.sect_of(stats)
+	if id.is_empty() or not Global.SECTS.has(id):
+		return "散修"
+	return String(Global.SECTS[id].get("name", id))
 
 
 ## 造一个空坑位（虚线框 +「空位」）。不可点、不可聚焦。
@@ -202,8 +273,9 @@ func _make_empty_slot(slot_size: Vector2) -> Panel:
 	return panel
 
 
-## 按当前选中的人刷新四个按钮的可用状态与提示。
+## 按当前选中的人刷新四个按钮的可用状态。
 ## 队长 = 上阵名单第 0 位：选中的人不是第一位时「设为队长」才可用。
+## 不再写 tooltip 文案（面板上的操作提示已全部移除）。
 func _refresh_buttons() -> void:
 	var s := _selected
 	var on_field := s != null and GameRoot.is_deployed(_deployed, s)
@@ -213,17 +285,9 @@ func _refresh_buttons() -> void:
 	var can_remove := in_team and GameRoot.party_count(_team) > 1
 
 	deploy_button.disabled = not (s != null and not on_field and GameRoot.deploy_can_add(_deployed, s))
-	deploy_button.tooltip_text = "上阵位已满，先让一个人下阵" if deploy_button.disabled \
-			else "把选中的人放进队伍（最多 %d 人）" % GameRoot.MAX_DEPLOYED
 	undeploy_button.disabled = not (s != null and on_field and GameRoot.deploy_can_remove(_deployed, s))
-	undeploy_button.tooltip_text = "至少要留 1 人上阵" if undeploy_button.disabled \
-			else "把选中的人移出队伍（至少要留 1 人上阵）"
 	lead_button.disabled = not (on_field and deploy_index > 0)
-	lead_button.tooltip_text = "先选中一个已上阵的队员" if not on_field \
-			else ("他已经是队长了" if deploy_index == 0 else "把他设为队长（上阵名单第一位）")
 	remove_button.disabled = not can_remove
-	remove_button.tooltip_text = "先选中一个团队成员" if not in_team \
-			else ("团队至少留 1 人" if not can_remove else "把选中的人从团队里彻底删掉（会连带下阵）")
 
 
 ## 团队里但没上阵的人（保持团队顺序）。
@@ -240,7 +304,20 @@ func _reserved_members() -> Array[UnitStats]:
 func _on_slot_pressed(stats: UnitStats) -> void:
 	SoundManager.play_sound(SoundManager.Sound.UI)
 	_selected = stats
+	_sync_slot_selection()
 	_refresh_buttons()
+
+
+## 让"按下态"严格等于"只有选中那一个是按下的"。
+## ⚠ 必须手动同步：坑位是 toggle_mode 的 Button，点谁谁自己变成按下态，
+##   不清其它人的话会好几个坑位同时顶着金框（截图里就同时亮了 4 个）。
+func _sync_slot_selection() -> void:
+	var key := GameRoot.character_key(_selected) if _selected != null else ""
+	for row in [team_row, reserve_row]:
+		for child in row.get_children():
+			if child is Button:
+				var k := String(child.get_meta("char_key", ""))
+				(child as Button).button_pressed = not key.is_empty() and k == key
 
 
 ## 「上阵」回调：只发请求。

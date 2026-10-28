@@ -30,6 +30,24 @@ const BATTLE_SCENE := preload("res://scenes/battle/battle.tscn")
 ## 换人改这一行，或在 main.tscn 检查器填 default_leader 覆盖。
 const DEFAULT_LEADER := preload("res://resources/units/players/行修.tres")
 
+# ───────────── 调试专用：开局阵容 ─────────────
+## true = 开局直接把 6 个角色全拉进团队、按表配好门派（燕如意只入团队不上阵）。
+## 调试完改成 false 就恢复"只有队长一个人"的正常开局。
+## ⚠ 正式版请连同 DEBUG_TEAM / DEBUG_BENCHED / _apply_debug_loadout() 一起删掉。
+const DEBUG_LOADOUT := true
+
+## 调试阵容：[显示名, 资源路径, 门派 id]。数组顺序 = 上阵顺序（第 1 个是队长）。
+const DEBUG_TEAM := [
+	["行修", "res://resources/units/players/行修.tres", "piaomiao"],
+	["厉狂澜", "res://resources/units/players/厉狂澜.tres", "xingluo"],
+	["夜魑", "res://resources/units/players/夜魑.tres", "wanyao"],
+	["陆孤鸣", "res://resources/units/players/陆孤鸣.tres", "taixu"],
+	["霓裳", "res://resources/units/players/霓裳.tres", "zixiao"],
+	["燕如意", "res://resources/units/players/燕如意.tres", "taixu"],
+]
+## 只入团队、不上阵的那个人（上阵位只有 MAX_DEPLOYED 个，正好空一位出来）。
+const DEBUG_BENCHED := "燕如意"
+
 
 # ── 配置（main.tscn 检查器里填；改这些等于改关卡结构与难度曲线）──
 ## 地图顺序表：数组顺序 = 关卡顺序，map_difficulty() 靠下标算，调序会连带改难度/奖励。
@@ -538,8 +556,34 @@ func _begin_new_run() -> void:
 	# 等级/经验也是局内进度，重开从 1 级练。
 	Global.level_by_character.clear()
 	Global.exp_by_character.clear()
+	# 调试阵容：把 team / deployed / 门派全部铺好（见文件顶部 DEBUG_LOADOUT）。
+	if DEBUG_LOADOUT:
+		_apply_debug_loadout()
 	map_changed.emit(current_map_id)
 	show_map()
+
+
+## 调试专用：按 DEBUG_TEAM 铺好团队、上阵名单与门派。
+## 门派走 join_sect()（和正常拜师同一条路，种族限制照常校验、技能等级自动填 1 级），
+## 失败只 push_warning 不中断 —— 调试时阵容照常能进游戏。
+## 上阵人数按 MAX_DEPLOYED 截断；DEBUG_BENCHED 那个人只进 party 不进 deployed。
+func _apply_debug_loadout() -> void:
+	party.clear()
+	deployed.clear()
+	for row in DEBUG_TEAM:
+		var stats := load(String(row[1])) as UnitStats
+		if stats == null:
+			push_warning("调试阵容：加载失败 %s" % row[1])
+			continue
+		party.append(stats)
+		if String(row[0]) != DEBUG_BENCHED and deployed.size() < MAX_DEPLOYED:
+			deployed.append(stats)
+		var why := join_sect(stats, String(row[2]))
+		if not why.is_empty():
+			push_warning("调试阵容：%s 拜入 %s 失败 —— %s" % [row[0], row[2], why])
+	# 队长 = 上阵第一个人（世界地图上的主控角色）
+	if not deployed.is_empty():
+		Global.main_player_selected = deployed[0]
 
 
 ## 显示世界地图（换图/战斗归来/开局都走这里）：实例化场景、注入状态、连信号，再 await _swap(world, world_root)。

@@ -114,6 +114,11 @@ enum State { IDLE, INTRO, TURN_START, COMMAND, TARGET_SELECT, EXECUTE, TURN_END,
 @onready var command_menu: CommandMenu = $UI/CommandMenu
 ## 信息栏（伤害播报、状态提示），空字符串表示不显示。
 @onready var info_label: Label = $UI/InfoLabel
+## 施放提示条的三段（名字 / "施放" / 技能名），各自单独上色。
+@onready var cast_name: Label = %CastName
+@onready var cast_verb: Label = $UI/CastBar/CastVerb
+@onready var cast_skill: Label = %CastSkill
+@onready var cast_bar: HBoxContainer = $UI/CastBar
 ## 地图截图当背景：Backdrop 是独立 CanvasLayer（layer = -1，画在所有单位和 UI 下面），
 ## Photo 铺满屏幕（cover 裁剪），Dim 是压暗蒙层；没截图时整个 Backdrop 隐藏，用场景自带绿底。
 @onready var backdrop: CanvasLayer = %Backdrop
@@ -219,7 +224,12 @@ func start_battle(players: Array[UnitStats], enemies: Array[UnitStats]) -> void:
 		state = State.IDLE
 		return
 
-	info_label.text = "战斗开始"
+	info_label.text = ""
+	# 乱敏**整场只掷一次**：在开战这一刻给每个单位定下 band，之后每回合都按这个值排序。
+	# 早期是每回合重掷（±4），而全员速度都在 9~11 —— 波动比速度差还大，
+	# 于是会出现"上回合最后一个出手、下回合第一个出手"= 看起来连续行动两次。
+	for unit in _all_units():
+		unit.roll_turn_speed()
 	turn_order.update_order(_alive(_all_units()))
 	# 开场停顿；计时器由 SceneTree 持有并自行回收，只等 timeout 即可。
 	await get_tree().create_timer(0.6).timeout
@@ -281,17 +291,16 @@ func _next_round() -> void:
 		return
 	# 只把"这一刻还活着"的单位放进出手队列。
 	turn_queue = _alive(_all_units())
-	# 每回合开始：刷冷却 + roll 本回合速度（**必须先 roll 再排序**）。
+	# 每回合开始只刷冷却；出手速度在 start_battle() 里已经掷定，这里**不再重掷**（顺序整场固定）。
 	for unit in turn_queue:
 		unit.tick_cooldowns()                        # 每回合开始时刷新技能冷却
-		unit.roll_turn_speed()                       # 乱敏：±4 随机扰动，每单位每回合只 roll 一次
 	# 比较函数只读缓存的 round_speed：若在里面调 turn_speed()，每次比较都取新随机数，
 	# 比较结果自相矛盾，引擎会报 "bad comparison function" 且排序结果未定义。
 	turn_queue.sort_custom(func(a: BattleUnit, b: BattleUnit) -> bool:
 		return a.round_speed > b.round_speed)
 	turn_index = 0
 	turn_order.update_order(turn_queue)
-	info_label.text = "第 %d 回合" % round_count
+	_set_round(round_count)
 	round_count += 1
 	await get_tree().create_timer(0.3).timeout
 	_begin_turn()
@@ -341,7 +350,6 @@ func _begin_turn() -> void:
 		actor.set_selected(true)
 		state = State.TURN_START
 		turn_order.update_turn(_turn_display(), actor)
-		info_label.text = "%s 被封印，跳过行动" % actor.stats.name
 		create_floating_text(actor, "封印", block_color)
 		await get_tree().create_timer(0.45).timeout
 		actor.set_selected(false)
@@ -449,7 +457,6 @@ func _on_command_selected(command: StringName) -> void:
 			# 防御立刻生效（伤害 ×0.5、下限 1，见 BattleUnit.take_damage）；await 前把该做的做完。
 			actor.set_defending(true)
 			create_floating_text(actor, "防御", block_color)
-			info_label.text = "%s 进入防御" % actor.stats.name
 			await get_tree().create_timer(action_delay).timeout
 			_finish_turn()
 
@@ -463,7 +470,7 @@ func _on_command_selected(command: StringName) -> void:
 
 		&"item":
 			# TODO: 道具系统。注意是"重新打开菜单"而不是 _finish_turn()，玩家还能改选。
-			info_label.text = "道具系统还没做"
+			info_label.text = ""
 			command_menu.open_for(actor)
 
 		_:
@@ -478,7 +485,7 @@ func _on_skill_selected(skill: SkillData) -> void:
 	if state != State.COMMAND or actor == null or skill == null:
 		return
 	if not actor.can_use_skill(skill):
-		info_label.text = "%s 现在用不了（蓝不够或冷却中）" % skill.display_name
+		info_label.text = ""
 		return
 	command_menu.close()
 
@@ -603,7 +610,7 @@ func _on_unit_clicked(unit: BattleUnit) -> void:
 			await _perform_attack(caster, unit)
 	else:
 		# 非选目标阶段点单位：以后可以在这里弹"查看单位信息"面板。
-		info_label.text = "%s  HP %.0f/%.0f   MP %.0f/%.0f" % [unit.stats.name, unit.hp, unit.max_hp, unit.mp, unit.max_mp]
+		info_label.text = ""
 
 
 ## 普攻：冲过去 → 格挡 → 伤害/暴击 → 飘字/受击 → 停顿 → 判胜负或收尾回合（协程）。
@@ -616,9 +623,11 @@ func _perform_attack(attacker: BattleUnit, target: BattleUnit) -> void:
 		return
 
 	state = State.EXECUTE
-	info_label.text = "%s → %s" % [attacker.stats.name, target.stats.name]
-	# 位移演出：冲过去再退回；await 到 tween.finished 保证"先冲再打"。
-	await attacker.play_attack(target)
+	info_label.text = ""
+	# 演出分三段：① 走到目标面前 → ② 结算（飘字 + 受击闪红）→ ③ 出招并退回原位。
+	# home 必须在 approach 之前记下来 —— 那之后 attacker.position 已经不是站位了。
+	var home := attacker.position
+	await attacker.attack_approach(target)
 
 	var damage := attacker.roll_damage()
 	var is_crit := attacker.roll_crit()
@@ -627,7 +636,10 @@ func _perform_attack(attacker: BattleUnit, target: BattleUnit) -> void:
 	var dealt := target.take_damage(damage)
 	# 飘字只显示整数部分（伤害是 float），避免出现 "12.000000"。
 	create_floating_text(target, str(int(roundf(dealt))), critical_color if is_crit else normal_color)
-	await target.play_hit()
+	# 受击后仰与出招**并行**：它俩时长一样，串着等会把一次普攻拖成两倍。
+	target.play_hit(attacker.global_position)
+	# ③ 出招 → 退回原位（攻击动画完成时，受击也刚好收尾）
+	await attacker.attack_finish(home)
 
 	# 命中都要等，节奏一致观感才不忽快忽慢（还要等本轮特效播完）。
 	await _wait_action_end()
@@ -693,26 +705,47 @@ func _perform_skill(caster: BattleUnit, skill: SkillData, targets: Array[BattleU
 		if not _check_battle_end():
 			_finish_turn()
 		return
+	# 多目标技能（三尺青锋打 2~3 人）：**先把目标补足**。
+	# 后面「全屏动画 / 受击后仰 / 群体演出」都用这同一份完整名单。
+	# 补足动作原来写在 _cast_aoe 里，导致起手时 victims 只有点选的那 1 个人，
+	# 于是全屏特效之后的受击后仰只歪了这一个人。
+	if skill.target_mode == SkillData.TargetMode.ENEMY_SINGLE and skill.max_targets > 1:
+		victims = _expand_targets(victims, skill.max_targets)
 
 	state = State.EXECUTE
-	info_label.text = "%s 施放「%s」" % [caster.stats.name, skill.display_name]
+	_show_cast(caster, skill)
 	caster.spend_mana(skill.mana_cost)
 	caster.start_cooldown(skill)
 	_play_sfx(skill.cast_sfx)
+	# 本技能的一整段动画时长：受击后仰要保持这么久（三尺青锋 1.4 秒、五雷正法 1.5 秒…）
+	var anim_time := _skill_anim_time(skill)
+	# 近战门派技能（太虚神剑 / 星罗魔爪）：先走到目标面前再放。
+	# home 必须在走之前记下来 —— 走完 caster.position 已经不是站位了。
+	var home := caster.position
+	var approaching := skill.melee and victims.size() == 1
+	if approaching:
+		await caster.attack_approach(victims[0])
 	# 把"被打的那一组"传下去：敌方施法时动画要盖在我方身上，不能按技能类型猜。
 	_spawn_screen_effect(skill, Vector2.INF, victims)
+	# 有**全屏动画**的技能（三尺青锋 / 群星陨落 …）：受击后仰从动画起点就开始，
+	# 和动画同进同出。放在这里而不是 _cast_aoe 的结算循环里 ——
+	# 那条路要先等弹体飞完（0.5~1 秒），后仰会晚到动画快结束才出现。
+	if skill.screen_effect_scene != null:
+		for t in victims:
+			if is_instance_valid(t):
+				t.play_hit(caster.global_position, anim_time)
 	await caster.play_cast()
 
 	# 多目标（max_targets > 1）或全体技能：走**群体演出**——
 	# 只生成一颗弹体、只播一次大特效，然后所有目标同时结算（雷动九天就是这条路径）。
 	# 之前 max_targets 走单体循环，会变成"每个敌人各播一遍"，观感像连放 3 次技能。
 	if skill.target_mode == SkillData.TargetMode.ENEMY_ALL:
-		await _cast_aoe(caster, skill, victims)
+		await _cast_aoe(caster, skill, victims, anim_time)
 		if not _check_battle_end():
 			_finish_turn()
 		return
 	if skill.target_mode == SkillData.TargetMode.ENEMY_SINGLE and skill.max_targets > 1:
-		await _cast_aoe(caster, skill, _expand_targets(victims, skill.max_targets))
+		await _cast_aoe(caster, skill, victims, anim_time)
 		if not _check_battle_end():
 			_finish_turn()
 		return
@@ -745,6 +778,12 @@ func _perform_skill(caster: BattleUnit, skill: SkillData, targets: Array[BattleU
 				seg_fx = _spawn_per_hit_effect(skill, target, hit, caster.global_position)
 			var seg_waits: bool = seg_fx != null and is_instance_valid(seg_fx) \
 					and seg_fx.has_signal("finished")
+			# 受击后仰**从动画开始就保持**，一直持续到这一段播完（不后退）。
+			# 时长取这一段序列帧的长度；没有 duration() 的（程序化特效）退回默认值。
+			var hold := anim_time
+			if seg_fx != null and seg_fx.has_method("duration"):
+				hold = float(seg_fx.call("duration"))   # 多段技能按"这一段"算
+			target.play_hit(caster.global_position, hold)
 			# ② 结算（没有伤害的技能只走状态，不飘伤害数字）
 			if _skill_deals_damage(skill):
 				# 伤害 = skill_damage()（power×攻击力 / 固定值 + 状态加成），暴击再乘 crit_multiplier()；
@@ -758,7 +797,6 @@ func _perform_skill(caster: BattleUnit, skill: SkillData, targets: Array[BattleU
 				if seg_waits:
 					await seg_fx.finished
 				create_floating_text(target, str(int(roundf(dealt))), critical_color if is_crit else normal_color)
-				await target.play_hit()
 			elif seg_waits:
 				await seg_fx.finished
 			_apply_skill_statuses(caster, skill, target)
@@ -786,6 +824,10 @@ func _perform_skill(caster: BattleUnit, skill: SkillData, targets: Array[BattleU
 		# 每个目标之间也留一个 action_delay，并且等这一段的特效播完。
 		await _wait_action_end()
 
+	# 近战技能：打完退回原位（不播 attack 动作，招式本身的特效已经演完了）
+	if approaching:
+		await caster.attack_return(home)
+
 	# 先判胜负，没结束才收尾回合。
 	if not _check_battle_end():
 		_finish_turn()
@@ -795,7 +837,8 @@ func _perform_skill(caster: BattleUnit, skill: SkillData, targets: Array[BattleU
 ## 一颗飞行体飞目标阵型中心 → **只播一次**大特效 → 按 aoe_step_delay 逐个结算（间隔极短 = 同时受击）。
 ## 蓝/冷却不在这里扣（_perform_skill 起手已扣）；hit_sfx 与镜头抖动只做一次；命中者再补一朵小爆炸，
 ## 中心爆炸先于伤害结算。坑：循环内重判有效/存活（不要 break）；play_hit() 故意不 await，要同时闪红。
-func _cast_aoe(caster: BattleUnit, skill: SkillData, victims: Array[BattleUnit]) -> void:
+func _cast_aoe(caster: BattleUnit, skill: SkillData, victims: Array[BattleUnit],
+		hold := 0.35) -> void:
 	var center := _group_center(victims)
 
 	# ① 一颗飞行体飞向敌阵中心（序列帧/粒子来自 SkillData）
@@ -838,7 +881,10 @@ func _cast_aoe(caster: BattleUnit, skill: SkillData, victims: Array[BattleUnit])
 				var ratio := 1.0 if skill.target_effect_scene != null else AOE_TARGET_BURST_RATIO
 				# 传入施法者位置：陨石等特效据此决定"从哪边斜插过来"
 				_spawn_hit_burst(skill, burst_pos, ratio, caster.body_center())
-			target.play_hit()          # 故意不 await：要的是"同时闪红"
+			# 后仰：有全屏动画的技能已经在起手时统一后仰过了（见 _perform_skill），
+			# 这里只补"没有全屏动画"的（比如只靠逐目标特效的群体技能）。
+			if skill.screen_effect_scene == null:
+				target.play_hit(caster.global_position, hold)   # 故意不 await：要的是"同时闪红"
 		_apply_skill_statuses(caster, skill, target)
 		await get_tree().create_timer(aoe_step_delay).timeout
 
@@ -874,7 +920,7 @@ func _perform_support(caster: BattleUnit, skill: SkillData, targets: Array[Battl
 		return
 
 	state = State.EXECUTE
-	info_label.text = "%s 施放「%s」" % [caster.stats.name, skill.display_name]
+	_show_cast(caster, skill)
 	caster.spend_mana(skill.mana_cost)
 	caster.start_cooldown(skill)
 	_play_sfx(skill.cast_sfx)
@@ -1045,10 +1091,80 @@ func _spawn_screen_effect(skill: SkillData, at := Vector2.INF, targets: Array = 
 			group = _alive(_all_units())
 		if not group.is_empty():
 			# 阵营直接看单位自己的标记，不看技能/施法者 —— 这样敌方放技能也一定铺对边。
-			fx.fit_units(group, _screen_effect_anchor(group[0].is_player))
+			var on_player_side: bool = group[0].is_player
+			fx.fit_units(group, _screen_effect_anchor(on_player_side))
+			# 铺在我方阵地时把画面左右镜像：敌方放的三尺青锋该从对面扎过来，方向才不反。
+			if fx.has_method("set_on_player_side"):
+				fx.set_on_player_side(on_player_side)
 	elif at != Vector2.INF and fx is Node2D:
 		(fx as Node2D).global_position = at
 	_track_fx(fx)
+
+
+## 我方名字用绿色、敌方用红色（和指令菜单/血条配色一致）。
+const CAST_NAME_ALLY := Color(0.5, 0.94, 0.58, 1)
+const CAST_NAME_ENEMY := Color(1.0, 0.42, 0.40, 1)
+## 施放提示停留时长与淡出时长（秒）。
+## 只亮一会儿：一直挂着会盖住战场，而且玩家真正需要看的是"谁在放什么"这一瞬间。
+const CAST_HOLD := 1.0
+const CAST_FADE := 0.25
+
+## 当前那条施放提示的计时 tween（新提示来了要先 kill 掉旧的）。
+var _cast_tween: Tween
+
+
+## 刷新底部的施放提示条：名字按阵营上色，技能名金色并去掉「」括号。
+## 拆成三个 Label 而不是富文本：项目这套字体没有粗体字重，RichTextLabel 的 [b] 不生效，
+## 而且分节点改色最直观。
+func _show_cast(caster: BattleUnit, skill: SkillData) -> void:
+	if cast_name == null or cast_skill == null or caster == null or skill == null:
+		return
+	cast_name.text = caster.stats.name
+	cast_name.add_theme_color_override("font_color",
+			CAST_NAME_ALLY if caster.is_player else CAST_NAME_ENEMY)
+	# "施放"这两个字也在这里才填 —— 写死在场景里的话，一进战斗就会孤零零挂在屏幕下方。
+	cast_verb.text = " 施放 "
+	cast_skill.text = skill.display_name
+	if cast_bar == null:
+		return
+	# 新提示顶掉旧提示的计时：先复位透明度，再重新"停 1 秒 → 淡出 → 清空"。
+	if _cast_tween != null and _cast_tween.is_valid():
+		_cast_tween.kill()
+	cast_bar.modulate.a = 1.0
+	_cast_tween = create_tween()
+	_cast_tween.tween_interval(CAST_HOLD)
+	_cast_tween.tween_property(cast_bar, "modulate:a", 0.0, CAST_FADE)
+	_cast_tween.tween_callback(func() -> void:
+		cast_name.text = ""
+		cast_verb.text = ""
+		cast_skill.text = ""
+	)
+
+
+## 刷新顶部常驻的回合数（"第 N 回合"里的 N）。
+## 那个面板属于 TurnOrder（跟着头像排一起缩放），所以只转发。
+func _set_round(n: int) -> void:
+	turn_order.set_round(n)
+
+
+## 这个技能的一整段动画有多长（秒）—— 受击后仰要保持这么久。
+## 顺序：全屏特效（三尺青锋/群星陨落这类走这条）→ 命中特效 → 都没有就 0.35 兜底。
+## 实现是"实例化一次问 duration() 再 free"：那些场景都很轻（根节点 + 一个 Sprite2D），
+## 而且只有施法瞬间调一次，开销可以忽略。程序化特效没有 duration()，返回 0 会被跳过。
+func _skill_anim_time(skill: SkillData) -> float:
+	if skill == null:
+		return 0.35
+	for scene in [skill.screen_effect_scene, skill.hit_effect_scene, skill.target_effect_scene]:
+		if scene == null:
+			continue
+		var inst = scene.instantiate()
+		var d := 0.0
+		if inst.has_method("duration"):
+			d = float(inst.call("duration"))
+		inst.free()
+		if d > 0.0:
+			return d
+	return 0.35
 
 
 ## 这个技能是"打我方的"吗：给自己加 buff / 全体队友 / 选一个队友，都算。
@@ -1138,6 +1254,10 @@ func _spawn_per_hit_effect(skill: SkillData, target: BattleUnit, hit: int,
 	boom.scale = Vector2.ONE * maxf(0.05, skill.burst_scale)
 	if boom.has_method("set_attack_direction"):
 		boom.call("set_attack_direction", target.global_position - source_position)
+	# 特效铺在谁身上，就按谁的阵营镜像画面（敌方放太虚神剑时方向才不会反）；
+	# 必须在 play_segment 之前调 —— 它内部会按当前朝向起播。
+	if boom.has_method("set_on_player_side"):
+		boom.call("set_on_player_side", target.is_player)
 	if boom.has_method("play_segment"):
 		boom.call("play_segment", hit, skill.tint)
 	elif boom.has_method("play"):

@@ -355,6 +355,10 @@ func _refresh_visuals() -> void:
 	health_bar.offset_bottom = hp_bottom
 	name_label.offset_top = name_top
 	name_label.offset_bottom = name_bottom
+	# 静态立绘（没有 8 方位帧动画、也没有 3D 模型）才补程序化空闲动作。
+	# 有帧动画的单位自带 idle，再叠一层会打架。
+	if _anim == null and _model3d == null:
+		_start_idle_motion()
 	# 名字紧贴血条顶边（标签框比文字高，居中的话会空出一截，看着像"名字飘太高"）。
 	name_label.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
 	name_label.size.y = PLATE_NAME_H
@@ -474,7 +478,8 @@ func _refresh_mana() -> void:
 
 
 ## 死亡处理（hp 归零时由 take_damage() 调，不再校验 alive）。一次性、不可逆：alive/defending=false、
-## 取消选中与高亮、关点选、名字变暗、淡出 0.45s 后隐藏、emit died（最后发，接收方看到的是最终状态）。
+## 取消选中与高亮、关点选、名字变暗，然后**朝自己那一侧的斜后方抛出**（抛物线 + 旋转 + 淡出）。
+## emit died 在最后发，接收方看到的是最终状态。
 ## 重要：**不 queue_free()**——Battle 的列表/顺序条/跨 await 引用还指着它，统一由 _clear_units() 释放。
 func _die() -> void:
 	alive = false
@@ -484,9 +489,36 @@ func _die() -> void:
 	set_focused(false)
 	click_area.input_pickable = false
 	name_label.modulate = Color(1, 1, 1, 0.35)
-	var tween := create_tween()
-	tween.tween_property(self, "modulate:a", 0.0, 0.45)
-	tween.tween_callback(func() -> void: visible = false)
+	# 正在播的受击后仰/空闲呼吸先停：它们也在改 sprite 的 rotation / position.y，会和退场抢
+	if _hit_tween != null and _hit_tween.is_valid():
+		_hit_tween.kill()
+	if _idle_tween != null and _idle_tween.is_valid():
+		_idle_tween.kill()
+
+	# 退场方向：**自己那一侧的斜后方**。我方在右(x>0)、敌方在左(x<0)，
+	# 所以往"远离对方"的方向飞 —— 怪物往左飞、自己人往右飞。
+	var back := 1.0 if is_player else -1.0
+	var start := position
+	# ① 水平位移 + 旋转（一条 tween 并行跑满全程）。
+	#    x 用 EASE_IN：起步慢、越飞越快，像被打飞的加速度，不是"平移出画"。
+	var fly := create_tween()
+	fly.tween_property(self, "position:x", start.x + back * DEATH_ARC, DEATH_TIME) \
+			.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	fly.parallel().tween_property(sprite, "rotation", deg_to_rad(DEATH_SPIN) * -back, DEATH_TIME) \
+			.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	# ② 竖直方向单独走"先上升后下落"两段 —— 和水平位移叠加就是抛物线。
+	#    不能塞进上面那条 tween 的 parallel() 里，否则只会一直上升、不会掉下来。
+	var arc := create_tween()
+	arc.tween_property(self, "position:y", start.y - DEATH_LIFT, DEATH_TIME * 0.42) \
+			.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	arc.tween_property(self, "position:y", start.y + DEATH_DROP, DEATH_TIME * 0.58) \
+			.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	# ③ 淡出**只放在最后 30%**：全程淡出的话，人还在屏幕里就已经半透明了。
+	var fade := create_tween()
+	fade.tween_interval(DEATH_TIME * DEATH_FADE_FROM)
+	fade.tween_property(self, "modulate:a", 0.0, DEATH_TIME * (1.0 - DEATH_FADE_FROM))
+	fade.tween_callback(func() -> void: visible = false)
+	# 注意：died 立刻发 —— 顺序条/判定要马上把这个人当死人看，动画只是表现。
 	died.emit(self)
 
 
@@ -741,27 +773,173 @@ func set_defending(value: bool) -> void:
 # ── 表现（演出）—— 都可以换成 AnimationPlayer ──
 # 所有 play_* 都是协程，返回时机就是"演出播完"，Battle 靠 await 它们保证节奏顺序。
 
-## 普攻位移：朝目标方向冲 80px 再退回（总时长 0.12+0.04+0.16=0.32s）。不 emit 信号、不改血量。
-## 方向用 global_position 相减、位移加到局部 position：仅在本单位与父节点无旋转/缩放时等价
-## （本项目舞台是纯平移，安全）。坑：目标在演出中被释放则直接 return，调用方会当成演出已结束。
-func play_attack(target: BattleUnit) -> void:
+## 普攻站位：停在目标**前方**多远（靠自己这一侧）。
+## 105 时两个人几乎贴在一起，看着像"撞上去"；180 ≈ 一个半身位，留出挥砍的间隔。
+const ATTACK_STAND_OFF := 180.0
+## 冲刺/归位速度（像素/秒）：按距离算时长，远近都跟手。
+const ATTACK_DASH_SPEED := 1900.0
+const ATTACK_DASH_MIN := 0.10
+const ATTACK_DASH_MAX := 0.26
+## 招式动作最长等多久（帧动画问得到就按它，问不到用这个兜底）。
+const ATTACK_SWING_MAX := 0.5
+## 冲进敌阵时临时抬高层级。
+## 为什么需要：敌我单位是同一个父节点下的兄弟节点、按生成顺序绘制 —— 我方先生成、
+## 敌人后生成，所以人一冲进敌方阵地就会被敌人的立绘盖住。抬高层级最省事，
+## 不用改整体 y_sort（那会连带影响特效、血条、名字牌的层级）。
+const ATTACK_Z := 50
+
+## 冲出去之前记下的层级，归位时还原。
+var _z_before := 0
+
+# ── 死亡退场（抛物线抛飞）──
+## 整段退场时长（秒）。
+const DEATH_TIME := 0.80
+## 向后抛出的水平距离（像素）。视口半宽约 840，700 足够从任何站位甩出画面。
+const DEATH_ARC := 700.0
+## 抛物线最高点相对原位的抬升（像素）。
+const DEATH_LIFT := 190.0
+## 落到比原位低多少（像素）：沉下去更像"被打飞后坠地"。
+const DEATH_DROP := 280.0
+## 旋转总角度（度），方向跟抛飞方向一致。
+const DEATH_SPIN := 420.0
+## 淡出从整段的百分之几开始（0.7 = 最后 30% 才淡，前面全程可见）。
+const DEATH_FADE_FROM := 0.7
+
+# ── 程序化动画（给静态立绘的单位用：怪物没有 attack/idle/cast 序列帧）──
+## 空闲呼吸：上下浮动的像素与一个来回的时长。
+## 只动 sprite.position.y，不碰 scale —— play_cast()/attack_swing() 都在 tween scale，
+## 两边抢同一个属性会互相打断。
+const IDLE_BOB := 4.0
+## 受击后仰：歪多少度、到位/回正各多久、保持期间每段抖动多长、抖幅多少度。
+const HIT_TILT := 10.0
+const HIT_LEAN_TIME := 0.10
+const HIT_BACK_TIME := 0.14
+const HIT_SHAKE_STEP := 0.07
+const HIT_SHAKE_DEG := 1.6
+const IDLE_PERIOD := 1.7
+## 程序化出招：蓄力后仰 → 突刺前倾 → 回正。数值是相对 _base_scale 的倍增。
+const SWING_ANTIC_X := 0.92
+const SWING_ANTIC_Y := 1.06
+const SWING_STRIKE_X := 1.12
+const SWING_STRIKE_Y := 0.92
+const SWING_TILT := 9.0            ## 倾斜角度（度）
+
+## 空闲呼吸的循环 tween（换图/重建时先 kill 掉旧的）。
+var _idle_tween: Tween
+## 当前正在播的受击后仰 tween。
+## 多段技能每一击都会重新调 play_hit()，不 kill 旧的就会几个 tween 同时抢 rotation，
+## 表现成"僵住不动、最后抽一下"。
+var _hit_tween: Tween
+
+
+## 普攻第一段：斜着走到目标**同一横线**的侧面站位（await 到到位）。
+## 落点 = 目标的 y（完全对齐）+ x 方向让出 ATTACK_STAND_OFF 的距离，且仍在**自己这一侧**
+## （我方 x 恒大于敌方，所以永远是"站到目标右手边"）—— 斜向切入，不是横着平移。
+## 以前是"朝目标冲 80px 就退"，看不出谁打谁；走到面前才有交手感。
+## 坐标换算用 global_position → 局部偏移：仅在本单位与父节点无旋转/缩放时等价
+## （本项目舞台是纯平移，安全）。目标在演出中被释放则直接返回，调用方当成演出已结束。
+func attack_approach(target: BattleUnit) -> void:
 	if not is_instance_valid(target):
 		return
-	# 帧动画：播放攻击动作（一次性，播完自动回 idle）。位移 tween 与它并行，
-	# 所以"冲上去"和"挥击"是同时发生的。
+	# 自己在目标的左边还是右边（我方在右、敌方在左，不会歧义）
+	var dx := global_position.x - target.global_position.x
+	var side_x := 1.0 if dx >= 0.0 else -1.0
+	var to_global := Vector2(target.global_position.x + side_x * ATTACK_STAND_OFF,
+			target.global_position.y)
+	var to := position + (to_global - global_position)
+	# 抬到最上层，避免被敌方立绘盖住
+	_z_before = z_index
+	z_index = ATTACK_Z
+	var dist := (to - position).length()
+	var t := clampf(dist / ATTACK_DASH_SPEED, ATTACK_DASH_MIN, ATTACK_DASH_MAX)
+	var tween := create_tween()
+	tween.tween_property(self, "position", to, t)
+	await tween.finished
+
+
+## 普攻第二段：出招（播 attack 动作并等它播完）。近战门派技能不需要它 —— 那些有自己的特效。
+func attack_swing() -> void:
 	if _model3d != null:
 		_model3d.play_once("attack")
 	elif _anim != null:
 		_anim.play_once("attack")
-	var from := position
-	var dir := (target.global_position - global_position).normalized()
-	var to := from + dir * 80.0
+	# 有帧动画：等它播完（能问就问到播完为止，加 ATTACK_SWING_MAX 上限防死等）。
+	if _anim != null:
+		var waited := 0.0
+		while _anim.is_playing_once() and waited < ATTACK_SWING_MAX:
+			await get_tree().process_frame
+			waited += get_process_delta_time()
+		return
+	# 没有帧动画（怪物 = 静态立绘）：用缩放 + 倾斜演一套"蓄力→突刺→回正"。
+	await _procedural_swing()
+
+
+## 程序化出招：蓄力（压扁后仰）→ 突刺（拉长前倾）→ 回正。总时长约 0.3 秒。
+## 手感和 play_cast() 的"涨大染色"配对：一个往横向打、一个往纵向顶。
+func _procedural_swing() -> void:
+	if sprite == null:
+		return
+	var sx := _base_scale.x
+	var sy := _base_scale.y
 	var tween := create_tween()
-	tween.tween_property(self, "position", to, 0.12)
-	# tween_interval：在序列里插一段"什么都不做"的等待，让"撞上去"有顿挫感，也不与受击闪烁糊在一起。
-	tween.tween_interval(0.04)
-	tween.tween_property(self, "position", from, 0.16)
+	# 蓄力：横向收、纵向拉，身体微后仰
+	tween.tween_property(sprite, "scale", Vector2(sx * SWING_ANTIC_X, sy * SWING_ANTIC_Y), 0.08)
+	tween.parallel().tween_property(sprite, "rotation", deg_to_rad(-SWING_TILT), 0.08)
+	# 突刺：横向拉、纵向压，向前倾
+	tween.tween_property(sprite, "scale", Vector2(sx * SWING_STRIKE_X, sy * SWING_STRIKE_Y), 0.10)
+	tween.parallel().tween_property(sprite, "rotation", deg_to_rad(SWING_TILT), 0.10)
+	# 回正
+	tween.tween_property(sprite, "scale", _base_scale, 0.14)
+	tween.parallel().tween_property(sprite, "rotation", 0.0, 0.14)
 	await tween.finished
+
+
+## 空闲呼吸：上下浮动，无限循环。**每只怪周期与相位都不同** ——
+## 同一批出场的怪如果节奏一致，会像广播体操一样整齐上下，很出戏。
+## 只动 position.y —— scale 留给 play_cast()/attack_swing()，rotation 留给攻击倾斜。
+func _start_idle_motion() -> void:
+	if sprite == null:
+		return
+	if _idle_tween != null and _idle_tween.is_valid():
+		_idle_tween.kill()
+	# 周期各差 ±15%，相位随机落在 0~1 之间（0 = 在最低点、1 = 在最高点）
+	var period := IDLE_PERIOD * randf_range(0.85, 1.18)
+	var phase := randf()
+	sprite.position.y = -IDLE_BOB * phase
+	# 先把"本轮剩下的上升段"走完（只走这一次，不进循环），之后才进标准循环。
+	# 这样起始位置和循环起点是对得上的，不会出现第一次跳动。
+	var lead := create_tween()
+	lead.tween_property(sprite, "position:y", -IDLE_BOB, period * 0.5 * (1.0 - phase)) \
+			.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	lead.finished.connect(_loop_idle.bind(period))
+
+
+## 空闲循环本体：上浮半周期 → 下落半周期，无限循环。period 由 _start_idle_motion 传进来。
+func _loop_idle(period: float) -> void:
+	if sprite == null or not is_inside_tree():
+		return
+	_idle_tween = create_tween().set_loops()
+	_idle_tween.tween_property(sprite, "position:y", 0.0, period * 0.5) \
+			.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	_idle_tween.tween_property(sprite, "position:y", -IDLE_BOB, period * 0.5) \
+			.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+
+
+## 普攻第三段：退回原位（await 到回到站位），并把攻击时抬高的层级还原。
+## 参数 from_position：开打前记下的局部位置（调用方在 attack_approach 之前存）。
+func attack_return(from_position: Vector2) -> void:
+	var dist := (position - from_position).length()
+	var t := clampf(dist / ATTACK_DASH_SPEED, ATTACK_DASH_MIN, ATTACK_DASH_MAX)
+	var tween := create_tween()
+	tween.tween_property(self, "position", from_position, t)
+	await tween.finished
+	z_index = _z_before
+
+
+## 普攻完整收尾：出招 + 归位（普通攻击用；近战技能只调 attack_return）。
+func attack_finish(from_position: Vector2) -> void:
+	await attack_swing()
+	await attack_return(from_position)
 
 
 ## 施法起手：微微涨大 + 染色（无素材时也有反馈），总时长约 0.14+0.16=0.3s。
@@ -782,13 +960,51 @@ func play_cast() -> void:
 	await tween.finished
 
 
-## 受击闪烁：0.05s 染红 + 0.15s 恢复，共 0.2s。不做任何数值结算（伤害在调用方已扣完）。
-## 恢复色同样是 DEFEND_TINT if defending else WHITE，否则被打一下防御的视觉提示就没了。
-## 注意 modulate 是乘法染色，本身是暗色贴图的单位闪红会不明显。
-func play_hit() -> void:
+## 受击表现：朝**远离攻击者**的方向后仰，然后**保持这个姿势**直到攻击/技能动画播完，
+## 期间只有细微抖动，结束时回正。**不后退**（位移会和出手的冲刺、空闲呼吸打架）。
+## 参数 from：攻击者的世界坐标；INF = 无从判断，退化成"向右后仰"。
+## 参数 hold：后仰总共保持多久（秒）。多段技能传那一段动画的时长，普通攻击传一次挥击的时长。
+## 只动 rotation + modulate —— 这两样空闲呼吸都不碰，所以不用停它。
+func play_hit(from := Vector2.INF, hold := 0.35) -> void:
+	if sprite == null:
+		return
+	# 方向：从攻击者指向自己 = 受力方向的反面
+	var dir := Vector2.RIGHT
+	if from != Vector2.INF:
+		var d := global_position - from
+		if d.length() > 1.0:
+			dir = d.normalized()
+	# 远离攻击者的方向 = dir；Godot 2D 里**正角是顺时针**，
+	# 所以"被打退的方向朝左"要让身子向左倒 → 负角。即 rotation = tilt 本身（tilt 带符号）。
+	# 之前写成 -tilt，等于把人往攻击者那边倒，方向正好反了。
+	var tilt := deg_to_rad(HIT_TILT) * (signf(dir.x) if absf(dir.x) > 0.05 else 1.0)
+	var rest := Color.WHITE if not defending else DEFEND_TINT
+	var lean := HIT_LEAN_TIME
+	var back := HIT_BACK_TIME
+	var shake := maxf(0.0, hold - lean - back)
+
+	# 上一击的后仰还没播完就再来一记：先掐掉，否则两个 tween 抢 rotation 会互相抵消
+	if _hit_tween != null and _hit_tween.is_valid():
+		_hit_tween.kill()
 	var tween := create_tween()
-	tween.tween_property(sprite, "modulate", HIT_TINT, 0.05)
-	tween.tween_property(sprite, "modulate", DEFEND_TINT if defending else Color.WHITE, 0.15)
+	_hit_tween = tween
+	# ① 后仰到位（带回弹感）
+	tween.tween_property(sprite, "rotation", tilt, lean) \
+			.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tween.parallel().tween_property(sprite, "modulate", HIT_TINT, minf(0.06, lean))
+	# ② 保持后仰：在这段时间里做细微抖动（围绕后仰角小幅摇摆）
+	var step := HIT_SHAKE_STEP
+	var n := int(shake / step)
+	for i in n:
+		var wobble := deg_to_rad(randf_range(-HIT_SHAKE_DEG, HIT_SHAKE_DEG))
+		tween.tween_property(sprite, "rotation", tilt + wobble, step)
+	var left := shake - n * step
+	if left > 0.01:
+		tween.tween_interval(left)
+	# ③ 回正 + 消红
+	tween.tween_property(sprite, "rotation", 0.0, back) \
+			.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	tween.parallel().tween_property(sprite, "modulate", rest, back)
 	await tween.finished
 
 

@@ -118,6 +118,9 @@ enum DamageType { PHYSICAL, MAGIC }
 @export var instant_hit := false
 
 ## true = **每一段连击各播一次命中特效**（太虚神剑这种"一击一段动画"的技能）。
+## 释放前先**走到目标面前**（近战招式：太虚神剑 / 星罗魔爪），打完退回原位。
+## 只对单目标技能有效 —— 群体技能满地跑会乱。
+@export var melee := false
 ## 打开后：单体的 hits 循环里每打一下就在目标脚下 new 一个 hit_effect_scene，
 ## 并调它的 play_segment(hit)；最后飞行体的 burst 不再重复放特效。
 @export var hit_effect_per_hit := false

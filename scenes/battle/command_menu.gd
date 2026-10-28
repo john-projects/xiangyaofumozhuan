@@ -37,6 +37,12 @@ signal skill_selected(skill: SkillData)
 ## 当前为谁打开（open_for 写、close 清 null）。普通引用，单位被释放不会自动变 null。
 var _unit: BattleUnit
 
+# ── 跨回合记忆：上回合玩家选了什么 ──
+## 上回合选中的一级指令（默认攻击）。
+var _last_command := &"attack"
+## 上回合在法术页选中的技能；非 null 时 open_for() 会直接回到法术页并选中它。
+var _last_skill: SkillData = null
+
 
 ## 一次性接线：连六个按钮、“道具”永久禁用，先 _show_main() 再 close()（顺序不能换）。
 ## bind() 把指令标识追加在信号参数之后，四个按钮共用一个回调；子类覆盖 _ready() 必须调 super._ready()。
@@ -55,6 +61,13 @@ func _ready() -> void:
 	# 不这么做的话"点一下空白 → 方向键失灵"，玩家会以为键盘操作坏了。
 	# 点在按钮上的事件会被按钮自己吃掉，不会走到这里。
 	gui_input.connect(_on_panel_gui_input)
+
+	# 给主按钮挂上指令标识：open_for() 恢复上回合选择时要按标识找按钮。
+	attack_button.set_meta("command", &"attack")
+	skill_button.set_meta("command", &"skill")
+	item_button.set_meta("command", &"item")
+	defend_button.set_meta("command", &"defend")
+	flee_button.set_meta("command", &"flee")
 
 	# 道具系统还没做，先禁用
 	# 注意这只在 _ready() 里设一次，open_for() 不会重新启用它 —— 等道具做完要记得改这里。
@@ -76,11 +89,17 @@ func open_for(unit: BattleUnit) -> void:
 		title_label.text = "指令"
 	# `unit == null or not unit.has_skills()`：先判空再调方法，靠 or 的短路求值避免 null 访问。
 	skill_button.disabled = unit == null or not unit.has_skills()
-	_show_main()
 	show()
-	# 键盘：打开菜单时默认把光标放在第一个**可用**指令上（"道具"是禁用的，会被自动跳过）。
-	# 必须在 show() 之后调用 —— 隐藏中的 Control 拿不到焦点。
-	_focus_first(main_buttons.get_children())
+	# 恢复上回合的选择：
+	#   上回合用的是法术 → 直接回法术页，焦点落在那个技能上（"记住二级菜单"）；
+	#   否则回主菜单，焦点落在上回合那个指令上（"记住一级菜单"）。
+	# 只抢焦点、不替玩家确认 —— 想换指令直接按方向键走。
+	# 必须在 show() 之后调：隐藏中的 Control 拿不到焦点。
+	if _last_skill != null and unit != null and unit.available_skills.has(_last_skill):
+		_build_skill_page(_last_skill)
+	else:
+		_show_main()
+		_focus_command(_last_command)
 
 
 ## 关闭菜单：hide() + _unit = null。不重置可见性、不发信号，下次 open_for() 会重新归位。
@@ -167,7 +186,15 @@ func _open_skills() -> void:
 	if _unit == null:
 		return
 	SoundManager.play_sound(SoundManager.Sound.UI)
+	_last_command = &"skill"
+	_build_skill_page(null)
 
+
+## 重建法术页（不放音效 —— open_for() 恢复上回合选择时也要用）。
+## 参数 focus_skill：要选中的技能；null = 落第一个可用项。
+func _build_skill_page(focus_skill: SkillData) -> void:
+	if _unit == null:
+		return
 	for child in skill_buttons.get_children():
 		skill_buttons.remove_child(child)
 		child.queue_free()
@@ -195,10 +222,35 @@ func _open_skills() -> void:
 	var chain: Array = skill_buttons.get_children()
 	chain.append(back_button)
 	_wire_dpad(chain)
-	_focus_first(chain)
+	if not _focus_skill(focus_skill):
+		_focus_first(chain)
 
 
-## 造一个技能按钮：显示“技能名 蓝N 后缀”，后缀优先冷却、其次蓝不够；可用性用 can_use_skill()。
+## 把焦点落到指定技能的按钮上；找到并聚焦返回 true。
+func _focus_skill(skill: SkillData) -> bool:
+	if skill == null:
+		return false
+	for child in skill_buttons.get_children():
+		if child is Button and not (child as Button).disabled \
+				and child.get_meta("skill", null) == skill:
+			(child as Button).grab_focus()
+			return true
+	return false
+
+
+## 把焦点落到某个一级指令对应的按钮上（不可用时退回第一个可用项）。
+func _focus_command(command: StringName) -> void:
+	for child in main_buttons.get_children():
+		if child is Button and not (child as Button).disabled \
+				and child.get_meta("command", &"") == command:
+			(child as Button).grab_focus()
+			return
+	_focus_first(main_buttons.get_children())
+
+
+## 造一个技能按钮：只显示“技能名 + 状态后缀”。
+## 后缀优先冷却、其次蓝不够；可用性用 can_use_skill()。
+## ⚠ 不再显示蓝耗数字（"蓝6"）—— 蓝耗已经统一成 5，写出来只是噪音。
 ## 副作用：接 pressed → _on_skill_pressed.bind(skill)，只读 _unit 数据；必须在 _unit 有效时调用。
 func _make_skill_button(skill: SkillData) -> Button:
 	var button := Button.new()
@@ -208,11 +260,11 @@ func _make_skill_button(skill: SkillData) -> Button:
 		suffix = "  冷却%d" % cd
 	elif _unit.mp < skill.mana_cost:
 		suffix = "  蓝不够"
-	# int(skill.mana_cost)：蓝耗是 float，显示成 "蓝6" 而不是 "蓝6.0"。
-	button.text = "%s  蓝%d%s" % [skill.display_name, int(skill.mana_cost), suffix]
+	button.text = "%s%s" % [skill.display_name, suffix]
 	button.custom_minimum_size = Vector2(180, 46)
 	button.add_theme_font_size_override("font_size", 20)
 	button.disabled = not _unit.can_use_skill(skill)
+	button.set_meta("skill", skill)
 	# bind(skill)：pressed 信号无参数，bind 的值会作为第一个参数传给 _on_skill_pressed。
 	button.pressed.connect(_on_skill_pressed.bind(skill))
 	return button
@@ -223,11 +275,15 @@ func _make_skill_button(skill: SkillData) -> Button:
 ## 主菜单按钮共用回调。播 UI 音效并 emit command_selected()。
 ## 不关菜单：关闭是 Battle 的职责（道具 / 技能未实现时要留着让玩家重选）。
 func _on_main_pressed(command: StringName) -> void:
+	_last_command = command
+	_last_skill = null          # 选了普通指令 = 下次不再回法术页
 	SoundManager.play_sound(SoundManager.Sound.UI)
 	command_selected.emit(command)
 
 
 ## 技能按钮回调。播 UI 音效并 emit skill_selected()；不做蓝量 / 冷却校验，准入由 Battle 负责。
 func _on_skill_pressed(skill: SkillData) -> void:
+	_last_command = &"skill"
+	_last_skill = skill
 	SoundManager.play_sound(SoundManager.Sound.UI)
 	skill_selected.emit(skill)

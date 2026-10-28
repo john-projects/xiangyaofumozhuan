@@ -421,7 +421,9 @@ func _add_toast_line(text: String, seconds: float) -> void:
 	box.add_theme_stylebox_override("panel", _toast_style())
 	var label := Label.new()
 	label.text = text
-	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	# 靠左对齐、垂直居中：固定 720 宽的条里居中对齐，长短不一的提示会参差不齐。
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	label.add_theme_font_size_override("font_size", 20)
 	# 金色文字 + 黑色描边：底板调透之后仍然清楚，只是整体"轻"了。

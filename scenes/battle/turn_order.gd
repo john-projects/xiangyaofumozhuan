@@ -23,6 +23,13 @@ const DEAD_ALPHA := 0.3
 
 ## 头像容器（%Icons），由 _rebuild() 动态增删子节点。
 @onready var icons: HBoxContainer = %Icons
+## 顶部常驻的回合数字（"第 N 回合"里的 N，红色）。
+@onready var round_number: Label = %RoundNumber
+
+## 面板左右内缩（VBox 的左右 offset 之和）—— 算自适应宽度时要加回来。
+const H_PADDING := 24.0
+## 自适应宽度下限，避免空队列时面板缩成一条线。
+const MIN_WIDTH := 96.0
 
 ## 单位队列（引用，不是拷贝）。弱类型 Array 才能直接接收 Array[BattleUnit]，代价是无静态类型检查。
 var _queue: Array = []
@@ -85,6 +92,26 @@ func _rebuild() -> void:
 			icons.add_child(_make_arrow())
 		# `unit == _current` 是引用比较，判断"这个是不是当前出手的人"。
 		icons.add_child(_make_icon(ordered[i], ordered[i] == _current))
+	# 黑底宽度跟着头像数量走（右边缘固定贴屏幕，所以改左偏移）。
+	# 必须延后一帧：_make_icon 刚 add_child，容器的最小尺寸这一帧还没算完。
+	_fit_width.call_deferred()
+
+
+## 把面板宽度收成"刚好装下这一排头像"。
+## 锚点在屏幕右上（anchor_left = 1），所以宽度 = -(内容宽 + 左右内缩)。
+func _fit_width() -> void:
+	if icons == null:
+		return
+	var w := maxf(MIN_WIDTH, icons.get_combined_minimum_size().x + H_PADDING)
+	offset_left = -12.0 - w
+
+
+## 刷新顶部常驻的回合数（"第 N 回合"里的 N）。
+## 文案拆成三段 Label 是为了给数字单独上红色；加粗用"描边和文字同色"伪造
+## （富文本的 [b] 在项目这套没有粗体字重的字体上不会生效）。
+func set_round(n: int) -> void:
+	if round_number != null:
+		round_number.text = str(n)
 
 
 ## 第一、二格之间的右向箭头（纯装饰，不占点击区域）。

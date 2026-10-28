@@ -22,3 +22,4 @@ hit_effect_on_ground = true
 hit_effect_per_hit = true
 hit_interval = 0.1
 burst_scale = 2.2
+melee = true

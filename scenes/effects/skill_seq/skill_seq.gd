@@ -52,6 +52,14 @@ const FADE_OUT := 0.3
 ## 为什么要能手填：等分常常切在"过渡帧"上（比如 3 连斩的第三段只剩消散的火星）。
 ## 按招式真实节拍切才对得上"每一下都是一招"。
 @export var seg_bounds: PackedInt32Array
+## 画面整体旋转角度（度，**顺时针为正** —— Godot 2D 的 y 轴朝下，正角即顺时针）。
+## 这是我方施法、特效铺在敌方阵地时的角度。
+## 只转贴图、不转根节点：根节点还担着 fit_units() 算出来的位置与缩放，
+## 转它会把"覆盖范围"一起转歪。
+@export var rotation_deg := 0.0
+## 敌方施法、特效铺在**我方阵地**时的旋转角度。
+## 不写 -rotation_deg 是因为镜像角度要单独调（实测 -60 比 -120 顺眼）。
+@export var rotation_deg_enemy := 0.0
 
 var _sprite: Sprite2D
 var _t := 0.0
@@ -74,6 +82,7 @@ func _ready() -> void:
 	_sprite.vframes = rows_total
 	_sprite.frame = 0
 	_sprite.scale = Vector2.ONE * scale_mul
+	_sprite.rotation = deg_to_rad(rotation_deg)
 	# 加色混合：黑像素 = 不发光 = 不可见，所以不需要 alpha。
 	_sprite.material = EffectTex.additive()
 	# 全屏模式要盖住所有单位（默认 z=1 会被立绘挡住）。
@@ -182,6 +191,16 @@ func duration() -> float:
 	return float(maxi(n, 1)) / maxf(fps, 1.0)
 
 
+## 全屏播放时，如果特效铺在**我方**阵地上（= 敌方放的技能），换成敌方专用的角度。
+## 为什么不是简单的镜像：镜像角度（-rotation_deg）实测不如单独调好看，
+## 所以给一个独立的 rotation_deg_enemy，两边各调各的。
+## 必须在 _ready() 之后再调（_sprite 那时才建好）。
+func set_on_player_side(is_player_side: bool) -> void:
+	if _sprite == null:
+		return
+	_sprite.rotation = deg_to_rad(rotation_deg_enemy if is_player_side else rotation_deg)
+
+
 func _process(delta: float) -> void:
 	if not _playing:
 		return
@@ -192,10 +211,13 @@ func _process(delta: float) -> void:
 		finished.emit()
 		queue_free()
 		return
-	# 收尾淡出：剩下的帧数不足 FADE_OUT 秒就按比例降 alpha，避免最后一帧"啪"地消失。
+	# 收尾淡出：剩下的帧不足 fade 秒就按比例降 alpha，避免最后一帧"啪"地消失。
+	# fade 取 0.3 秒和"总时长 1/4"里较小的那个 —— 短特效（三尺青锋只有 0.75 秒）
+	# 用满 0.3 秒会把最亮的绽放段整个压暗。
+	var fade := minf(FADE_OUT, duration() * 0.25)
 	var left := float(_to - f) / maxf(fps, 1.0)
-	if left < FADE_OUT:
-		_sprite.modulate.a = clampf(left / FADE_OUT, 0.0, 1.0)
+	if fade > 0.0 and left < fade:
+		_sprite.modulate.a = clampf(left / fade, 0.0, 1.0)
 	if f != _frame:
 		_frame = f
 		_sprite.frame = f

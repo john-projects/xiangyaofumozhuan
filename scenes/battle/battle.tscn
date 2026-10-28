@@ -87,18 +87,57 @@ unique_name_in_owner = true
 
 [node name="TurnOrder" parent="UI" unique_id=1782321179 instance=ExtResource("3_turnorder")]
 
+[node name="CastBar" type="HBoxContainer" parent="UI" unique_id=1142666690]
+anchors_preset = 7
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -500.0
+offset_top = -214.0
+offset_right = 500.0
+offset_bottom = -172.0
+grow_horizontal = 2
+grow_vertical = 0
+mouse_filter = 2
+theme_override_constants/separation = 0
+alignment = 1
+
+[node name="CastName" type="Label" parent="UI/CastBar" unique_id=1142666691]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 24
+text = ""
+
+[node name="CastVerb" type="Label" parent="UI/CastBar" unique_id=1142666692]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.85, 0.85, 0.85, 1)
+theme_override_font_sizes/font_size = 24
+text = ""
+
+[node name="CastSkill" type="Label" parent="UI/CastBar" unique_id=1142666693]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.98, 0.82, 0.42, 1)
+theme_override_font_sizes/font_size = 24
+text = ""
+
 [node name="InfoLabel" type="Label" parent="UI" unique_id=1142666683]
 unique_name_in_owner = true
-anchors_preset = 5
+anchors_preset = 7
 anchor_left = 0.5
+anchor_top = 1.0
 anchor_right = 0.5
-offset_left = -400.0
-offset_top = 118.0
-offset_right = 400.0
-offset_bottom = 154.0
+anchor_bottom = 1.0
+offset_left = -500.0
+offset_top = -168.0
+offset_right = 500.0
+offset_bottom = -126.0
 grow_horizontal = 2
+grow_vertical = 0
 theme_override_font_sizes/font_size = 24
-text = "战斗开始"
+text = ""
 horizontal_alignment = 1
 
 [node name="CommandMenu" parent="UI" unique_id=986006701 instance=ExtResource("4_command")]
