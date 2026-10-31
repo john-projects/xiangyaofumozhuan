@@ -30,6 +30,10 @@ const BATTLE_SCENE := preload("res://scenes/battle/battle.tscn")
 ## 换人改这一行，或在 main.tscn 检查器填 default_leader 覆盖。
 const DEFAULT_LEADER := preload("res://resources/units/players/行修.tres")
 
+## 精英怪出现间隔（场）。默认 6 ± 2 → 每 4~8 场战斗出现一只，最多一只。
+@export var elite_every_min := 4
+@export var elite_every_max := 8
+
 # ───────────── 调试专用：开局阵容 ─────────────
 ## true = 开局直接把 6 个角色全拉进团队、按表配好门派（燕如意只入团队不上阵）。
 ## 调试完改成 false 就恢复"只有队长一个人"的正常开局。
@@ -57,7 +61,11 @@ const DEBUG_BENCHED := "燕如意"
 @export var enemy_scale_per_map := 0.15        # 每前进一张图，敌人血量/伤害 +15%
 @export var coin_reward_per_map := 40          # 通关奖励 = coin_reward_per_map * 地图序号
 ## 新档初始金币，默认 500（与 Global.coins 默认值一致）。
-@export var starting_coins := 500
+## 距离上一次精英出场已经打了几场；elite_next_in 是本轮的目标间隔。
+var _battles_since_elite := 0
+var _elite_next_in := 6
+
+@export var starting_coins := 10000
 
 # ── 等级与经验（每个角色各自，满级 100）──
 ## 满级；到顶后经验不再增长（打赢只给金币）。
@@ -171,8 +179,6 @@ var party: Array[UnitStats] = []
 ## 上阵名单（≤ MAX_DEPLOYED）：必须是 party 子集；战斗前逐个 duplicate()，掉血不污染 .tres。
 ## ⚠ 同 party 是引用语义交给 WorldMap，也别整个重新赋值。
 var deployed: Array[UnitStats] = []
-## 已通关地图集合：map_id -> true。用于地图名后缀"（已通关）"与将来"必须先打赢才能走"。
-var cleared_maps: Dictionary = {}
 ## 是否在战斗中（enter_battle 置 true / _on_battle_ended 置 false）。⚠ 目前无人读，预留。
 var in_battle := false
 
@@ -504,12 +510,11 @@ func show_title() -> void:
 
 
 ## 新游戏：重置主要局内状态后用默认队长开局。⚠ Global 跨屏存活，新档必须逐项手动清。
-## 清 party/deployed/cleared_maps/_map_positions/_last_result、current_map_id、Global.coins=starting_coins、
+## 清 party/deployed/_map_positions/_last_result、current_map_id、Global.coins=starting_coins、
 ## 等级/经验/装备/门派/属性点/main_player_selected；最后 start_game_with_defaults()。
 func start_new_game() -> void:
 	party.clear()
 	deployed.clear()
-	cleared_maps.clear()
 	_map_positions.clear()
 	_last_result = ""
 	current_map_id = _first_map_id()
@@ -522,6 +527,8 @@ func start_new_game() -> void:
 	Global.sect_skill_levels_by_character.clear()
 	Global.attr_alloc_by_character.clear()
 	Global.main_player_selected = null
+	_battles_since_elite = 0
+	_elite_next_in = randi_range(elite_every_min, elite_every_max)
 	start_game_with_defaults()
 
 
@@ -602,7 +609,7 @@ func show_map(result_text := "", from_map_id := "", restore_position := false) -
 	if restore_position and _map_positions.has(map.id):
 		world.spawn_override = _map_positions[map.id]     # 打完战斗回到原地
 	world.deployed = deployed      # 上阵名单（引用语义；队伍管理面板要按它显示"上阵/下阵"）
-	world.setup(map, party, result_text, cleared_maps.has(map.id), _map_names(), from_map_id)
+	world.setup(map, party, result_text, _map_names(), from_map_id)
 	world.battle_requested.connect(enter_battle)
 	world.travel_requested.connect(travel_to)
 	world.back_to_title_requested.connect(show_title)
@@ -628,7 +635,6 @@ func travel_to(next_id: String) -> void:
 	if next == null:
 		push_warning("GameRoot: 没有这张地图 -> %s" % next_id)
 		return
-	# TODO: 想"必须先打赢才能走"就在这里判断 cleared_maps.has(current_map_id)
 	_remember_position()
 	var from_id := current_map_id
 	current_map_id = next.id
@@ -709,7 +715,7 @@ func _capture_battle_backdrop() -> Texture2D:
 
 # ── 战斗结算 ──
 
-## 战斗结束：胜利记 cleared_maps（唯一写入点）、加金币、按上阵成员发经验；失败只写文案；随后回地图原地。
+## 战斗结束：胜利加金币、按上阵成员发经验；失败只写文案；随后回地图原地。
 ## 不直接清 Battle：show_map→_swap 先 fade_out，_clear_screens 发生在信号返回后，避免在自身回调里 free 自己。
 ## ⚠ Battle 侧对 battle_ended 只发一次，这里不会重复发奖。
 func _on_battle_ended(player_won: bool) -> void:
@@ -718,7 +724,6 @@ func _on_battle_ended(player_won: bool) -> void:
 	var map_name := map.display_name if map != null else current_map_id
 
 	if player_won:
-		cleared_maps[map.id if map != null else current_map_id] = true
 		var reward := coin_reward_per_map * map_difficulty()
 		Global.coins += reward
 		# 经验：和金币同一条公式思路（难度越高越多），另加"按敌人数量"的份（见 exp_reward）
@@ -1421,6 +1426,7 @@ func _make_player_team() -> Array[UnitStats]:
 			continue
 		# duplicate：战斗改的是副本，不污染 .tres（以后做"战斗结束回写血量"也方便）
 		var copy := stats.duplicate() as UnitStats
+		copy.weapon_visual = equipment_in(stats, ItemBase.EquipType.WEAPON) as ItemEquipment
 		# 等级+基础属性 → 派生属性覆盖到副本；防御/躲避/法伤及二级属性只带进去（战斗暂未用）。
 		# 不再乘旧的"每级 ×1.5%"倍率，成长全由属性点承担。
 		var d := derived_stats(stats)
@@ -1547,6 +1553,7 @@ static func _apply_sect_passives(copy: UnitStats, source: UnitStats) -> void:
 
 ## 按当前地图难度生成敌方队伍；池子为空返回空数组（调用方中止）。
 ## 池：MapData.enemy_pool 非空则用，否则 enemy_pool；数量 = clampi(上阵人数 ±1, 1, 5)。
+## 种类**随机抽取且允许重复**（同一只可能连出好几场），坑位由 _spawn_team() 打乱。
 ## ⚠ scale 用原始 base 值乘（不累乘，避免循环抽到同一只时复利）；maxf(1.0,…) 兜底防 0/负血。
 func _make_enemy_team() -> Array[UnitStats]:
 	var out: Array[UnitStats] = []
@@ -1555,13 +1562,44 @@ func _make_enemy_team() -> Array[UnitStats]:
 	if pool.is_empty():
 		return out
 
+	# 拆成普通池 / 精英池：精英单独掷一次骰子，不进普通轮盘，
+	# 否则 5 个坑位各自独立抽，精英几乎每场都出、还可能出好几只。
+	var normal_pool: Array[UnitStats] = []
+	var elite_pool: Array[UnitStats] = []
+	for entry in pool:
+		if entry == null:
+			continue
+		if entry.is_elite:
+			elite_pool.append(entry)
+		else:
+			normal_pool.append(entry)
+	# 一个普通怪都没配就退回整池（否则会抽不出人）
+	if normal_pool.is_empty():
+		normal_pool = pool
+
 	var difficulty := map_difficulty()
 	# 数量 = 上阵人数 或 上阵人数 +1（以前是 ±1，会出现敌人比玩家人少的情况）。
 	# 上限 MAX_ENEMY_COUNT = 5：敌方战场只有 5 个站位，5 人队时就是 5 打 5。
 	var count := clampi(deployed_count(deployed) + randi_range(0, 1), 1, MAX_ENEMY_COUNT)
 	var scale: float = 1.0 + (difficulty - 1) * enemy_scale_per_map
+	# 精英：按「场次间隔」出场，而不是每场独立掷骰。
+	# 到点了就占掉一个随机坑位，然后重新掷下一轮的间隔（4~8 场）。
+	var elite_index := -1
+	if not elite_pool.is_empty() and count > 0:
+		_battles_since_elite += 1
+		if _battles_since_elite >= _elite_next_in:
+			elite_index = randi() % count
+			_battles_since_elite = 0
+			_elite_next_in = randi_range(elite_every_min, elite_every_max)
 	for i in count:
-		var base: UnitStats = pool[i % pool.size()]
+		# **随机抽、允许重复**：以前是 pool[i % size] 顺次取，池子一旦比敌人数量多，
+		# 排在后面的就永远出不来（5 打 5 时第 6、7 种一次都不会登场）。
+		# 想"每场尽量不重复"就把下面这行换成先洗牌再取前 count 个。
+		var base: UnitStats
+		if i == elite_index:
+			base = elite_pool[randi() % elite_pool.size()]
+		else:
+			base = normal_pool[randi() % normal_pool.size()]
 		if base == null:
 			continue
 		var scaled := base.duplicate() as UnitStats

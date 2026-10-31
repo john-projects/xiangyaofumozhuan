@@ -10,8 +10,8 @@
 [resource]
 script = ExtResource("2_xvmk0")
 name = "燕如意"
-icon = ExtResource("1_avatar")
-model_glb = "res://assets/models/players/燕如意.glb"
+icon = ExtResource("2_portrait")
 portrait = ExtResource("2_portrait")
 speed = 340.0
 metadata/_custom_type_script = "uid://j6ibt5vlkg3t"
+avatar = ExtResource("1_avatar")

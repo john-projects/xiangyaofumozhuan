@@ -1,0 +1,17 @@
+{
+  "source": "E:\\dream\\godot\\各种UI图\\map\\01_桃花村-ai.png",
+  "output": "output\\upscale_taohuacun\\01_桃花村-ai-4x.png",
+  "source_size": [
+    1448,
+    1086
+  ],
+  "output_size": [
+    5792,
+    4344
+  ],
+  "scale": 4,
+  "model": "RealESRGAN_x4plus_anime_6B",
+  "seconds": 41.02,
+  "alpha": "bicubic interpolation of original alpha; no changed layout",
+  "model_sha256": "f872d837d3c90ed2e05227bed711af5671a6fd1c9f7d7e91c911a61f155e99da"
+}

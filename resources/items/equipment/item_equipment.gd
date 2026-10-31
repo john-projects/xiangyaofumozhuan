@@ -22,6 +22,14 @@ class_name ItemEquipment
 ## 速度（整数，加到 UnitStats.speed 上的点数）。
 @export var speed := 0
 
+@export_group("3D 武器外观")
+## 武器场景以握柄为原点，局部 +Y 指向剑尖；不配置时不显示手持模型。
+@export var weapon_scene: PackedScene
+## 相对右手骨骼的握点、旋转及缩放，用于校准武器美术资源。
+@export var weapon_position := Vector3.ZERO
+@export var weapon_rotation_degrees := Vector3.ZERO
+@export var weapon_scale := 1.0
+
 
 ## 生成属性卡上的 BBCode 富文本：只列**非 0** 项，六项全 0 时返回一句占位，保证卡片不空。
 ## 参数：无（读自身字段）。返回值：BBCode 字符串，hover_item_card 直接丢给 RichTextLabel；纯函数无副作用。

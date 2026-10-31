@@ -32,6 +32,8 @@ signal battle_ended(player_won: bool)
 const BATTLE_UNIT_SCENE := preload("res://scenes/battle/battle_unit.tscn")
 ## 技能飞行体场景。每次施法每个目标一个，命中爆炸后自毁。
 const SKILL_PROJECTILE_SCENE := preload("res://scenes/effects/projectile/skill_projectile.tscn")
+## 我方阵亡后留在原地的幽火（程序化火焰，见 ghost_flame.gd）。
+const GHOST_FLAME_SCENE := preload("res://scenes/effects/ghost_flame/ghost_flame.tscn")
 ## 默认命中爆炸（程序化四层）；群体技能给每个敌人补的小爆炸也用它。
 const DEFAULT_BURST_EFFECT_SCENE := preload("res://scenes/effects/burst_effect.tscn")
 ## 群体技能里每人补的小爆炸相对 skill.burst_scale 的比例。
@@ -242,6 +244,11 @@ func start_battle(players: Array[UnitStats], enemies: Array[UnitStats]) -> void:
 func _spawn_team(stats_list: Array[UnitStats], slots_root: Node2D, is_player: bool) -> Array[BattleUnit]:
 	var result: Array[BattleUnit] = []
 	var slots := slots_root.get_children()
+	# 敌方坑位随机：同一个敌人不必每场都站同一个 Marker2D。
+	# 我方保持固定顺序（操作时站位稳定，点选习惯不变）。
+	if not is_player:
+		slots = slots.duplicate()
+		slots.shuffle()
 	# 人数与站位数取小，避免越界访问 slots[i]。
 	var count: int = mini(stats_list.size(), slots.size())
 	if stats_list.size() > slots.size():
@@ -258,6 +265,10 @@ func _spawn_team(stats_list: Array[UnitStats], slots_root: Node2D, is_player: bo
 		unit.available_skills = _skills_for(unit, is_player)
 		# 用 global_position：站位 Marker 相对 Stage，单位挂在 Stage/Units 下，父节点不同。
 		unit.global_position = (slots[i] as Node2D).global_position
+		# Y 排序在脚下同高时按节点顺序绘制；后排提前，确保前排盖住后排。
+		# 敌方站位会随机，不能依赖生成顺序，也不抬高 z_index 影响特效层级。
+		if String(slots[i].name).begins_with("Back"):
+			units_root.move_child(unit, 0)
 		unit.clicked.connect(_on_unit_clicked)
 		# 悬停用来同步键盘光标。
 		unit.hovered.connect(_on_unit_hovered)
@@ -628,6 +639,17 @@ func _perform_attack(attacker: BattleUnit, target: BattleUnit) -> void:
 	# home 必须在 approach 之前记下来 —— 那之后 attacker.position 已经不是站位了。
 	var home := attacker.position
 	await attacker.attack_approach(target)
+	await attacker.attack_swing(_apply_basic_attack_hit.bind(attacker, target))
+	await attacker.attack_return(home)
+	await _wait_action_end()
+	if not _check_battle_end():
+		_finish_turn()
+
+
+## 挥击关键点：扣血、数字和受击在同一刻触发。
+func _apply_basic_attack_hit(attacker: BattleUnit, target: BattleUnit) -> void:
+	if not is_instance_valid(target) or not target.alive:
+		return
 
 	var damage := attacker.roll_damage()
 	var is_crit := attacker.roll_crit()
@@ -637,15 +659,8 @@ func _perform_attack(attacker: BattleUnit, target: BattleUnit) -> void:
 	# 飘字只显示整数部分（伤害是 float），避免出现 "12.000000"。
 	create_floating_text(target, str(int(roundf(dealt))), critical_color if is_crit else normal_color)
 	# 受击后仰与出招**并行**：它俩时长一样，串着等会把一次普攻拖成两倍。
-	target.play_hit(attacker.global_position)
-	# ③ 出招 → 退回原位（攻击动画完成时，受击也刚好收尾）
-	await attacker.attack_finish(home)
-
-	# 命中都要等，节奏一致观感才不忽快忽慢（还要等本轮特效播完）。
-	await _wait_action_end()
-	# 先判胜负：已结束就**不能**再 _finish_turn()，否则会把结束的战斗继续往下推。
-	if not _check_battle_end():
-		_finish_turn()
+	if target.alive:
+		target.play_hit(attacker.global_position)
 
 
 # ── 技能 ──
@@ -792,10 +807,11 @@ func _perform_skill(caster: BattleUnit, skill: SkillData, targets: Array[BattleU
 				var is_crit := caster.skill_crit(skill)
 				if is_crit:
 					damage = ceilf(damage * caster.crit_multiplier())
-				var dealt := target.take_damage(damage, skill.damage_type == SkillData.DamageType.MAGIC)
-				# ③ 等这一段动画播完再跳数字
+				# ③ 等这一段动画播完，伤害与数字在同一刻落地 ——
+				#    这样"扣血 / 跳数字 / 收招"三件事对齐，不会血条先掉、数字后出。
 				if seg_waits:
 					await seg_fx.finished
+				var dealt := target.take_damage(damage, skill.damage_type == SkillData.DamageType.MAGIC)
 				create_floating_text(target, str(int(roundf(dealt))), critical_color if is_crit else normal_color)
 			elif seg_waits:
 				await seg_fx.finished
@@ -1328,9 +1344,21 @@ func _shake_camera(amount: float) -> void:
 
 ## 有单位阵亡（BattleUnit.died）时刷新出手顺序条；**不动 turn_queue/turn_index**。
 ## 死掉的那个会在 _begin_turn() 轮到时被跳过，所以本回合不会出现下标错位。
-func _on_unit_died(_unit: BattleUnit) -> void:
+func _on_unit_died(unit: BattleUnit) -> void:
 	# 用轮转后的队列刷新，否则顺序条会跳回"速度排序"，和玩家看到的"出完手到队尾"对不上。
 	turn_order.update_turn(_turn_display(), actor)
+	# 我方阵亡 → 原地化成一团幽火；怪物不倒、不生成任何东西，直接淡出。
+	if is_instance_valid(unit) and unit.is_player:
+		_spawn_ghost_flame(unit.global_position)
+
+
+## 在指定世界坐标点起一团幽火当"墓碑"。火焰自己循环燃烧、不自行销毁，
+## 战斗结束随场景一起卸载 —— 所以整场战斗都能看到阵亡的位置。
+func _spawn_ghost_flame(at: Vector2) -> void:
+	var flame := GHOST_FLAME_SCENE.instantiate() as Node2D
+	fx_root.add_child(flame)
+	# 稍微上移，让火苗从脚边烧起来而不是糊在地上
+	flame.global_position = at + Vector2(0.0, -18.0)
 
 
 # ── 胜负 / 飘字 / 工具 ──

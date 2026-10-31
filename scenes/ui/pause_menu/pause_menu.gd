@@ -35,7 +35,6 @@ signal title_requested
 @onready var party_button: Button = %PartyButton
 @onready var bag_button: Button = %BagButton
 @onready var stats_button: Button = %StatsButton
-@onready var battle_button: Button = %BattleButton
 @onready var title_button: Button = %TitleButton
 
 
@@ -47,17 +46,13 @@ func _ready() -> void:
 	party_button.pressed.connect(_emit_party)
 	bag_button.pressed.connect(_emit_bag)
 	stats_button.pressed.connect(_emit_stats)
-	battle_button.pressed.connect(_emit_battle)
 	title_button.pressed.connect(_emit_title)
 
 
 ## 打开菜单。
-## 参数 battle_enabled：本次所在的图能不能打（纯剧情图把「进入战斗」置灰，与地图上那个按钮一致）。
-## 副作用：按 battle_enabled 改「进入战斗」的 disabled、show()、把焦点放到「继续游戏」。
-## 注意：必须 grab_focus() 一个**没被置灰**的按钮 —— 置灰的按钮拿不到焦点，
-##   要是把它设成初始焦点，菜单一打开键盘就没反应了（这里选「继续游戏」，它永远可用）。
-func open(battle_enabled: bool) -> void:
-	battle_button.disabled = not battle_enabled
+## 参数 battle_enabled：保留签名兼容调用方；「进入战斗」已从本菜单移除，不再使用。
+## 副作用：show() 并把焦点放到「继续游戏」。
+func open(_battle_enabled := true) -> void:
 	show()
 	resume_button.grab_focus()
 
@@ -67,7 +62,7 @@ func open(battle_enabled: bool) -> void:
 func focus_ring() -> Array[Control]:
 	var out: Array[Control] = []
 	var buttons: Array[Button] = [resume_button, party_button, bag_button, stats_button,
-			battle_button, title_button]
+			title_button]
 	for button in buttons:
 		if not button.disabled:
 			out.append(button)

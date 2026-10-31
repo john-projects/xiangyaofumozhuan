@@ -49,6 +49,18 @@ const NAME_COLOR_INTERACT := Color(1.0, 0.35, 0.35)
 var data: MapNPC
 
 # ── 节点引用（% = unique_name_in_owner）──────────────────────────────────────
+## 本图角色的目标显示高度（世界像素）。由 WorldMap 在 setup() 前写入，
+## 用来把任意分辨率的立绘归一到和玩家一致的高度 —— 不归一的话，512 高的新立绘
+## 会比 150 高的旧占位大三倍多。
+var display_height := 195.0
+## 站立呼吸：上下浮动幅度（像素）、周期（秒）。
+const IDLE_BOB := 3.0
+const IDLE_PERIOD := 2.4
+## 每个 NPC 用自己的周期与相位，一群人站着才不会像在做广播体操。
+var _idle_phase := 0.0
+var _idle_period := IDLE_PERIOD
+## 脚下阴影（第一次 setup 时建，之后复用）。
+var _shadow: Polygon2D = null
 ## NPC 立绘。有 texture 时用它；没有则隐藏并显示 Fallback 色块。
 @onready var sprite: Sprite2D = %Sprite
 ## 占位色块（金色方块）。仅当 MapNPC.texture 为空时可见，用来"没美术也能跑"。
@@ -69,14 +81,84 @@ var data: MapNPC
 ## 注意：这里没做 data 为 null 的兜底，传 null 会在 data.texture 处直接报错。
 func setup(p_data: MapNPC) -> void:
 	data = p_data
+	_idle_phase = randf() * TAU
+	_idle_period = IDLE_PERIOD * randf_range(0.85, 1.2)
+	_ensure_shadow()
 	if data.texture != null:
 		sprite.texture = data.texture
+		_fit_sprite_to_height()
 		fallback.visible = false
 	else:
 		fallback.visible = true
 	name_label.text = data.display_name
 	_apply_name_style(NAME_COLOR_NPC)      # NPC 名字常态是金色
 	set_highlight(false)
+
+
+## 站立呼吸：只动 sprite 的 y，幅度 3px、周期 2 秒左右。
+## 不做缩放呼吸 —— 缩放会连名字版和阴影的视觉比例一起改，反而乱。
+func _process(delta: float) -> void:
+	if sprite == null or sprite.texture == null:
+		return
+	_idle_phase += delta * TAU / _idle_period
+	sprite.position.y = -IDLE_BOB * (0.5 + 0.5 * sin(_idle_phase))
+
+
+## 脚下阴影：三层同心椭圆（外淡内深），和队长/队友的地面阴影同一套参数。
+## 插到子节点最前面，保证画在立绘下面（这层不受 y_sort 影响，同父节点按顺序绘制）。
+func _ensure_shadow() -> void:
+	if _shadow != null or not is_inside_tree():
+		return
+	var ellipse := PackedVector2Array()
+	var rx := display_height * 0.16
+	var ry := display_height * 0.045
+	for i in 48:
+		var angle := TAU * float(i) / 48.0
+		ellipse.append(Vector2(cos(angle) * rx, sin(angle) * ry))
+	_shadow = Polygon2D.new()
+	_shadow.name = "Shadow"
+	_shadow.polygon = ellipse
+	_shadow.color = Color(0.10, 0.075, 0.065, 0.055)
+	for index in 2:
+		var inner := Polygon2D.new()
+		inner.polygon = ellipse
+		inner.scale = Vector2.ONE * (0.78 if index == 0 else 0.52)
+		inner.color = Color(0.10, 0.075, 0.065, 0.07 if index == 0 else 0.12)
+		_shadow.add_child(inner)
+	add_child(_shadow)
+	move_child(_shadow, 0)      # 画在最底层
+
+
+## 按贴图高度归一到 display_height，并把脚底锚到节点原点。
+## Sprite2D 是居中绘制，offset.y 上移半个（未缩放前的）贴图高度后，底边正好落在 y=0 ——
+## 这样不同分辨率、不同身高的立绘踩在同一条地面上，阴影和名字版也不用逐个调。
+## 副作用：改 sprite.scale / sprite.offset / name_label 与 Mark 的纵向位置。
+func _fit_sprite_to_height() -> void:
+	if sprite.texture == null:
+		return
+	var tex_h := float(sprite.texture.get_height())
+	if tex_h <= 0.0 or display_height <= 0.0:
+		return
+	var s := display_height / tex_h
+	sprite.scale = Vector2(s, s)
+	sprite.offset = Vector2(0.0, -tex_h * 0.5)
+	# 阴影尺寸跟着身高重算（重新 setup 时对得上）
+	if _shadow != null:
+		var ellipse := PackedVector2Array()
+		var rx := display_height * 0.16
+		var ry := display_height * 0.045
+		for i in 48:
+			var angle := TAU * float(i) / 48.0
+			ellipse.append(Vector2(cos(angle) * rx, sin(angle) * ry))
+		_shadow.polygon = ellipse
+		for child in _shadow.get_children():
+			(child as Polygon2D).polygon = ellipse
+	# 头顶名字与提示跟着身高走
+	name_label.offset_top = -display_height - 30.0
+	name_label.offset_bottom = -display_height - 4.0
+	if mark != null:
+		mark.offset_top = -display_height - 56.0
+		mark.offset_bottom = -display_height - 32.0
 
 
 ## 给名字上色（并补一圈黑描边，地图底色再花也看得清）。

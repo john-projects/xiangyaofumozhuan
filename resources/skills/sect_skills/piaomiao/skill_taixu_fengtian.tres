@@ -19,3 +19,4 @@ tint = Color(0.8, 0.75, 1, 1)
 hit_effect_on_ground = true
 screen_effect_scene = ExtResource("9_seq")
 burst_scale = 1.8
+hit_effect_center = false

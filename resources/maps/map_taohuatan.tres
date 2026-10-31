@@ -1,0 +1,36 @@
+[gd_resource type="Resource" script_class="MapData" format=3]
+
+[ext_resource type="Script" path="res://resources/maps/map_data.gd" id="1_mapdata"]
+[ext_resource type="Texture2D" path="res://assets/map/桃花滩.png" id="2_texture"]
+[ext_resource type="Script" path="res://resources/maps/map_portal.gd" id="p_portal"]
+[ext_resource type="Script" path="res://resources/units/unit_stats.gd" id="1_stats"]
+[ext_resource type="Resource" path="res://resources/units/enemies/虾精.tres" id="e1"]
+[ext_resource type="Resource" path="res://resources/units/enemies/蟹怪.tres" id="e2"]
+[ext_resource type="Resource" path="res://resources/units/enemies/八爪鱼.tres" id="e3"]
+
+[sub_resource type="Resource" id="Resource_portal_back"]
+script = ExtResource("p_portal")
+id = "portal_back_taohuatan"
+position = Vector2(0.5, 0.15)
+target_map_id = "taohuacun"
+label = "返回桃花村"
+radius = 105.0
+
+[sub_resource type="Resource" id="Resource_portal_taohuatandongku"]
+script = ExtResource("p_portal")
+id = "portal_taohuatandongku"
+position = Vector2(0.535, 0.523)
+target_map_id = "taohuatandongku"
+label = "桃花滩洞窟"
+radius = 105.0
+
+[resource]
+script = ExtResource("1_mapdata")
+id = "taohuatan"
+display_name = "桃花滩"
+texture = ExtResource("2_texture")
+map_scale = 1.0
+unit_height = 195.0
+spawn_point = Vector2(0.5, 0.3)
+portals = Array[ExtResource("p_portal")]([SubResource("Resource_portal_back"), SubResource("Resource_portal_taohuatandongku")])
+enemy_pool = Array[ExtResource("1_stats")]([ExtResource("e1"), ExtResource("e2"), ExtResource("e3")])

@@ -11,7 +11,7 @@
 script = ExtResource("1_02km3")
 name = "行修"
 race = 2
-icon = ExtResource("1_avatar")
-model_glb = "res://assets/models/players/行修.glb"
+icon = ExtResource("2_portrait")
 portrait = ExtResource("2_portrait")
 metadata/_custom_type_script = "uid://j6ibt5vlkg3t"
+avatar = ExtResource("1_avatar")

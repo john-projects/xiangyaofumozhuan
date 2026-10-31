@@ -1,0 +1,170 @@
+[
+  {
+    "name": "大师兄-太虚剑宗",
+    "width": 1254,
+    "height": 1254,
+    "minAlpha": 0,
+    "maxAlpha": 255,
+    "bytes": 1337753
+  },
+  {
+    "name": "大师兄-万药谷",
+    "width": 1254,
+    "height": 1254,
+    "minAlpha": 0,
+    "maxAlpha": 255,
+    "bytes": 1118944
+  },
+  {
+    "name": "大师兄-星罗教",
+    "width": 1254,
+    "height": 1254,
+    "minAlpha": 0,
+    "maxAlpha": 255,
+    "bytes": 1570378
+  },
+  {
+    "name": "大师兄-紫霄神道教",
+    "width": 1254,
+    "height": 1254,
+    "minAlpha": 0,
+    "maxAlpha": 255,
+    "bytes": 1796480
+  },
+  {
+    "name": "商人-仓库管理员",
+    "width": 1254,
+    "height": 1254,
+    "minAlpha": 0,
+    "maxAlpha": 255,
+    "bytes": 1235787
+  },
+  {
+    "name": "商人-船夫",
+    "width": 1254,
+    "height": 1254,
+    "minAlpha": 0,
+    "maxAlpha": 255,
+    "bytes": 1305304
+  },
+  {
+    "name": "商人-当铺掌柜",
+    "width": 1254,
+    "height": 1254,
+    "minAlpha": 0,
+    "maxAlpha": 255,
+    "bytes": 1200165
+  },
+  {
+    "name": "商人-防具商",
+    "width": 1254,
+    "height": 1254,
+    "minAlpha": 0,
+    "maxAlpha": 255,
+    "bytes": 1508318
+  },
+  {
+    "name": "商人-符箓摊主",
+    "width": 1254,
+    "height": 1254,
+    "minAlpha": 0,
+    "maxAlpha": 255,
+    "bytes": 1378694
+  },
+  {
+    "name": "商人-酒店掌柜",
+    "width": 1254,
+    "height": 1254,
+    "minAlpha": 0,
+    "maxAlpha": 255,
+    "bytes": 1518759
+  },
+  {
+    "name": "商人-客栈小二",
+    "width": 1254,
+    "height": 1254,
+    "minAlpha": 0,
+    "maxAlpha": 255,
+    "bytes": 1119826
+  },
+  {
+    "name": "商人-炼器师",
+    "width": 1254,
+    "height": 1254,
+    "minAlpha": 0,
+    "maxAlpha": 254,
+    "bytes": 1714204
+  },
+  {
+    "name": "商人-灵宠商",
+    "width": 1254,
+    "height": 1254,
+    "minAlpha": 0,
+    "maxAlpha": 255,
+    "bytes": 1514396
+  },
+  {
+    "name": "商人-说书人",
+    "width": 1254,
+    "height": 1254,
+    "minAlpha": 0,
+    "maxAlpha": 255,
+    "bytes": 1454112
+  },
+  {
+    "name": "商人-武器商",
+    "width": 1254,
+    "height": 1254,
+    "minAlpha": 0,
+    "maxAlpha": 255,
+    "bytes": 1391431
+  },
+  {
+    "name": "商人-药店老板",
+    "width": 1254,
+    "height": 1254,
+    "minAlpha": 0,
+    "maxAlpha": 255,
+    "bytes": 1150447
+  },
+  {
+    "name": "掌门-缥缈仙府",
+    "width": 1254,
+    "height": 1254,
+    "minAlpha": 0,
+    "maxAlpha": 253,
+    "bytes": 1641963
+  },
+  {
+    "name": "掌门-太虚剑宗",
+    "width": 1254,
+    "height": 1254,
+    "minAlpha": 0,
+    "maxAlpha": 254,
+    "bytes": 1524156
+  },
+  {
+    "name": "掌门-万药谷",
+    "width": 1254,
+    "height": 1254,
+    "minAlpha": 0,
+    "maxAlpha": 255,
+    "bytes": 1775139
+  },
+  {
+    "name": "掌门-星罗教",
+    "width": 1254,
+    "height": 1254,
+    "minAlpha": 0,
+    "maxAlpha": 255,
+    "bytes": 1995453
+  },
+  {
+    "name": "掌门-紫霄神道教",
+    "width": 1254,
+    "height": 1254,
+    "minAlpha": 0,
+    "maxAlpha": 255,
+    "bytes": 1960990
+  }
+]

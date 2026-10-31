@@ -53,7 +53,8 @@ const CAST_TINT := Color(1.45, 1.2, 0.9)
 ## _refresh_visuals() 会按 tex_h 反推 sprite.scale，所以换 150px / 320px / 512px 的立绘，
 ## 屏幕上都是这么高 —— 提高分辨率只提升清晰度，不改布局、也不影响还没换图的老素材。
 ## 这是一条"美术口径"：想让单位整体变大变小，改这里一处即可。
-const UNIT_DISPLAY_HEIGHT := 240.0
+const UNIT_DISPLAY_HEIGHT := 210.0
+const BATTLE_VISUAL_SCALE := UNIT_DISPLAY_HEIGHT / 240.0
 
 # ── 名字配色 ──
 # 我方和怪物（敌方）默认都是绿色；只有"当前被选为攻击目标"的那只才变红（见 set_focused）。
@@ -81,7 +82,7 @@ const BATTLE_FACING_ENEMY := "down_right"
 const PLATE_NAME_H := 26.0        # 名字标签高度（与场景里 -160~-134 一致）
 const PLATE_BAR_H := 22.0         # 每条血/蓝条的高度
 const PLATE_NAME_BAR_GAP := 0.0   # 名字和血条之间（0 = 紧贴）
-const PLATE_HEAD_GAP := -10.0     # 蓝条底边相对头顶（负数 = 往下沉，贴着头顶；3D 立绘上部有透明留白）
+const PLATE_HEAD_GAP := 6.0      # 信息条与头顶留出间隔，避免压住发饰。
 
 # ── 高亮配色（脚下光环）──
 # 不再用"描边"：描边会把立绘边缘糊成一圈、和技能特效打架，所以改成脚下光环 + 呼吸脉动。
@@ -93,8 +94,8 @@ const RING_TARGET := Color(1.0, 0.35, 0.35, 1.0)
 ## 悬停（只是鼠标停上去，还没选）：淡白。
 const RING_HOVER := Color(1.0, 1.0, 1.0, 0.75)
 ## 光环椭圆半径（贴合 %Selection 那个扁圆：横向 58、纵向 17）。
-const RING_RX := 58.0
-const RING_RY := 17.0
+const RING_RX := 58.0 * BATTLE_VISUAL_SCALE
+const RING_RY := 17.0 * BATTLE_VISUAL_SCALE
 ## 光环整体下移的像素：让角色遮住后半圈、脚边只露一圈，避免线条横穿身体。
 const RING_DROP := 7.0
 
@@ -297,10 +298,11 @@ func _setup_model3d() -> void:
 	var av := Model3DAvatar.new()
 	av.name = "Model3D"
 	add_child(av)
-	if not av.setup(stats.model_glb, UNIT_DISPLAY_HEIGHT):
+	if not av.setup(stats.model_glb, UNIT_DISPLAY_HEIGHT, true):
 		av.queue_free()
 		return
 	_model3d = av
+	_model3d.set_weapon(stats.weapon_visual if is_player else null)
 	sprite.visible = false
 	# 保持与 2D 帧动画一致：我方朝左上，敌方朝右下。
 	_model3d.face_dir(BATTLE_FACING_PLAYER if is_player else BATTLE_FACING_ENEMY)
@@ -367,8 +369,13 @@ func _refresh_visuals() -> void:
 	_arrow_base_y = target_arrow.position.y
 	# 选中光环就在原点（= 脚下）
 	selection.position = Vector2.ZERO
+	selection.scale = Vector2.ONE * BATTLE_VISUAL_SCALE
+	var ground_shadow := get_node("Shadow") as Polygon2D
+	ground_shadow.scale = Vector2.ONE * BATTLE_VISUAL_SCALE
+	ground_shadow.color = Color(0.10, 0.075, 0.065, 0.20)
 	# 点击判定挪到身体中段（Area2D 在脚底，光靠半径盖不住上半身）
 	click_area.position.y = body_center_offset
+	click_area.scale = Vector2.ONE * BATTLE_VISUAL_SCALE
 	# 敌人翻转：flip_h 只影响绘制，不改坐标/碰撞，点击区域不受影响。
 	# 有帧动画时朝向已经画在图里了（我方朝左、敌朝右），再 flip 会镜像回去，所以跳过。
 	sprite.flip_h = (not is_player) and _anim == null
@@ -478,7 +485,7 @@ func _refresh_mana() -> void:
 
 
 ## 死亡处理（hp 归零时由 take_damage() 调，不再校验 alive）。一次性、不可逆：alive/defending=false、
-## 取消选中与高亮、关点选、名字变暗，然后**朝自己那一侧的斜后方抛出**（抛物线 + 旋转 + 淡出）。
+## 取消选中与高亮、关点选、名字变暗，然后**原地倒地**（绕脚底旋转 + 下沉 + 压暗成尸体）。
 ## emit died 在最后发，接收方看到的是最终状态。
 ## 重要：**不 queue_free()**——Battle 的列表/顺序条/跨 await 引用还指着它，统一由 _clear_units() 释放。
 func _die() -> void:
@@ -495,29 +502,18 @@ func _die() -> void:
 	if _idle_tween != null and _idle_tween.is_valid():
 		_idle_tween.kill()
 
-	# 退场方向：**自己那一侧的斜后方**。我方在右(x>0)、敌方在左(x<0)，
-	# 所以往"远离对方"的方向飞 —— 怪物往左飞、自己人往右飞。
-	var back := 1.0 if is_player else -1.0
-	var start := position
-	# ① 水平位移 + 旋转（一条 tween 并行跑满全程）。
-	#    x 用 EASE_IN：起步慢、越飞越快，像被打飞的加速度，不是"平移出画"。
-	var fly := create_tween()
-	fly.tween_property(self, "position:x", start.x + back * DEATH_ARC, DEATH_TIME) \
-			.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
-	fly.parallel().tween_property(sprite, "rotation", deg_to_rad(DEATH_SPIN) * -back, DEATH_TIME) \
-			.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-	# ② 竖直方向单独走"先上升后下落"两段 —— 和水平位移叠加就是抛物线。
-	#    不能塞进上面那条 tween 的 parallel() 里，否则只会一直上升、不会掉下来。
-	var arc := create_tween()
-	arc.tween_property(self, "position:y", start.y - DEATH_LIFT, DEATH_TIME * 0.42) \
-			.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	arc.tween_property(self, "position:y", start.y + DEATH_DROP, DEATH_TIME * 0.58) \
-			.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
-	# ③ 淡出**只放在最后 30%**：全程淡出的话，人还在屏幕里就已经半透明了。
-	var fade := create_tween()
-	fade.tween_interval(DEATH_TIME * DEATH_FADE_FROM)
-	fade.tween_property(self, "modulate:a", 0.0, DEATH_TIME * (1.0 - DEATH_FADE_FROM))
-	fade.tween_callback(func() -> void: visible = false)
+	# 3D 模型如果配了 dead 动作就先播它（有就播，没有拉倒）
+	if _model3d != null:
+		_model3d.play_once("dead")
+	# 两种死法：
+	#   怪物 —— 不倒、不留尸体，直接淡出（战场干净，也不挡后面的人）
+	#   人物 —— 快速隐去身体，由 Battle 在原地补一团幽火（见 _on_unit_died）
+	# 两者都**不 queue_free**：Battle 的列表/顺序条还指着这个节点，
+	# 统一交给战斗结束时的 _clear_units() 释放。
+	var fade_time := DEATH_FADE_PLAYER if is_player else DEATH_FADE_ENEMY
+	var tween := create_tween()
+	tween.tween_property(self, "modulate:a", 0.0, fade_time)
+	tween.tween_callback(func() -> void: visible = false)
 	# 注意：died 立刻发 —— 顺序条/判定要马上把这个人当死人看，动画只是表现。
 	died.emit(self)
 
@@ -760,11 +756,12 @@ func _update_selection() -> void:
 ## 坑：这里的 modulate tween 与 play_hit()/play_cast() 收尾互相覆盖，故 play_* 收尾写 `DEFEND_TINT if defending else WHITE`。
 func set_defending(value: bool) -> void:
 	defending = value
+	var body := _visual_body()
 	if value:
 		var tween := create_tween()
-		tween.tween_property(sprite, "modulate", DEFEND_TINT, 0.15)
+		tween.tween_property(body, "modulate", DEFEND_TINT, 0.15)
 	else:
-		sprite.modulate = Color.WHITE
+		body.modulate = Color.WHITE
 
 
 ## 本回合的"取消防御 + 状态结算"在文件上半部分的 begin_turn() 里（和 statuses 放一起）。
@@ -791,19 +788,19 @@ const ATTACK_Z := 50
 ## 冲出去之前记下的层级，归位时还原。
 var _z_before := 0
 
-# ── 死亡退场（抛物线抛飞）──
-## 整段退场时长（秒）。
-const DEATH_TIME := 0.80
-## 向后抛出的水平距离（像素）。视口半宽约 840，700 足够从任何站位甩出画面。
-const DEATH_ARC := 700.0
-## 抛物线最高点相对原位的抬升（像素）。
-const DEATH_LIFT := 190.0
-## 落到比原位低多少（像素）：沉下去更像"被打飞后坠地"。
-const DEATH_DROP := 280.0
-## 旋转总角度（度），方向跟抛飞方向一致。
-const DEATH_SPIN := 420.0
-## 淡出从整段的百分之几开始（0.7 = 最后 30% 才淡，前面全程可见）。
-const DEATH_FADE_FROM := 0.7
+# ── 死亡：原地倒地成尸体 ──
+## 倒地动画时长（秒）。
+const DEATH_FADE_ENEMY := 0.45
+## 人物淡出时长（秒）：比怪物快，因为马上会有一团幽火顶上来。
+const DEATH_FADE_PLAYER := 0.16
+## 旧倒地参数现仅 3D 模型无 dead 动作时兜底用，见 _die()。
+const DEATH_FALL_TIME := 0.45
+## 倒地角度（度）：不到 90，留一点倾斜更像"软倒"而不是"被推倒"。
+const DEATH_FALL_ANGLE := 82.0
+## 倒地后身体再往下沉多少像素。
+const DEATH_SINK := 10.0
+## 尸体染色：压暗 + 去血色的灰紫。留 alpha=1，尸体要看得见。
+const DEATH_TINT := Color(0.55, 0.52, 0.60, 1.0)
 
 # ── 程序化动画（给静态立绘的单位用：怪物没有 attack/idle/cast 序列帧）──
 ## 空闲呼吸：上下浮动的像素与一个来回的时长。
@@ -811,7 +808,7 @@ const DEATH_FADE_FROM := 0.7
 ## 两边抢同一个属性会互相打断。
 const IDLE_BOB := 4.0
 ## 受击后仰：歪多少度、到位/回正各多久、保持期间每段抖动多长、抖幅多少度。
-const HIT_TILT := 10.0
+const HIT_TILT := 6.0
 const HIT_LEAN_TIME := 0.10
 const HIT_BACK_TIME := 0.14
 const HIT_SHAKE_STEP := 0.07
@@ -854,14 +851,32 @@ func attack_approach(target: BattleUnit) -> void:
 	var t := clampf(dist / ATTACK_DASH_SPEED, ATTACK_DASH_MIN, ATTACK_DASH_MAX)
 	var tween := create_tween()
 	tween.tween_property(self, "position", to, t)
+	if _model3d != null:
+		_model3d.face_from_vector(to - position)
+		_model3d.play("run")
 	await tween.finished
+	if _model3d != null:
+		_model3d.face_from_vector(target.global_position - global_position)
+		_model3d.play("idle")
 
 
 ## 普攻第二段：出招（播 attack 动作并等它播完）。近战门派技能不需要它 —— 那些有自己的特效。
-func attack_swing() -> void:
+func attack_swing(on_impact: Callable = Callable()) -> void:
 	if _model3d != null:
-		_model3d.play_once("attack")
-	elif _anim != null:
+		var duration := _model3d.play_once("attack", 0.04)
+		if duration > 0.0:
+			await get_tree().create_timer(duration * 0.44).timeout
+			if on_impact.is_valid():
+				on_impact.call()
+			await get_tree().create_timer(duration * 0.56).timeout
+		else:
+			if on_impact.is_valid():
+				on_impact.call()
+			await _procedural_swing()
+		return
+	if on_impact.is_valid():
+		on_impact.call()
+	if _anim != null:
 		_anim.play_once("attack")
 	# 有帧动画：等它播完（能问就问到播完为止，加 ATTACK_SWING_MAX 上限防死等）。
 	if _anim != null:
@@ -874,23 +889,29 @@ func attack_swing() -> void:
 	await _procedural_swing()
 
 
-## 程序化出招：蓄力（压扁后仰）→ 突刺（拉长前倾）→ 回正。总时长约 0.3 秒。
-## 手感和 play_cast() 的"涨大染色"配对：一个往横向打、一个往纵向顶。
+## 程序化反馈作用于当前可见的形象；3D 模式的原 Sprite 已隐藏。
+func _visual_body() -> Node2D:
+	return _model3d if _model3d != null else sprite
+
+
+## 缺少攻击剪辑时，蓄力后仰 → 突刺前倾 → 回正。
 func _procedural_swing() -> void:
-	if sprite == null:
+	var body := _visual_body()
+	if body == null:
 		return
-	var sx := _base_scale.x
-	var sy := _base_scale.y
+	var rest_scale := Vector2.ONE if _model3d != null else _base_scale
+	var sx := rest_scale.x
+	var sy := rest_scale.y
 	var tween := create_tween()
 	# 蓄力：横向收、纵向拉，身体微后仰
-	tween.tween_property(sprite, "scale", Vector2(sx * SWING_ANTIC_X, sy * SWING_ANTIC_Y), 0.08)
-	tween.parallel().tween_property(sprite, "rotation", deg_to_rad(-SWING_TILT), 0.08)
+	tween.tween_property(body, "scale", Vector2(sx * SWING_ANTIC_X, sy * SWING_ANTIC_Y), 0.08)
+	tween.parallel().tween_property(body, "rotation", deg_to_rad(-SWING_TILT), 0.08)
 	# 突刺：横向拉、纵向压，向前倾
-	tween.tween_property(sprite, "scale", Vector2(sx * SWING_STRIKE_X, sy * SWING_STRIKE_Y), 0.10)
-	tween.parallel().tween_property(sprite, "rotation", deg_to_rad(SWING_TILT), 0.10)
+	tween.tween_property(body, "scale", Vector2(sx * SWING_STRIKE_X, sy * SWING_STRIKE_Y), 0.10)
+	tween.parallel().tween_property(body, "rotation", deg_to_rad(SWING_TILT), 0.10)
 	# 回正
-	tween.tween_property(sprite, "scale", _base_scale, 0.14)
-	tween.parallel().tween_property(sprite, "rotation", 0.0, 0.14)
+	tween.tween_property(body, "scale", rest_scale, 0.14)
+	tween.parallel().tween_property(body, "rotation", 0.0, 0.14)
 	await tween.finished
 
 
@@ -931,8 +952,14 @@ func attack_return(from_position: Vector2) -> void:
 	var dist := (position - from_position).length()
 	var t := clampf(dist / ATTACK_DASH_SPEED, ATTACK_DASH_MIN, ATTACK_DASH_MAX)
 	var tween := create_tween()
+	if _model3d != null:
+		_model3d.face_from_vector(from_position - position)
+		_model3d.play("run")
 	tween.tween_property(self, "position", from_position, t)
 	await tween.finished
+	if _model3d != null:
+		_model3d.face_dir(BATTLE_FACING_PLAYER if is_player else BATTLE_FACING_ENEMY)
+		_model3d.play("idle")
 	z_index = _z_before
 
 
@@ -946,17 +973,19 @@ func attack_finish(from_position: Vector2) -> void:
 ## 先设回 WHITE 清掉上次残留的受击红/防御蓝；放大到 _base_scale*1.14 再回落；
 ## parallel() 让缩放与染色同时进行；收尾色 DEFEND_TINT if defending else WHITE（防御中施法保持淡蓝）。
 func play_cast() -> void:
-	sprite.modulate = Color.WHITE
+	var body := _visual_body()
+	var rest_scale := Vector2.ONE if _model3d != null else _base_scale
+	body.modulate = Color.WHITE
 	# 帧动画：播放施法动作（一次性）。涨大/染色 tween 与它并行，不冲突。
 	if _model3d != null:
 		_model3d.play_once("cast")
 	elif _anim != null:
 		_anim.play_once("cast")
 	var tween := create_tween()
-	tween.tween_property(sprite, "scale", _base_scale * 1.14, 0.14)
-	tween.parallel().tween_property(sprite, "modulate", CAST_TINT, 0.14)
-	tween.tween_property(sprite, "scale", _base_scale, 0.16)
-	tween.parallel().tween_property(sprite, "modulate", DEFEND_TINT if defending else Color.WHITE, 0.16)
+	tween.tween_property(body, "scale", rest_scale * 1.14, 0.14)
+	tween.parallel().tween_property(body, "modulate", CAST_TINT, 0.14)
+	tween.tween_property(body, "scale", rest_scale, 0.16)
+	tween.parallel().tween_property(body, "modulate", DEFEND_TINT if defending else Color.WHITE, 0.16)
 	await tween.finished
 
 
@@ -966,7 +995,8 @@ func play_cast() -> void:
 ## 参数 hold：后仰总共保持多久（秒）。多段技能传那一段动画的时长，普通攻击传一次挥击的时长。
 ## 只动 rotation + modulate —— 这两样空闲呼吸都不碰，所以不用停它。
 func play_hit(from := Vector2.INF, hold := 0.35) -> void:
-	if sprite == null:
+	var body := _visual_body()
+	if body == null:
 		return
 	# 方向：从攻击者指向自己 = 受力方向的反面
 	var dir := Vector2.RIGHT
@@ -989,22 +1019,22 @@ func play_hit(from := Vector2.INF, hold := 0.35) -> void:
 	var tween := create_tween()
 	_hit_tween = tween
 	# ① 后仰到位（带回弹感）
-	tween.tween_property(sprite, "rotation", tilt, lean) \
+	tween.tween_property(body, "rotation", tilt, lean) \
 			.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-	tween.parallel().tween_property(sprite, "modulate", HIT_TINT, minf(0.06, lean))
+	tween.parallel().tween_property(body, "modulate", HIT_TINT, minf(0.06, lean))
 	# ② 保持后仰：在这段时间里做细微抖动（围绕后仰角小幅摇摆）
 	var step := HIT_SHAKE_STEP
 	var n := int(shake / step)
 	for i in n:
 		var wobble := deg_to_rad(randf_range(-HIT_SHAKE_DEG, HIT_SHAKE_DEG))
-		tween.tween_property(sprite, "rotation", tilt + wobble, step)
+		tween.tween_property(body, "rotation", tilt + wobble, step)
 	var left := shake - n * step
 	if left > 0.01:
 		tween.tween_interval(left)
 	# ③ 回正 + 消红
-	tween.tween_property(sprite, "rotation", 0.0, back) \
+	tween.tween_property(body, "rotation", 0.0, back) \
 			.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
-	tween.parallel().tween_property(sprite, "modulate", rest, back)
+	tween.parallel().tween_property(body, "modulate", rest, back)
 	await tween.finished
 
 

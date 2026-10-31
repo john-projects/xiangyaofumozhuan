@@ -68,13 +68,6 @@ theme_override_font_sizes/font_size = 34
 text = "操作菜单"
 horizontal_alignment = 1
 
-[node name="HintLabel" type="Label" parent="Panel/Margin/VBox"]
-layout_mode = 2
-theme_override_font_sizes/font_size = 16
-text = "↑↓ / W S 选择 · Enter / E 确认 · Esc 继续游戏"
-horizontal_alignment = 1
-modulate = Color(1, 1, 1, 0.7)
-
 [node name="ResumeButton" type="Button" parent="Panel/Margin/VBox"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 58)
@@ -103,13 +96,6 @@ layout_mode = 2
 theme_override_font_sizes/font_size = 24
 text = "角色属性（C）"
 
-[node name="BattleButton" type="Button" parent="Panel/Margin/VBox"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 58)
-layout_mode = 2
-theme_override_font_sizes/font_size = 24
-text = "进入战斗"
-
 [node name="TitleButton" type="Button" parent="Panel/Margin/VBox"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 58)
@@ -117,9 +103,3 @@ layout_mode = 2
 theme_override_font_sizes/font_size = 24
 text = "返回主菜单"
 
-[node name="FooterLabel" type="Label" parent="Panel/Margin/VBox"]
-layout_mode = 2
-theme_override_font_sizes/font_size = 14
-text = "（也可以直接用鼠标点）"
-horizontal_alignment = 1
-modulate = Color(1, 1, 1, 0.5)

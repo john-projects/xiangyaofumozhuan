@@ -1,7 +1,6 @@
 [gd_resource type="Resource" script_class="SkillData" format=3 uid="uid://5vh2vurg0nbo"]
 
 [ext_resource type="Script" uid="uid://sbgbq3puamij" path="res://resources/skills/skill_data.gd" id="1_5nk4j"]
-[ext_resource type="PackedScene" path="res://scenes/effects/leidong_jiutian/leidong_jiutian.tscn" id="2_leidong"]
 [ext_resource type="PackedScene" path="res://scenes/effects/skill_seq/leidong_jiutian_seq.tscn" id="9_seq"]
 
 [resource]

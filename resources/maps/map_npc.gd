@@ -56,6 +56,11 @@ enum Action {
 ## SELL_WEAPONS 专用：购买按钮的动词前缀，最终文字形如「购买  12 金币」。
 @export var shop_label := "购买"
 
+## SELL_WEAPONS 专用：只上架这几类装备（ItemBase.EquipType 成员值）。
+## 留空 = 全上架（保持旧行为）。武器商填 [WEAPON]，防具商填 [ARMOR, HELMET, BOOTS]，
+## 首饰商填 [NECKLACE, BELT] —— 这样同一套装备表能拆成三家店。
+@export var sell_types: Array[int] = []
+
 ## JOIN_SECT 专用：这个掌门代表哪个门派（Global.SECTS 的键：taixu / piaomiao / zixiao / wanyao / xingluo）。
 ## 留空 = 没有门派可拜（面板会提示"没有这个门派"）。用字符串 id 而不是门派对象，是为了让地图只依赖一个稳定的键。
 @export var sect_id: String = ""

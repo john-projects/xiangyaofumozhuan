@@ -17,6 +17,15 @@ class_name WorldMap
 # ── 对外信号（本文件唯一的输出口，全部由 GameRoot 订阅）──
 ## 玩家点「进入战斗」。GameRoot 收到后调 enter_battle()，打哪张图由 current_map_id 决定。
 signal battle_requested
+## 暗雷遭遇：走**动**累计这么多秒后掷一次骰子（每次触发后重新掷一个 interval ± jitter 的值）。
+@export var encounter_interval := 5.0
+## 间隔抖动（秒）。5 ± 2 → 每次 3~7 秒之间随机。
+@export var encounter_jitter := 2.0
+## 掷骰命中率（0~1）。命中即进入战斗，命中后计时清零。
+@export var encounter_chance := 0.7
+## 进图后这么多秒内不判定，防止一落地就被打。
+@export var encounter_grace := 2.0
+
 ## 玩家在 NPC 面板里选了目的地。参数是目标地图 id（MapData.id）。
 signal travel_requested(map_id: String)
 
@@ -57,6 +66,8 @@ signal back_to_title_requested
 # ── 常量 ──
 ## NPC 场景。preload：加载时解析，之后每次 _add_npc() 只 instantiate()。
 const NPC_SCENE := preload("res://scenes/world/world_npc.tscn")
+## 传送光圈的脚本（纯代码绘制，没有 .tscn）。
+const PORTAL_SCRIPT := preload("res://scenes/world/world_portal.gd")
 ## 操作菜单（Esc 唤出）。见 scenes/ui/pause_menu/。
 const PAUSE_MENU_SCENE := preload("res://scenes/ui/pause_menu/pause_menu.tscn")
 ## 队伍管理二级页（操作菜单 →「队伍管理」）。见 scenes/ui/party_panel/。
@@ -91,10 +102,12 @@ const EDGE_MARGIN := 60.0
 ## 立绘可能是 150px 的老头像，也可能是 320px 的新立绘；都按 tex_h 反推缩放，
 ## 保证屏幕上一样大 —— 提高素材分辨率只提升清晰度，不改地图布局。
 const MAP_UNIT_HEIGHT := 195.0        # 兜底：地图没配 unit_height 时的角色显示高度
+const PARTY_DISPLAY_SCALE := 0.8
 
 ## 当前地图的角色显示高度（世界像素）。大尺寸底图要按比例调大，否则人物会显小。
 func _unit_height() -> float:
-	return _map.unit_height if _map != null and _map.unit_height > 0.0 else MAP_UNIT_HEIGHT
+	var base := _map.unit_height if _map != null and _map.unit_height > 0.0 else MAP_UNIT_HEIGHT
+	return base * PARTY_DISPLAY_SCALE
 
 ## 立绘内容在贴图里距**底边**的留白比例（实测：动画帧 20/480=4.2%，静态头像 13/320=4.1%）。
 ## 脚底锚定要用它算 offset —— 直接把半高当偏移会让角色"陷进"地面前 8px。
@@ -106,9 +119,7 @@ const NAME_COLOR_ALLY := Color(0.45, 1.0, 0.55)
 
 # 版式按"渲染像素"排布：_make_name_plate() 会插一个 scale = 1/父缩放 的中间节点，
 # 让版式不受角色节点缩放影响（目前父节点都是 1.0，等于直出）。
-# 整块压在角色头顶上方：立绘脚底锚定在原点，195 高的头像头顶约在 -185，
-# 所以名字标签顶边给 -206（名字高 30 → 下沿 -176，离头顶约 9px）。
-const NAME_PLATE_TOP := -206.0      # 名字标签顶边
+# 标签按本图角色的实际显示高度定位，下沿在头顶上方 4 像素。
 const NAME_PLATE_HEIGHT := 30.0     # 名字标签高度
 
 ## 队长每移动这么远，往轨迹里记一个点（像素）。越小越平滑，但轨迹数组涨得越快。
@@ -166,8 +177,6 @@ var _trail: Array[Vector2] = []
 var _last_trail_pos := Vector2.INF
 ## 顶部要飘的结算文案（例如"战斗胜利！获得 40 金币"）。空字符串 = 不显示。
 var _result := ""
-## 本图是否已通关过。只影响地图名后面那句"（已通关）"。
-var _cleared := false
 ## "我是从哪张图走过来的"（地图 id）。用来决定在目标图里出生在哪个 NPC 旁边，双向传送不迷路。
 var _from_map_id := ""
 ## map_id → 地图显示名 的字典，由 GameRoot 传入，用于把目的地 id 翻译成按钮上的中文。
@@ -186,6 +195,17 @@ var _walk_image: Image = null
 var _npcs: Array[WorldNPC] = []
 ## capture_map_photo() 等 frame_post_draw 用的标志（一次性信号回调置 true）。
 var _photo_drawn := false
+## 本图的地面传送光圈节点。
+var _portals: Array[WorldPortal] = []
+## 刚抵达后的冷却（秒）：防止一落地就被脚下的光圈弹走。
+var _portal_cooldown := 0.0
+## 暗雷计时（秒，仅在走动时累加）与宽限期剩余。
+var _encounter_timer := 0.0
+## 本轮要累计到多少秒（每次触发后重新掷）。
+var _encounter_target := 5.0
+var _encounter_grace_left := 0.0
+## 本帧玩家是否在移动（_move_player 里写，_update_encounter 里读）。
+var _is_moving := false
 ## 当前高亮的 NPC（离玩家最近且进入 interact_radius 的那个），没有则为 null。
 var _nearest: WorldNPC = null
 ## 对话/传送面板是否打开。为 true 时 _process 不处理走动，避免"一边看对话一边飘走"。
@@ -243,16 +263,12 @@ var _player_model3d: Model3DAvatar = null
 var _leader_key := ""
 ## 相机。它是 Player 的**子节点**，所以只要玩家移动，相机天然跟随（省掉每帧同步）。
 @onready var camera: Camera2D = %Camera
-## 左上角地图名标签（通关后会追加"（已通关）"）。
+## 左上角地图名标签。
 @onready var map_name_label: Label = %MapNameLabel
 ## 底部提示（"按 E 与 xxx 交谈"），由 _update_nearest() 每帧开关。
 @onready var hint_label: Label = %HintLabel
 ## 屏幕中央的「一行弹窗」栈（VBox）：结果提示、拜师/招募回执都往这里加。
 @onready var toast_stack: VBoxContainer = %ToastStack
-## 右下角「进入战斗」按钮。地图的 battle_enabled 为 false 时置灰。
-@onready var battle_button: Button = %BattleButton
-## 左下角「返回主菜单」按钮。
-@onready var back_button: Button = %BackButton
 ## 中央的 NPC 对话/传送面板（Panel）。默认隐藏。
 @onready var panel: Panel = %TravelPanel
 ## UI 层（CanvasLayer）。操作菜单等浮层运行时挂到这里（见 _setup_overlays），不随相机移动、不参与 y_sort。
@@ -268,14 +284,13 @@ var _leader_key := ""
 
 ## 只存数据，搭建留给 _ready()：GameRoot 是"先 setup 再 add_child"，此时 @onready 变量全是 null。
 ## 参数：p_map 本图配置；p_party 出战队伍（只保引用，不复制不修改）；result_text 顶部结算文案（空串 = 不飘）；
-##   p_cleared 是否已通关；p_map_names map_id → 显示名；p_from_map_id 从哪张图来（决定出生点）。
+##   p_map_names map_id → 显示名；p_from_map_id 从哪张图来（决定出生点）。
 ## 副作用：只写私有字段，不 emit 信号、不碰 Global、不建节点。
 func setup(p_map: MapData, p_party: Array[UnitStats], result_text: String,
-		p_cleared: bool, p_map_names: Dictionary, p_from_map_id := "") -> void:
+		p_map_names: Dictionary, p_from_map_id := "") -> void:
 	_map = p_map
 	_party = p_party
 	_result = result_text
-	_cleared = p_cleared
 	_map_names = p_map_names
 	_from_map_id = p_from_map_id
 
@@ -302,8 +317,16 @@ func _ready() -> void:
 	if _map_size == Vector2.ZERO:
 		push_warning("WorldMap: %s 没配 texture，走不动也看不到东西" % _map.display_name)
 
+	# 抵达后先给 0.8 秒冷却：万一落点仍在某个圈附近，也不会一进图就传走
+	if not _from_map_id.is_empty():
+		_portal_cooldown = 0.8
+	# 暗雷宽限：进图后几秒内不判定遭遇
+	_encounter_grace_left = encounter_grace
+	_encounter_target = maxf(0.5, encounter_interval + randf_range(-encounter_jitter, encounter_jitter))
+
 	# ── 图层：物件 + 可行走掩膜 ──
 	_spawn_props()
+	_spawn_portals()
 	_load_walk_mask()
 
 	# ── 玩家 ──
@@ -318,8 +341,9 @@ func _ready() -> void:
 		var av := Model3DAvatar.new()
 		av.name = "Model3D"
 		player.add_child(av)
-		if av.setup(stats.model_glb, _unit_height()):
+		if av.setup(stats.model_glb, _unit_height(), true):
 			_player_model3d = av
+			av.set_weapon(GameRoot.equipment_in(stats, ItemBase.EquipType.WEAPON) as ItemEquipment)
 			player_sprite.visible = false        # 2D 立绘让位给 3D 视口
 		else:
 			av.queue_free()
@@ -346,6 +370,7 @@ func _ready() -> void:
 		_anchor_sprite_feet(player_sprite)     # 脚底落到原点（阴影就在脚下）
 	player_fallback.visible = icon == null and _player_anim == null and _player_model3d == null
 	player.position = _world_pos(_spawn_normalized())
+	_style_party_shadow(player.get_node("Shadow") as Polygon2D)
 	_leader_key = GameRoot.character_key(_leader_stats())
 
 	# ── 相机（挂在玩家下面，自动跟随）──
@@ -359,13 +384,9 @@ func _ready() -> void:
 	_spawn_npcs()
 
 	# ── UI ──
-	# 三个按钮只连一次 pressed；本节点随场景销毁，连接会自动断，不用手动 disconnect。
-	battle_button.pressed.connect(_on_battle_pressed)
-	back_button.pressed.connect(_on_back_pressed)
+	# 面板上的按钮只连一次 pressed；本节点随场景销毁，连接会自动断，不用手动 disconnect。
 	close_button.pressed.connect(_close_panel)
-	# battle_enabled = false 的地图（纯剧情图）置灰「进入战斗」。
-	battle_button.disabled = not _map.battle_enabled
-	map_name_label.text = "%s%s" % [_map.display_name, "（已通关）" if _cleared else ""]
+	map_name_label.text = _map.display_name
 	# 初始没有最近 NPC，提示先藏起来；面板同理。
 	hint_label.visible = false
 	panel.hide()
@@ -531,12 +552,27 @@ func _is_walkable(world_pos: Vector2) -> bool:
 	return _walk_image.get_pixelv(px).r > 0.5
 
 
-## 出生点（归一化），优先级：spawn_override（战斗回原地）> 指回 _from_map_id 的 NPC 旁 > _map.spawn_point。
-## 站在传送 NPC 旁时 +0.04 是相对图高的偏移，避免和 NPC 完全重叠（贴图互相盖住、距离判定一开始就贴着）。
+## 出生点（归一化），优先级：
+##   spawn_override（战斗回原地）> 指回 _from_map_id 的**光圈**旁 > 指回 _from_map_id 的 NPC 旁 > _map.spawn_point。
+## 光圈排在 NPC 前：光圈是"走进来"的入口，站在它旁边最符合玩家的空间记忆。
+## 偏移量按图高算（0.05 ≈ 80~110 像素），既不会和光圈圆心重叠触发回传，
+## 又能一眼看见"自己是从这个圈进来的"。
 func _spawn_normalized() -> Vector2:
 	if spawn_override != Vector2.INF:
 		return spawn_override
 	if not _from_map_id.is_empty():
+		for portal in _map.portals:
+			if portal != null and portal.target_map_id == _from_map_id:
+				# 往地图中心方向让开 —— 偏移必须**大于光圈半径**，否则一落地就站在圈里，
+				# 又会被判定为踩中弹回上一张图（来回死循环）。
+				# 取 1.6 倍半径，留出余量。
+				var inward := (Vector2(0.5, 0.5) - portal.position).normalized()
+				if inward == Vector2.ZERO:
+					inward = Vector2(0.0, 1.0)
+				var away_px := maxf(portal.radius * 1.6, 140.0)
+				var off_norm := inward * (away_px / maxf(_map_size.y, 1.0))
+				# 别让落点跑出 [0.06, 0.94]
+				return (portal.position + off_norm).clamp(Vector2(0.06, 0.06), Vector2(0.94, 0.94))
 		for npc_data in _map.npcs:
 			if npc_data != null and npc_data.destinations.has(_from_map_id):
 				return npc_data.position + Vector2(0.0, 0.04)
@@ -593,9 +629,87 @@ func _add_npc(npc_data: MapNPC) -> void:
 	var npc := NPC_SCENE.instantiate() as WorldNPC
 	# 直接挂在 WorldMap 下（WorldMap 开了 y_sort，玩家才能绕到 NPC 身后/身前）
 	add_child(npc)
+	# 先把本图的角色高度告诉 NPC，setup() 里会据此把立绘归一并脚底锚定
+	# ×1.1：NPC 立绘身形偏瘦，和玩家同高会显得小一号
+	npc.display_height = _unit_height() * 1.1
 	npc.setup(npc_data)
 	npc.position = _world_pos(npc_data.position)
 	_npcs.append(npc)
+
+
+## 按 MapData.portals 摆光圈。半径用 portal.radius（世界像素）。
+## 只生成"目标地图存在"的？不 —— 目标缺失也照画，踩上去提示"尚不可前往"，
+## 这样地图上留的坑位是可见的，策划一眼能看出还没接哪张图。
+func _spawn_portals() -> void:
+	_portals.clear()
+	if _map == null or _map.portals.is_empty() or _map_size == Vector2.ZERO:
+		return
+	for data in _map.portals:
+		if data == null:
+			continue
+		var node := PORTAL_SCRIPT.new() as WorldPortal
+		node.name = "Portal_%s" % (data.id if not data.id.is_empty() else data.target_map_id)
+		add_child(node)
+		var label := data.label
+		if label.is_empty():
+			label = _map_names.get(data.target_map_id, data.target_map_id)
+		node.setup(data, data.radius, label)
+		node.position = _world_pos(data.position)
+		_portals.append(node)
+
+
+## 每帧判定：玩家踩进任一光圈 → 请求切图。
+## 两个保护：UI 打开时不触发（否则关面板瞬间会误传）；刚抵达后的 0.8 秒不触发
+## （防止目标图的返回光圈就在脚下，一落地又被弹回去）。
+func _check_portals(delta: float) -> void:
+	if _portal_cooldown > 0.0:
+		_portal_cooldown -= delta
+		return
+	if _portals.is_empty() or player == null:
+		return
+	for node in _portals:
+		if not is_instance_valid(node) or node.portal == null:
+			continue
+		if not node.contains(player.global_position):
+			continue
+		var target := node.portal.target_map_id
+		if target.is_empty() or target == _map.id:
+			return
+		# GameRoot 是 class_name 不是 autoload，get_map() 不能静态调用；
+		# 用 GameRoot 注入的 _map_names（全地图 id → 显示名）判断目标是否存在。
+		if not _map_names.has(target):
+			show_toast("「%s」尚未开放" % node.display_label)
+			_portal_cooldown = 2.0
+			return
+		_portal_cooldown = 1.2
+		travel_requested.emit(target)
+		return
+
+
+## 暗雷遭遇（暗雷模式：野外走动随机遇敌，站着不动不遇）。
+## 只有 battle_enabled 且敌人池非空的地图才判；UI 打开时 _process 已提前 return，
+## 所以开面板时也不会被偷袭。
+func _update_encounter(delta: float) -> void:
+	if _map == null or not _map.battle_enabled:
+		return
+	# 只看本图自己的敌人池：GameRoot 是 class_name 不是 autoload，读它的实例属性会编译不过。
+	# 所有野外图都显式配了 enemy_pool，纯城镇图则 battle_enabled = false。
+	if _map.enemy_pool.is_empty():
+		return
+	if _encounter_grace_left > 0.0:
+		_encounter_grace_left -= delta
+		return
+	if not _is_moving:
+		# 站着不动：计时慢慢回落（不是立刻清零，免得走一步停一下永远不遇敌）
+		_encounter_timer = maxf(0.0, _encounter_timer - delta * 2.0)
+		return
+	_encounter_timer += delta
+	if _encounter_timer < _encounter_target:
+		return
+	_encounter_timer = 0.0
+	_encounter_target = maxf(0.5, encounter_interval + randf_range(-encounter_jitter, encounter_jitter))
+	if randf() <= encounter_chance:
+		battle_requested.emit()
 
 
 ## 每帧找"最近且在 interact_radius 内"的 NPC，维护高亮与底部提示。
@@ -640,6 +754,8 @@ func _process(delta: float) -> void:
 	_update_trail()
 	_update_companions(delta)
 	_update_nearest()
+	_check_portals(delta)
+	_update_encounter(delta)
 
 
 ## 按输入向量移动玩家并夹在地图内；dash 按住即持续冲刺，flip_h 只在 |dir.x| > 0.01 时更新以免朝向抖动。
@@ -647,6 +763,7 @@ func _process(delta: float) -> void:
 ## 配了帧动画时改用 8 方位朝向（不再靠 flip_h 镜像），并把动作切成 run / idle。
 func _move_player(delta: float) -> void:
 	var dir := _read_move_input()
+	_is_moving = dir != Vector2.ZERO
 	if dir == Vector2.ZERO:
 		if _player_model3d != null:
 			_player_model3d.play("idle")
@@ -669,7 +786,7 @@ func _move_player(delta: float) -> void:
 	player.position.x = clampf(player.position.x, EDGE_MARGIN, maxf(EDGE_MARGIN, _map_size.x - EDGE_MARGIN))
 	player.position.y = clampf(player.position.y, EDGE_MARGIN, maxf(EDGE_MARGIN, _map_size.y - EDGE_MARGIN))
 	if _player_model3d != null:
-		_player_model3d.face_from_vector(face_dir)     # 3D 模式下直接转模型，不用 8 套贴图
+		_player_model3d.face_from_vector(dir)     # 3D 使用真实移动方向，不受贴图四斜向限制。
 		_player_model3d.play("run")
 	elif _player_anim != null:
 		_player_anim.set_facing(_player_anim.facing_from_vector(face_dir))
@@ -750,8 +867,9 @@ func _refresh_player_avatar() -> void:
 		var av := Model3DAvatar.new()
 		av.name = "Model3D"
 		player.add_child(av)
-		if av.setup(stats.model_glb, _unit_height()):
+		if av.setup(stats.model_glb, _unit_height(), true):
 			_player_model3d = av
+			av.set_weapon(GameRoot.equipment_in(stats, ItemBase.EquipType.WEAPON) as ItemEquipment)
 			player_sprite.visible = false
 		else:
 			av.queue_free()
@@ -831,17 +949,13 @@ func _rebuild_companions() -> void:
 ## 造一个跟随小人：影子 + 立绘 + 名字（结构同 Player，只是不带相机）。
 func _make_companion(stats: UnitStats) -> Node2D:
 	var node := Node2D.new()
+	node.set_meta("character", stats)
 	node.name = "Companion"
 	add_child(node)
 	var shadow := Polygon2D.new()
 	shadow.name = "Shadow"
-	shadow.color = Color(0, 0, 0, 0.3)
-	# 和 world_map.tscn 里 Player/Shadow 的椭圆保持一致（场景里那份没法直接复用，这里重写一份）
-	shadow.polygon = PackedVector2Array([Vector2(44, 0), Vector2(38, 8), Vector2(22, 13.9),
-			Vector2(0, 16), Vector2(-22, 13.9), Vector2(-38, 8), Vector2(-44, 0),
-			Vector2(-38, -8), Vector2(-22, -13.9), Vector2(0, -16), Vector2(22, -13.9),
-			Vector2(38, -8)])
 	node.add_child(shadow)
+	_style_party_shadow(shadow)
 	var sprite := Sprite2D.new()
 	sprite.name = "Sprite"
 	sprite.texture = stats.icon
@@ -856,8 +970,9 @@ func _make_companion(stats: UnitStats) -> Node2D:
 		var av := Model3DAvatar.new()
 		av.name = "Model3D"
 		node.add_child(av)
-		if av.setup(stats.model_glb, _unit_height()):
+		if av.setup(stats.model_glb, _unit_height(), true):
 			sprite.visible = false
+			av.set_weapon(GameRoot.equipment_in(stats, ItemBase.EquipType.WEAPON) as ItemEquipment)
 		else:
 			av.queue_free()
 	var label := _make_name_plate(node, 16, NAME_COLOR_ALLY, stats)
@@ -897,8 +1012,25 @@ func _make_name_label(font_size: int, color: Color = NAME_COLOR_ALLY) -> Label:
 	label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
 	label.add_theme_constant_override("outline_size", 5)
 	label.size = Vector2(220, NAME_PLATE_HEIGHT)
-	label.position = Vector2(-110, NAME_PLATE_TOP)     # 以角色脚下为原点，往上抬到头顶
+	label.position = Vector2(-110, -_unit_height() - NAME_PLATE_HEIGHT - 4.0)
 	return label
+
+
+## 同一套脚底软阴影用于队长和队友；尺寸跟随本图角色高度。
+func _style_party_shadow(shadow: Polygon2D) -> void:
+	shadow.color = Color(0.10, 0.075, 0.065, 0.055)
+	var ellipse := PackedVector2Array()
+	for i in 48:
+		var angle := TAU * float(i) / 48.0
+		ellipse.append(Vector2(cos(angle) * _unit_height() * 0.16,
+				sin(angle) * _unit_height() * 0.045))
+	shadow.polygon = ellipse
+	for index in 2:
+		var inner := Polygon2D.new()
+		inner.polygon = ellipse
+		inner.scale = Vector2.ONE * (0.78 if index == 0 else 0.52)
+		inner.color = Color(0.10, 0.075, 0.065, 0.07 if index == 0 else 0.12)
+		shadow.add_child(inner)
 
 
 
@@ -1153,7 +1285,6 @@ func _open_bag(from_menu := false, as_companion := false) -> void:
 	if _stats_open:
 		_stats_panel.set_linked_height(_bag_panel.panel_height())
 	_set_focus_ring(_combined_ring())
-	_sync_world_button_focus()
 
 
 ## 操作菜单里点了「背包」。不能把信号直连 _open_bag：信号无参，from_menu 会丢成 false。
@@ -1172,7 +1303,6 @@ func _close_bag() -> void:
 		# 背包收起来后属性面板**保持一样高**（高度锚点还在，没必要缩一下再弹回来）
 		_stats_panel.set_linked_height(_bag_panel.panel_height())
 	_set_focus_ring(_combined_ring())
-	_sync_world_button_focus()
 	if _bag_from_menu:
 		_bag_from_menu = false
 		_open_pause_menu()
@@ -1193,7 +1323,6 @@ func _open_stats(from_menu := false) -> void:
 		# 背包先开着的话，属性面板跟着它看同一个人
 		_stats_panel.show_character(_bag_panel.current_character())
 	_set_focus_ring(_combined_ring())
-	_sync_world_button_focus()
 
 
 ## 属性面板开着时按 B：单独开关背包，不动属性面板。
@@ -1227,7 +1356,6 @@ func _close_stats() -> void:
 	TooltipManager.hide_tip()
 	_stats_panel.hide()
 	_set_focus_ring(_combined_ring())
-	_sync_world_button_focus()
 	if _stats_from_menu:
 		_stats_from_menu = false
 		_open_pause_menu()
@@ -1262,7 +1390,6 @@ func _open_pause_menu() -> void:
 	_menu_open = true
 	_pause_menu.open(_map.battle_enabled)
 	_set_focus_ring(_pause_menu.focus_ring())
-	_sync_world_button_focus()
 
 
 ## 关闭操作菜单，回到游戏。
@@ -1270,7 +1397,6 @@ func _close_pause_menu() -> void:
 	_menu_open = false
 	_pause_menu.hide()
 	_focus_ring.clear()
-	_sync_world_button_focus()
 
 
 ## 打开队伍管理二级页：把操作菜单藏起来（避免两层都亮着），按 _party 与 deployed 重建列表。
@@ -1281,7 +1407,6 @@ func _open_party_panel() -> void:
 	_party_panel.clear_message()
 	_party_panel.show_party(_party, deployed)
 	_set_focus_ring(_party_panel.focus_ring())
-	_sync_world_button_focus()
 
 
 ## Esc /「返回」：从队伍管理退回操作菜单（二级页逐级退，而不是直接回游戏）。
@@ -1328,7 +1453,6 @@ func _open_merchant(data: MapNPC) -> void:
 	_open_bag(false, true)
 	_bag_panel.set_slot_focus_enabled(true)     # 交易时背包也要能点/能键盘选（要卖东西）
 	_set_focus_ring(_merchant_panel.focus_ring())
-	_sync_world_button_focus()
 
 
 ## 关闭商人面板回游戏。背包若是交易顺手打开的，一起收掉。
@@ -1340,7 +1464,6 @@ func _close_merchant() -> void:
 		_close_bag()               # 交易结束，配件背包一起收（_bag_with_shop 由它清掉）
 	_bag_panel.set_slot_focus_enabled(true)
 	_focus_ring.clear()
-	_sync_world_button_focus()
 
 
 ## 重建货架：sell_pool 优先，留空用 Global.get_all_equipment()。
@@ -1350,6 +1473,14 @@ func _rebuild_merchant() -> void:
 		return
 	var items: Array[ItemBase] = _merchant_data.sell_pool if not _merchant_data.sell_pool.is_empty() \
 			else Global.get_all_equipment()
+	# 按 sell_types 过滤：商店只上架自己那一类（空 = 不过滤）
+	if not _merchant_data.sell_types.is_empty():
+		var filtered: Array[ItemBase] = []
+		for item in items:
+			var eq := item as ItemEquipment
+			if eq != null and _merchant_data.sell_types.has(int(eq.equip_type)):
+				filtered.append(item)
+		items = filtered
 	# coins 仍要传：面板靠它判定哪些格子买不起（只是不显示金币）。
 	_merchant_panel.show_shop(_merchant_data.display_name, items, Global.coins,
 			Global.equipped_weapons)
@@ -1426,6 +1557,7 @@ func _sync_merchant_focus() -> void:
 ## 副作用：余额；背包开着则重建方格/装备栏并同步焦点环；属性面板开着也刷新（装备加成要跟着变）。
 func notify_bag_changed(message := "") -> void:
 	refresh_coins()
+	_refresh_weapon_visuals()
 	if _stats_open:
 		# 属性面板直接读 GameRoot/UnitStats，数据已经变了，重建一次就能看到新装备
 		_stats_panel.refresh.call_deferred()
@@ -1441,6 +1573,19 @@ func notify_bag_changed(message := "") -> void:
 		_sync_bag_focus.call_deferred()
 
 
+## 装备/卸下后就地更新外观，不重建角色，不打断跑步或改变站位。
+func _refresh_weapon_visuals() -> void:
+	if is_instance_valid(_player_model3d):
+		_player_model3d.set_weapon(GameRoot.equipment_in(_leader_stats(), ItemBase.EquipType.WEAPON) as ItemEquipment)
+	for companion in _companions:
+		if not is_instance_valid(companion):
+			continue
+		var avatar := companion.get_node_or_null("Model3D") as Model3DAvatar
+		if avatar != null:
+			var character := companion.get_meta("character") as UnitStats
+			avatar.set_weapon(GameRoot.equipment_in(character, ItemBase.EquipType.WEAPON) as ItemEquipment)
+
+
 ## 延迟同步背包焦点环（理由同上）；属性面板也开着时用合并环，否则「＋」会从 W/S 候选里消失。
 func _sync_bag_focus() -> void:
 	if _bag_open and _bag_panel != null:
@@ -1451,14 +1596,6 @@ func _sync_bag_focus() -> void:
 func refresh_coins() -> void:
 	if _bag_panel != null:
 		_bag_panel.refresh_coins()
-
-
-## 浮层开着时把地图上两个常驻按钮设为不可聚焦，关掉后恢复。
-## 为什么：GUI 焦点按空间方向找邻居，不禁用的话方向键会把焦点跑出浮层。
-func _sync_world_button_focus() -> void:
-	var mode := Control.FOCUS_NONE if _ui_open() else Control.FOCUS_ALL
-	battle_button.focus_mode = mode
-	back_button.focus_mode = mode
 
 
 ## 设置焦点环并聚焦第一个。⚠ 调用前浮层必须已经 show()：grab_focus() 对隐藏控件静默失败，键盘会整片失灵。
@@ -1524,7 +1661,6 @@ func _open_panel(npc: WorldNPC) -> void:
 	# 顺序很重要：先 show() 再设焦点（grab_focus 对隐藏控件静默失败，键盘会失灵且无报错）。
 	panel.show()
 	_set_focus_ring(_collect_focusable(panel_buttons))
-	_sync_world_button_focus()
 
 
 ## 把可选项文字染成金色（悬停/按下/聚焦更亮）。只给能点的上色，置灰的保持灰色。
@@ -1779,6 +1915,11 @@ func capture_map_photo() -> Image:
 		if is_instance_valid(companion) and companion.visible:
 			companion.visible = false
 			hidden.append(companion)
+	# 传送光圈同理：它是 WorldMap 的直接子节点，不是 NPC/玩家，漏掉就会被拍进战斗背景。
+	for portal in _portals:
+		if is_instance_valid(portal) and portal.visible:
+			portal.visible = false
+			hidden.append(portal)
 	if ui_layer != null and ui_layer.visible:
 		ui_layer.visible = false
 		hidden_layer = ui_layer
@@ -1854,7 +1995,6 @@ func _close_panel() -> void:
 	_panel_npc = null
 	_focus_ring.clear()
 	panel.hide()
-	_sync_world_button_focus()
 
 
 ## 选了传送目的地：播 UI 音效、关面板、emit travel_requested。

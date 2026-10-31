@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="UnitStats" format=3]
+
+[ext_resource type="Script" path="res://resources/units/unit_stats.gd" id="1_stats"]
+[ext_resource type="Texture2D" path="res://assets/sprites/units/players/fullbody/行修.png" id="2_icon"]
+[ext_resource type="Texture2D" path="res://assets/sprites/units/players/portraits/行修.png" id="3_avatar"]
+
+[resource]
+script = ExtResource("1_stats")
+name = "魔影行修"
+type = 1
+race = 1
+attr_con = 12
+attr_mag = 14
+attr_str = 16
+attr_end = 11
+attr_agi = 13
+icon = ExtResource("2_icon")
+avatar = ExtResource("3_avatar")
+is_elite = true

@@ -2,15 +2,21 @@
 
 [ext_resource type="Script" uid="uid://j6ibt5vlkg3t" path="res://resources/units/unit_stats.gd" id="1_a5pf0"]
 [ext_resource type="Script" uid="uid://v6570clid4e6" path="res://resources/maps/map_data.gd" id="1_mapdata"]
-[ext_resource type="Texture2D" uid="uid://dpx74cjide5rb" path="res://assets/map/桃花村.png" id="2_texture"]
+[ext_resource type="Texture2D" path="res://assets/map/桃花村.png" id="2_texture"]
 [ext_resource type="Script" uid="uid://c60dn4pj1cfw7" path="res://resources/items/item_base.gd" id="3_06chs"]
 [ext_resource type="Script" uid="uid://ctu1nt07fqrnc" path="res://resources/maps/map_npc.gd" id="3_npc"]
 [ext_resource type="Script" uid="uid://b23h0s27eoug8" path="res://resources/maps/map_prop.gd" id="9_props"]
-[ext_resource type="Texture2D" uid="uid://dpxw8tsbgrfse" path="res://assets/sprites/tomato/Players/Player_2.png" id="t_chuanfu"]
-[ext_resource type="Texture2D" uid="uid://dmox6e28kf6ax" path="res://assets/sprites/tomato/Players/Player_4.png" id="t_duiyou"]
-[ext_resource type="Texture2D" uid="uid://bt0lww88864ws" path="res://assets/sprites/tomato/Players/Player_5.png" id="t_shangren"]
-[ext_resource type="Texture2D" uid="uid://cproxhccob85g" path="res://assets/sprites/tomato/Players/Player_1.png" id="t_taixu"]
-[ext_resource type="Texture2D" uid="uid://dq63ocnu3lset" path="res://assets/sprites/tomato/Players/Player_3}.png" id="t_zixiao"]
+
+[ext_resource type="Texture2D" path="res://assets/sprites/npc/掌门-太虚剑宗.png" id="n_taixuzhangmen"]
+[ext_resource type="Texture2D" path="res://assets/sprites/npc/掌门-缥缈仙府.png" id="n_piaomiaozhangmen"]
+[ext_resource type="Texture2D" path="res://assets/sprites/npc/掌门-紫霄神道教.png" id="n_zixiaozhangmen"]
+[ext_resource type="Texture2D" path="res://assets/sprites/npc/掌门-万药谷.png" id="n_wanyaoguzhu"]
+[ext_resource type="Texture2D" path="res://assets/sprites/npc/掌门-星罗教.png" id="n_xingluojiaozhu"]
+[ext_resource type="Texture2D" path="res://assets/sprites/npc/商人-船夫.png" id="n_chuanfu"]
+[ext_resource type="Texture2D" path="res://assets/sprites/npc/商人-武器商.png" id="n_shangren"]
+[ext_resource type="Texture2D" path="res://assets/sprites/npc/商人-说书人.png" id="n_shuoshu"]
+[ext_resource type="Script" path="res://resources/maps/map_portal.gd" id="p_portal"]
+[ext_resource type="Texture2D" path="res://assets/sprites/npc/商人-防具商.png" id="n_fangju"]
 
 [sub_resource type="Resource" id="Resource_signpost"]
 script = ExtResource("3_npc")
@@ -25,35 +31,26 @@ teleport_label = ""
 script = ExtResource("3_npc")
 id = "chuanfu"
 display_name = "船夫"
-texture = ExtResource("t_chuanfu")
+texture = ExtResource("n_chuanfu")
 position = Vector2(0.52, 0.7)
 dialogue = "客官要出海吗？近来风浪大，渡船都歇在滩上了。"
 destinations = Array[String]([])
 teleport_label = ""
 
-[sub_resource type="Resource" id="Resource_duiyou"]
+[sub_resource type="Resource" id="Resource_shuoshu"]
 script = ExtResource("3_npc")
-id = "duiyou"
-display_name = "队友"
-texture = ExtResource("t_duiyou")
+id = "shuoshu"
+display_name = "说书人"
+texture = ExtResource("n_shuoshu")
 position = Vector2(0.38, 0.47)
-dialogue = "需要加入队伍吗？"
-action = 3
-
-[sub_resource type="Resource" id="Resource_shangren"]
-script = ExtResource("3_npc")
-id = "shangren"
-display_name = "商人"
-texture = ExtResource("t_shangren")
-position = Vector2(0.33, 0.53)
-dialogue = "看看有没有趁手的家伙？都是现货。"
-action = 4
+dialogue = "话说那太虚天渊底下，压着一桩上古的旧账……客官想听哪一段？"
+action = 1
 
 [sub_resource type="Resource" id="Resource_taixu"]
 script = ExtResource("3_npc")
 id = "taixu_zhangmen"
 display_name = "太虚剑宗掌门"
-texture = ExtResource("t_taixu")
+texture = ExtResource("n_taixuzhangmen")
 position = Vector2(0.46, 0.55)
 dialogue = "剑者，心也。太虚剑宗只收人族弟子 —— 你若有这份心性，便来试剑。"
 action = 5
@@ -63,7 +60,8 @@ sect_id = "taixu"
 script = ExtResource("3_npc")
 id = "piaomiao_zhangmen"
 display_name = "缥缈仙府府主"
-texture = ExtResource("t_chuanfu")
+position = Vector2(0.66, 0.4)
+texture = ExtResource("n_piaomiaozhangmen")
 dialogue = "云海缥缈，人族与仙族皆可入我门下 —— 只看你肯不肯静心。"
 action = 5
 sect_id = "piaomiao"
@@ -72,7 +70,7 @@ sect_id = "piaomiao"
 script = ExtResource("3_npc")
 id = "zixiao_zhangmen"
 display_name = "紫霄神道教道尊"
-texture = ExtResource("t_zixiao")
+texture = ExtResource("n_zixiaozhangmen")
 position = Vector2(0.54, 0.46)
 dialogue = "雷法天授，非仙族血脉不可轻传。你是什么出身，自己清楚。"
 action = 5
@@ -82,7 +80,7 @@ sect_id = "zixiao"
 script = ExtResource("3_npc")
 id = "wanyao_guzhu"
 display_name = "万药谷谷主"
-texture = ExtResource("t_duiyou")
+texture = ExtResource("n_wanyaoguzhu")
 position = Vector2(0.58, 0.52)
 dialogue = "不问出身，只问药性。仙族、魔族的弟子我这儿都收。"
 action = 5
@@ -92,20 +90,66 @@ sect_id = "wanyao"
 script = ExtResource("3_npc")
 id = "xingluo_jiaozhu"
 display_name = "星罗教教主"
-texture = ExtResource("t_shangren")
+texture = ExtResource("n_xingluojiaozhu")
 position = Vector2(0.62, 0.57)
 dialogue = "星象已定，魔族当兴。入我星罗教，先看你命盘。"
 action = 5
 sect_id = "xingluo"
+
+[sub_resource type="Resource" id="Resource_portal_taohuatan"]
+script = ExtResource("p_portal")
+id = "portal_taohuatan"
+position = Vector2(0.526, 0.783)
+target_map_id = "taohuatan"
+radius = 105.0
+
+[sub_resource type="Resource" id="Resource_portal_taolin"]
+script = ExtResource("p_portal")
+id = "portal_taolin"
+position = Vector2(0.654, 0.16)
+target_map_id = "taolin"
+radius = 105.0
+
+[sub_resource type="Resource" id="Resource_shangren_weapon"]
+script = ExtResource("3_npc")
+id = "shangren_weapon"
+display_name = "武器商"
+position = Vector2(0.3, 0.5)
+texture = ExtResource("n_shangren")
+dialogue = "刀剑弓弩，都是开了刃的现货。挑一件趁手的。"
+action = 4
+sell_types = Array[int]([2])
+
+[sub_resource type="Resource" id="Resource_shangren_armor"]
+script = ExtResource("3_npc")
+id = "shangren_armor"
+display_name = "防具商"
+position = Vector2(0.34, 0.565)
+texture = ExtResource("n_fangju")
+dialogue = "头盔、铠甲、靴子，一副好甲能救命。"
+action = 4
+sell_types = Array[int]([1, 5, 6])
+
+[sub_resource type="Resource" id="Resource_shangren_jewel"]
+script = ExtResource("3_npc")
+id = "shangren_jewel"
+display_name = "首饰商"
+position = Vector2(0.26, 0.565)
+texture = ExtResource("n_fangju")
+dialogue = "项链与腰带，护身又养气。首饰商暂时借了防具商的铺面。"
+action = 4
+sell_types = Array[int]([3, 4])
 
 [resource]
 script = ExtResource("1_mapdata")
 id = "taohuacun"
 display_name = "桃花村"
 texture = ExtResource("2_texture")
-map_scale = 0.8496
+map_scale = 1.0
 unit_height = 230.0
 spawn_point = Vector2(0.4, 0.44)
-npcs = Array[ExtResource("3_npc")]([SubResource("Resource_signpost"), SubResource("Resource_chuanfu"), SubResource("Resource_duiyou"), SubResource("Resource_shangren"), SubResource("Resource_taixu"), SubResource("Resource_piaomiao"), SubResource("Resource_zixiao"), SubResource("Resource_wanyao"), SubResource("Resource_xingluo")])
+npcs = Array[ExtResource("3_npc")]([SubResource("Resource_signpost"), SubResource("Resource_chuanfu"), SubResource("Resource_shuoshu"), SubResource("Resource_taixu"), SubResource("Resource_piaomiao"), SubResource("Resource_zixiao"), SubResource("Resource_wanyao"), SubResource("Resource_xingluo"), SubResource("Resource_shangren_weapon"), SubResource("Resource_shangren_armor"), SubResource("Resource_shangren_jewel")])
 next_id = ""
 exit_center = Vector2(0.62, 0.5)
+portals = Array[ExtResource("p_portal")]([SubResource("Resource_portal_taohuatan"), SubResource("Resource_portal_taolin")])
+battle_enabled = false

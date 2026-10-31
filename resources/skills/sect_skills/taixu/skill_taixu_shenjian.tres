@@ -1,7 +1,6 @@
 [gd_resource type="Resource" script_class="SkillData" format=3 uid="uid://x1shr4dybe1w"]
 
 [ext_resource type="Script" uid="uid://sbgbq3puamij" path="res://resources/skills/skill_data.gd" id="1_367tr"]
-[ext_resource type="PackedScene" path="res://scenes/effects/taixu/taixu_shenjian.tscn" id="2_fx"]
 [ext_resource type="PackedScene" path="res://scenes/effects/skill_seq/taixu_shenjian_seq.tscn" id="9_seq"]
 
 [resource]
@@ -14,7 +13,7 @@ power = 0.95
 sect_id = "taixu"
 sect_skill_key = "taixu_shenjian"
 hits = 3
-hit_power = Array[float]([0.4, 0.6, 0.8])
+hit_power = Array[float]([0.8, 1.2, 1.4])
 tint = Color(0.8, 0.92, 1, 1)
 hit_particles = 40
 hit_effect_scene = ExtResource("9_seq")

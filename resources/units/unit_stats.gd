@@ -30,6 +30,9 @@ enum Race {
 @export var name: String
 ## 单位类型（PLAYER / ENEMY）。默认是枚举第 0 项 PLAYER —— ⚠ 新建敌人 .tres 忘了改，它会以"我方"身份进战斗。
 @export var type: UnitType
+## 精英标记：精英怪在 GameRoot._make_enemy_team() 里单独掷骰，
+## 一场战斗**最多出现一只**（普通怪则有多个坑位各自随机）。
+@export var is_elite := false
 ## 种族（玩家用来分门派；敌人用来选属性系数表）。默认 HUMAN。
 @export var race: Race
 
@@ -62,6 +65,9 @@ enum Race {
 ## 该 .glb 需带骨骼 + idle/run/attack/cast 动画（由 xx3d 的 export_glb.py 生成）。
 ## 优先级：model_glb > anim_dir > icon。留空则走下面两者。
 @export var model_glb: String = ""
+## 战斗副本的武器外观快照，由 GameRoot 从原角色装备栏写入。
+## duplicate() 后 resource_path 为空，不能拿副本重新查原角色的装备。
+var weapon_visual: ItemEquipment = null
 ## 最大生命值（单位：血点；默认 1.0 = 最小值兜底，防止忘了填导致瞬间暴毙或除零）。
 ## ⚠ 它是**模板值**：运行时真正在跑的是 HealthComponent.max_health（setup() 时从这里拷过去）。
 @export var health:= 1.0

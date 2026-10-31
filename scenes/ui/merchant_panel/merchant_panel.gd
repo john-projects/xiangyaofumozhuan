@@ -73,6 +73,12 @@ var _pending: ItemBase = null
 var _pending_is_sell := false
 ## 最近一次算出来的窗口尺寸（window_width() 给背包算并排偏移用）。
 var _window_size := Vector2.ZERO
+## 当前焦点停在哪件商品上（item_key）。重建货架后用它把焦点抓回去。
+var _focus_key := ""
+## 当前焦点格子在货架里的序号（找不到同款商品时按序号兜底）。
+var _focus_index := -1
+## 重建后要不要恢复滚动位置（首次打开时应回到顶部）。
+var _restore_scroll := false
 
 
 func _ready() -> void:
@@ -104,6 +110,9 @@ func _ready() -> void:
 ## ⚠ 刻意不清空 message_label：买完是先 show_message() 再 deferred 重建，清了就永远看不到提示。
 func show_shop(p_title: String, items: Array[ItemBase], coins: int,
 		owned: Array[ItemBase]) -> void:
+	# 先记下这次是重新打开还是买完重建：重建时保留滚动位置与选中格，
+	# 真正打开商店时才回到顶部、回到第一格。
+	var was_visible := visible
 	show()
 	_hide_confirm()          # 重建了货架，之前那件"待确认"的格子已经不存在了
 	title_label.text = p_title
@@ -118,9 +127,36 @@ func show_shop(p_title: String, items: Array[ItemBase], coins: int,
 		grid.add_child(_make_slot(item, coins, owned))
 	for i in range(items.size(), SHELF_SLOTS):
 		grid.add_child(_make_empty_slot())
+	_restore_scroll = was_visible
 	if scroll != null:
-		scroll.scroll_vertical = 0        # 每次打开/重建都回到最上面那几行
+		# 重建（买完东西）时保留原来的滚动位置；真正"打开商店"时才回到顶部
+		if not _restore_scroll:
+			scroll.scroll_vertical = 0
 	_apply_window_geometry()
+	_restore_focus(items)
+
+
+## 重建货架后把焦点抓回"上一次看的那件商品"。
+## 优先按商品键找（买完之后它可能因为"已持有"多了一个角标，但键不变）；
+## 找不到就按序号兜底；再找不到就不动焦点（WorldMap 会调 _set_focus_ring 兜底）。
+func _restore_focus(items: Array[ItemBase]) -> void:
+	if _slots.is_empty():
+		return
+	var target: Control = null
+	if not _focus_key.is_empty():
+		for slot in _slots:
+			if String(slot.get_meta("item_key", "")) == _focus_key:
+				target = slot
+				break
+	if target == null and _focus_index >= 0 and _focus_index < _slots.size():
+		target = _slots[_focus_index]
+	if target == null:
+		return
+	# grab_focus 对隐藏控件静默失败，所以调用前必须已经 show()（show_shop 开头已 show）
+	target.grab_focus()
+	if scroll != null:
+		# 让这一格滚进可视范围（ensure_control_visible 由 ScrollContainer 提供）
+		scroll.ensure_control_visible(target)
 
 
 ## 在面板上显示一句提示（"买下了 XXX（-12 金币）。" / "金币不够…" 等），由 WorldMap 调用。
@@ -150,6 +186,12 @@ func cancel_confirm() -> bool:
 		return false
 	_hide_confirm()
 	return true
+
+
+## 商品的唯一键：名字 + 稀有度。和 GameRoot.item_owned_count() 的判定口径一致，
+## 所以"同一件商品"在重建前后能对上号。
+func _item_key(item: ItemBase) -> String:
+	return "%s#%d" % [item.item_name, item.item_tier]
 
 
 ## 按视觉顺序返回可聚焦控件：所有"当前买得起"的格子。
@@ -272,6 +314,12 @@ func _make_slot(item: ItemBase, coins: int, owned: Array[ItemBase]) -> Button:
 		slot.add_child(_make_tag("持×%d" % have, true, true))
 
 	if reason.is_empty():
+		slot.set_meta("item_key", _item_key(item))
+		# 焦点进到这个格子就记住它，重建货架时把它抓回来
+		var idx := _slots.size()
+		slot.focus_entered.connect(func() -> void:
+			_focus_key = _item_key(item)
+			_focus_index = idx)
 		slot.pressed.connect(_ask_confirm.bind(item))
 		# 悬停 / 键盘焦点都弹同一张属性卡；买不起的格子不接，避免"属性卡 + 原生 tooltip"两个框一起冒。
 		slot.mouse_entered.connect(TooltipManager.show_for_control.bind(slot, item))

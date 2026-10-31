@@ -26,6 +26,18 @@ const FRAME_W := 320
 const FRAME_H := 480
 
 ## 8 个方位。**顺序有意义**：_facing_from_vector() 按角度 45° 分扇区，下标要和这里对应。
+## 素材只有两个斜向时：四个正方向吸附到最近的斜向。
+const SNAP_DIR := {
+	"down": "down_right",
+	"right": "down_right",
+	"up": "up_left",
+	"left": "up_left",
+}
+## 缺哪一侧就用另一侧镜像（sprite.flip_h）。只列"靠镜像补出来"的方向。
+const MIRROR_DIR := {
+	"down_left": "down_right",
+	"up_right": "up_left",
+}
 const DIRS: Array[String] = ["right", "down_right", "down", "down_left",
 		"left", "up_left", "up", "up_right"]
 
@@ -68,9 +80,11 @@ func setup(p_sprite: Sprite2D, p_dir: String) -> bool:
 	# 必须先设 base_dir 再探资源 —— _load_sheet 是靠 base_dir 拼路径的。
 	base_dir = p_dir.rstrip("/")
 	_sheets.clear()
-	if _load_sheet("idle", "down") == null:
+	# 素材可能只有一个斜向（配合镜像用），所以不硬性要求 idle_down，任一 idle_* 即可。
+	if _load_sheet("idle", "down") == null and _load_sheet("idle", "down_right") == null \
+			and _load_sheet("idle", "up_left") == null:
 		# 配了 anim_dir 却找不到文件时明确报出来，否则会静默退回静态图、很难查。
-		push_warning("CharAnim2D: 找不到 %s/idle_down.png（回退到静态立绘）" % base_dir)
+		push_warning("CharAnim2D: %s 下没有任何 idle_*.png（回退到静态立绘）" % base_dir)
 		base_dir = ""
 		return false
 	sprite = p_sprite
@@ -176,7 +190,8 @@ func _process(delta: float) -> void:
 
 ## 当前条带图的帧数（宽度 / 帧宽）。
 func _frame_count() -> int:
-	var t: Texture2D = _sheets.get("%s_%s" % [_action, _dir], null)
+	var r := _resolve(_action, _dir)
+	var t: Texture2D = _sheets.get("%s_%s" % [String(r[0]), String(r[1])], null)
 	if t == null:
 		return 1
 	return maxi(1, int(t.get_width() / FRAME_W))
@@ -185,9 +200,12 @@ func _frame_count() -> int:
 ## 把当前 _frame 写进 sprite.region_rect。
 ## 副作用：改 sprite.texture（换方位/动作时）和 region_rect（每帧）。
 func _apply_frame() -> void:
-	var t := _load_sheet(_action, _dir)
+	var r := _resolve(_action, _dir)
+	var t := _load_sheet(String(r[0]), String(r[1]))
 	if t == null:
 		return
+	# 镜像：素材是另一侧的，水平翻转补出这一侧
+	sprite.flip_h = bool(r[2])
 	if sprite.texture != t:
 		sprite.texture = t
 	var count := maxi(1, int(t.get_width() / FRAME_W))
@@ -195,6 +213,27 @@ func _apply_frame() -> void:
 	sprite.region_enabled = true
 	sprite.region_rect = Rect2(float(_frame * FRAME_W), 0.0, float(FRAME_W), float(FRAME_H))
 	frame_changed.emit()
+
+
+## 把 (动作, 方位) 解析成实际要用的 (动作, 方位, 是否镜像)。
+## 优先级：原样有素材 → 正方向吸附斜向 → 缺侧走镜像 → 动作整组缺失退回 idle。
+func _resolve(action: String, dir: String) -> Array:
+	var d := dir
+	# ① 正方向吸附到斜向（只在"该动作下这个正方向真的没有素材"时才吸附）
+	if SNAP_DIR.has(d) and _load_sheet(action, d) == null:
+		d = String(SNAP_DIR[d])
+	# ② 缺侧镜像
+	var flip := false
+	if _load_sheet(action, d) == null and MIRROR_DIR.has(d):
+		d = String(MIRROR_DIR[d])
+		flip = true
+	# ③ 这个动作完全没有素材 → 用同朝向的 idle（角色至少还在呼吸）
+	if _load_sheet(action, d) == null and action != "idle":
+		action = "idle"
+		if _load_sheet(action, d) == null and MIRROR_DIR.has(d):
+			d = String(MIRROR_DIR[d])
+			flip = true
+	return [action, d, flip]
 
 
 ## 按需加载条带图并缓存。返回 null 表示该动作/方位没有资源。

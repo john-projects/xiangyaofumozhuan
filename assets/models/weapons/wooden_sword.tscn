@@ -1,0 +1,44 @@
+[gd_scene load_steps=7 format=3]
+
+[sub_resource type="StandardMaterial3D" id="Wood"]
+albedo_color = Color(0.48, 0.25, 0.10, 1)
+roughness = 0.85
+
+[sub_resource type="StandardMaterial3D" id="GripMaterial"]
+albedo_color = Color(0.16, 0.08, 0.04, 1)
+
+[sub_resource type="PrismMesh" id="Blade"]
+material = SubResource("Wood")
+size = Vector3(0.085, 0.75, 0.025)
+
+[sub_resource type="BoxMesh" id="Guard"]
+material = SubResource("Wood")
+size = Vector3(0.23, 0.045, 0.055)
+
+[sub_resource type="CylinderMesh" id="Grip"]
+material = SubResource("GripMaterial")
+top_radius = 0.022
+bottom_radius = 0.022
+height = 0.18
+
+[sub_resource type="SphereMesh" id="Pommel"]
+material = SubResource("Wood")
+radius = 0.033
+height = 0.066
+
+[node name="WoodenSword" type="Node3D"]
+
+[node name="Blade" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.495, 0)
+mesh = SubResource("Blade")
+
+[node name="Guard" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.12, 0)
+mesh = SubResource("Guard")
+
+[node name="Grip" type="MeshInstance3D" parent="."]
+mesh = SubResource("Grip")
+
+[node name="Pommel" type="MeshInstance3D" parent="."]
+position = Vector3(0, -0.115, 0)
+mesh = SubResource("Pommel")

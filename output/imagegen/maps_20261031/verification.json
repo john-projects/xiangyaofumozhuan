@@ -1,0 +1,218 @@
+[
+  {
+    "name": "01_桃花村",
+    "width": 1448,
+    "height": 1086,
+    "minAlpha": 0,
+    "maxAlpha": 253,
+    "bytes": 3399797
+  },
+  {
+    "name": "02_桃花滩",
+    "width": 1448,
+    "height": 1086,
+    "minAlpha": 0,
+    "maxAlpha": 253,
+    "bytes": 2931077
+  },
+  {
+    "name": "03_桃花滩洞窟",
+    "width": 1448,
+    "height": 1086,
+    "minAlpha": 0,
+    "maxAlpha": 255,
+    "bytes": 2747181
+  },
+  {
+    "name": "04_桃林",
+    "width": 1448,
+    "height": 1086,
+    "minAlpha": 0,
+    "maxAlpha": 253,
+    "bytes": 3347118
+  },
+  {
+    "name": "05_芦花渡",
+    "width": 1448,
+    "height": 1086,
+    "minAlpha": 0,
+    "maxAlpha": 253,
+    "bytes": 3101277
+  },
+  {
+    "name": "06_广陵城",
+    "width": 1448,
+    "height": 1086,
+    "minAlpha": 0,
+    "maxAlpha": 253,
+    "bytes": 3166441
+  },
+  {
+    "name": "07_落霞坡",
+    "width": 1448,
+    "height": 1086,
+    "minAlpha": 0,
+    "maxAlpha": 255,
+    "bytes": 2976055
+  },
+  {
+    "name": "08_灵药涧",
+    "width": 1448,
+    "height": 1086,
+    "minAlpha": 0,
+    "maxAlpha": 253,
+    "bytes": 3215833
+  },
+  {
+    "name": "09_乱石岗",
+    "width": 1448,
+    "height": 1086,
+    "minAlpha": 0,
+    "maxAlpha": 254,
+    "bytes": 3208988
+  },
+  {
+    "name": "10_剑鸣峰",
+    "width": 1448,
+    "height": 1086,
+    "minAlpha": 0,
+    "maxAlpha": 255,
+    "bytes": 2536282
+  },
+  {
+    "name": "11_黑风坳",
+    "width": 1448,
+    "height": 1086,
+    "minAlpha": 0,
+    "maxAlpha": 254,
+    "bytes": 2735284
+  },
+  {
+    "name": "12_临江城",
+    "width": 1448,
+    "height": 1086,
+    "minAlpha": 0,
+    "maxAlpha": 254,
+    "bytes": 3410200
+  },
+  {
+    "name": "13_落雁关",
+    "width": 1448,
+    "height": 1086,
+    "minAlpha": 0,
+    "maxAlpha": 253,
+    "bytes": 2918653
+  },
+  {
+    "name": "14_寒潭涧",
+    "width": 1448,
+    "height": 1086,
+    "minAlpha": 0,
+    "maxAlpha": 255,
+    "bytes": 2767559
+  },
+  {
+    "name": "15_断魂崖",
+    "width": 1448,
+    "height": 1086,
+    "minAlpha": 0,
+    "maxAlpha": 255,
+    "bytes": 3023673
+  },
+  {
+    "name": "16_落星崖",
+    "width": 1448,
+    "height": 1086,
+    "minAlpha": 0,
+    "maxAlpha": 255,
+    "bytes": 2570355
+  },
+  {
+    "name": "17_苍云岭",
+    "width": 1448,
+    "height": 1086,
+    "minAlpha": 0,
+    "maxAlpha": 253,
+    "bytes": 2506813
+  },
+  {
+    "name": "18_幽冥泽",
+    "width": 1448,
+    "height": 1086,
+    "minAlpha": 0,
+    "maxAlpha": 254,
+    "bytes": 2576576
+  },
+  {
+    "name": "19_望海城",
+    "width": 1448,
+    "height": 1086,
+    "minAlpha": 0,
+    "maxAlpha": 253,
+    "bytes": 3115929
+  },
+  {
+    "name": "20_神霄峰",
+    "width": 1448,
+    "height": 1086,
+    "minAlpha": 0,
+    "maxAlpha": 254,
+    "bytes": 3262854
+  },
+  {
+    "name": "21_野狐关",
+    "width": 1448,
+    "height": 1086,
+    "minAlpha": 0,
+    "maxAlpha": 255,
+    "bytes": 2857667
+  },
+  {
+    "name": "22_浮云岛",
+    "width": 1448,
+    "height": 1086,
+    "minAlpha": 0,
+    "maxAlpha": 253,
+    "bytes": 2792097
+  },
+  {
+    "name": "23_栖霞山",
+    "width": 1448,
+    "height": 1086,
+    "minAlpha": 0,
+    "maxAlpha": 254,
+    "bytes": 3105334
+  },
+  {
+    "name": "24_万骨墟",
+    "width": 1448,
+    "height": 1086,
+    "minAlpha": 0,
+    "maxAlpha": 255,
+    "bytes": 3196299
+  },
+  {
+    "name": "25_九霄雷池",
+    "width": 1448,
+    "height": 1086,
+    "minAlpha": 0,
+    "maxAlpha": 254,
+    "bytes": 2811429
+  },
+  {
+    "name": "26_太虚天渊",
+    "width": 1448,
+    "height": 1086,
+    "minAlpha": 0,
+    "maxAlpha": 255,
+    "bytes": 2580451
+  },
+  {
+    "name": "27_无光渊底",
+    "width": 1448,
+    "height": 1086,
+    "minAlpha": 0,
+    "maxAlpha": 255,
+    "bytes": 2788371
+  }
+]

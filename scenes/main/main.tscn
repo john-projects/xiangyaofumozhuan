@@ -8,14 +8,18 @@
 [ext_resource type="Resource" path="res://resources/units/enemies/偷桃毛猴.tres" id="6_enemy4"]
 [ext_resource type="Resource" path="res://resources/units/enemies/草丛毒蜂.tres" id="7_enemy5"]
 [ext_resource type="Resource" path="res://resources/units/enemies/顽石精怪.tres" id="9_enemy6"]
+[ext_resource type="Resource" path="res://resources/units/enemies/魔影行修.tres" id="10_enemy7"]
 [ext_resource type="Script" uid="uid://v6570clid4e6" path="res://resources/maps/map_data.gd" id="8_mapdata"]
 [ext_resource type="Resource" path="res://resources/maps/map_taohuacun.tres" id="13_taohuacun"]
+[ext_resource type="Resource" path="res://resources/maps/map_taohuatan.tres" id="14_map_taohuatan"]
+[ext_resource type="Resource" path="res://resources/maps/map_taolin.tres" id="14_map_taolin"]
+[ext_resource type="Resource" path="res://resources/maps/map_taohuatandongku.tres" id="15_map_taohuatandongku"]
 
 [node name="Main" type="Node" unique_id=1825466943]
 script = ExtResource("1_main")
-maps = Array[ExtResource("8_mapdata")]([ExtResource("13_taohuacun")])
+maps = Array[ExtResource("8_mapdata")]([ExtResource("13_taohuacun"), ExtResource("14_map_taohuatan"), ExtResource("14_map_taolin"), ExtResource("15_map_taohuatandongku")])
 start_map_id = "taohuacun"
-enemy_pool = Array[ExtResource("2_unitstats")]([ExtResource("3_enemy1"), ExtResource("4_enemy2"), ExtResource("5_enemy3"), ExtResource("6_enemy4"), ExtResource("7_enemy5"), ExtResource("9_enemy6")])
+enemy_pool = Array[ExtResource("2_unitstats")]([ExtResource("3_enemy1"), ExtResource("4_enemy2"), ExtResource("5_enemy3"), ExtResource("6_enemy4"), ExtResource("7_enemy5"), ExtResource("9_enemy6"), ExtResource("10_enemy7")])
 
 [node name="WorldRoot" type="Node2D" parent="." unique_id=220584061]
 unique_name_in_owner = true

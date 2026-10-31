@@ -21,11 +21,11 @@ extends Node2D
 ##       av.play("run")
 ##       av.face_from_vector(dir)
 
-## 视口分辨率。越大越清晰，显存和填充率也越高；2D 显示高度只有 ~195，256 足够。
-const VIEW_W := 256
-const VIEW_H := 384
-## 相机正交尺寸（世界单位）。模型高约 1.90，留 10% 余量。
-const ORTHO_SIZE := 2.10
+## 动作留白：横向原来的三倍、纵向 1.5 倍，避免挥袖/武器被矩形边界裁掉。
+## 相机范围与分辨率同比扩大，保持人物的像素密度；校准仍以人物身高为准。
+const VIEW_W := 768
+const VIEW_H := 576
+const ORTHO_SIZE := 3.15
 ## 相机俯角。**用 0**：2D 地图上其他角色都是正视立绘，俯视会把角色压扁显得"变形"。
 ## （之前设成 -35.264° 的等轴测角，正是"看起来被拉长/压扁"的原因之一。）
 const ISO_PITCH := 0.0
@@ -37,6 +37,11 @@ var _sprite: Sprite2D = null
 var _model: Node3D = null
 var _anim: AnimationPlayer = null
 var _ready_ok := false
+var _weapon_socket: BoneAttachment3D = null
+var _weapon: Node3D = null
+var _weapon_item: ItemEquipment = null
+var _calibrated := false
+var _action_revision := 0
 ## 希望模型在 2D 屏幕上显示的高度（像素）；_calibrate() 用它换算精灵缩放。
 var _display_height := 195.0
 
@@ -47,7 +52,7 @@ var _yaw_offset := 0.0
 ## 建立视口/相机/灯光并载入模型。
 ## 参数 glb_path：res:// 下的 .glb 路径；display_height：希望在 2D 屏幕上显示的高度（像素）。
 ## 返回 true 表示成功；失败会 push_warning 并返回 false（调用方应回退到静态立绘）。
-func setup(glb_path: String, display_height := 195.0) -> bool:
+func setup(glb_path: String, display_height := 195.0, map_view := false) -> bool:
 	if not ResourceLoader.exists(glb_path):
 		push_warning("Model3DAvatar: 找不到 %s" % glb_path)
 		return false
@@ -70,21 +75,21 @@ func setup(glb_path: String, display_height := 195.0) -> bool:
 	var env := Environment.new()
 	env.background_mode = Environment.BG_CLEAR_COLOR
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color(0.72, 0.76, 0.86)
-	env.ambient_light_energy = 0.55
+	env.ambient_light_color = Color(0.88, 0.86, 0.82) if map_view else Color(0.72, 0.76, 0.86)
+	env.ambient_light_energy = 0.70 if map_view else 0.55
 	var we := WorldEnvironment.new()
 	we.environment = env
 	_viewport.add_child(we)
 
 	var key := DirectionalLight3D.new()
-	key.light_energy = 1.15
+	key.light_energy = 0.80 if map_view else 1.15
 	key.light_color = Color(1.0, 0.96, 0.90)
 	key.rotation_degrees = Vector3(-48, 38, 0)
 	key.shadow_enabled = false
 	_viewport.add_child(key)
 
 	var fill := DirectionalLight3D.new()
-	fill.light_energy = 0.35
+	fill.light_energy = 0.18 if map_view else 0.35
 	fill.light_color = Color(0.72, 0.82, 1.0)
 	fill.rotation_degrees = Vector3(-15, -130, 0)
 	fill.shadow_enabled = false
@@ -95,7 +100,8 @@ func setup(glb_path: String, display_height := 195.0) -> bool:
 	_camera.name = "Camera3D"
 	_camera.projection = Camera3D.PROJECTION_ORTHOGONAL
 	_camera.size = ORTHO_SIZE
-	_camera.rotation_degrees = Vector3(ISO_PITCH, ISO_YAW, 0)
+	# 地图轻微俯视，保留 Q 版比例；战斗继续使用原来的取景。
+	_camera.rotation_degrees = Vector3(-12.0 if map_view else ISO_PITCH, ISO_YAW, 0)
 	# 沿自身 +Z（后方）退开，保证模型在视锥内
 	_camera.position = _camera.transform.basis.z * 6.0 + Vector3(0, 0.05, 0)
 	_viewport.add_child(_camera)
@@ -108,11 +114,15 @@ func setup(glb_path: String, display_height := 195.0) -> bool:
 	var inst = packed.instantiate()
 	_model.add_child(inst)
 	_anim = _find_animation_player(inst)
+	# 行修的原动作带大幅转身和长收招；游戏内改用站姿衍生的短上身动作。
+	if glb_path.ends_with("/行修.glb"):
+		_build_compact_actions()
 	# 不同来源的模型原点不一样（有的在脚底、有的在身体中心）：先按网格包围盒把**身体中心**挪到原点，
 	# 否则"原点在脚底"的模型会把头挤出画面（Meshy 的模型就是这样，头直接被裁掉）。
 	var bounds := _model_bounds(inst)
 	if bounds.size.y > 0.0:
 		_model.position = -bounds.get_center()
+	_setup_weapon_socket(inst)
 
 	# ── 显示用 Sprite2D ──
 	_sprite = Sprite2D.new()
@@ -140,7 +150,51 @@ func setup(glb_path: String, display_height := 195.0) -> bool:
 	_calibrate.call_deferred()
 
 	_ready_ok = true
+	play("idle", 0.0)
 	return true
+
+
+## 手部挂点跟随骨骼，不需要逐帧维护武器坐标。
+func _setup_weapon_socket(inst: Node) -> void:
+	var skeletons := inst.find_children("*", "Skeleton3D", true, false)
+	for node in skeletons:
+		var skeleton := node as Skeleton3D
+		for i in skeleton.get_bone_count():
+			var bone := skeleton.get_bone_name(i)
+			if bone.to_lower().replace("_", "").replace(":", "").ends_with("righthand"):
+				_weapon_socket = BoneAttachment3D.new()
+				_weapon_socket.name = "WeaponSocket"
+				_weapon_socket.bone_name = bone
+				skeleton.add_child(_weapon_socket)
+				return
+
+
+## 替换/卸下武器。只实例化外观，装备属性与背包仍由 GameRoot 管理。
+func set_weapon(item: ItemEquipment) -> void:
+	if item == _weapon_item:
+		return
+	_weapon_item = item
+	if _weapon != null:
+		_weapon.get_parent().remove_child(_weapon)
+		_weapon.queue_free()
+		_weapon = null
+	if item == null or item.weapon_scene == null:
+		return
+	if _weapon_socket == null:
+		push_warning("Model3DAvatar: 模型缺少右手骨骼，无法挂载武器")
+		return
+	var instance := item.weapon_scene.instantiate()
+	if not instance is Node3D:
+		instance.free()
+		push_warning("Model3DAvatar: 武器场景根节点必须是 Node3D")
+		return
+	_weapon = instance as Node3D
+	_weapon_socket.add_child(_weapon)
+	_weapon.position = item.weapon_position
+	_weapon.rotation_degrees = item.weapon_rotation_degrees
+	_weapon.scale = Vector3.ONE * item.weapon_scale
+	# 首帧身高校准只测人物，避免长剑改变人物的大小和脚底锚点。
+	_weapon.visible = _calibrated
 
 
 ## 按视口第一帧的实际像素校准显示：身高 = display_height，脚底落在原点。
@@ -162,6 +216,9 @@ func _calibrate() -> void:
 	# 脚底：包围盒底边（used.end.y）对齐到节点原点 y=0
 	_sprite.offset = Vector2(VIEW_W * 0.5 - float(used.get_center().x),
 			VIEW_H * 0.5 - float(used.end.y))
+	_calibrated = true
+	if is_instance_valid(_weapon):
+		_weapon.visible = true
 	print("[Model3DAvatar] 校准：alpha 包围盒=%s → 缩放=%.4f 偏移=%s"
 			% [used, _sprite.scale.x, _sprite.offset])
 
@@ -226,6 +283,8 @@ func play(anim: String, blend := 0.15) -> void:
 		return
 	if _anim.current_animation == clip and _anim.is_playing():
 		return
+	_action_revision += 1
+	_anim.get_animation(clip).loop_mode = Animation.LOOP_LINEAR if anim in ["idle", "run", "walk"] else Animation.LOOP_NONE
 	_anim.play(clip, blend)
 
 
@@ -233,6 +292,8 @@ func play(anim: String, blend := 0.15) -> void:
 func _resolve_anim(anim: String) -> String:
 	if _anim == null:
 		return ""
+	if _anim.has_animation("compact/" + anim):
+		return "compact/" + anim
 	var list := _anim.get_animation_list()
 	if list.has(anim):
 		return anim
@@ -247,6 +308,64 @@ func _resolve_anim(anim: String) -> String:
 	return ""
 
 
+## 保留 idle 的腿、髋部和根节点，只做一次小幅挥击/抬手。
+## 每个实例独立建库，原 GLB 和其他角色不受影响。
+func _build_compact_actions() -> void:
+	if _anim == null:
+		return
+	var idle_clip := _resolve_anim("idle")
+	if idle_clip.is_empty():
+		return
+	var rest := _anim.get_animation(idle_clip)
+	var library := AnimationLibrary.new()
+	for action in ["attack", "cast"]:
+		var clip := Animation.new()
+		clip.length = 0.48
+		var phases := [0.0, 0.22, 0.44, 0.64, 1.0]
+		for track in rest.get_track_count():
+			var kind := rest.track_get_type(track)
+			if kind not in [Animation.TYPE_ROTATION_3D, Animation.TYPE_POSITION_3D, Animation.TYPE_SCALE_3D]:
+				continue
+			var out := clip.add_track(kind)
+			var path := rest.track_get_path(track)
+			clip.track_set_path(out, path)
+			var bone := String(path).to_lower().replace("_", "")
+			for i in phases.size():
+				var time: float = phases[i] * clip.length
+				if kind == Animation.TYPE_ROTATION_3D:
+					var base := rest.rotation_track_interpolate(track, 0.0)
+					var delta := Vector3.ZERO
+					if action == "attack":
+						var stroke: float = [0.0, -0.4, 1.0, 0.65, 0.0][i]
+						if bone.ends_with("rightarm"):
+							delta.x = 80.0 * stroke
+						elif bone.ends_with("rightforearm"):
+							delta.x = 18.0 * stroke
+						elif bone.ends_with("leftarm"):
+							delta.x = -25.0 * stroke
+						elif bone.ends_with("spine1"):
+							delta.x = 12.0 * stroke
+						elif bone.ends_with("spine2"):
+							delta.x = 12.0 * stroke
+							delta.y = 16.0 * stroke
+						elif bone.ends_with("head"):
+							delta.x = -6.0 * stroke
+							delta.y = -4.0 * stroke
+					else:
+						var lift: float = [0.0, 0.45, 1.0, 0.8, 0.0][i]
+						if bone.ends_with("rightarm") or bone.ends_with("leftarm"):
+							delta.x = -50.0 * lift
+						elif bone.ends_with("rightforearm") or bone.ends_with("leftforearm"):
+							delta.x = -22.0 * lift
+					clip.rotation_track_insert_key(out, time, base * Quaternion.from_euler(delta * PI / 180.0))
+				elif kind == Animation.TYPE_POSITION_3D:
+					clip.position_track_insert_key(out, time, rest.position_track_interpolate(track, 0.0))
+				else:
+					clip.scale_track_insert_key(out, time, rest.scale_track_interpolate(track, 0.0))
+		library.add_animation(action, clip)
+	_anim.add_animation_library("compact", library)
+
+
 ## 播放一次性动作，播完自动回 idle。返回片段时长（秒），0 表示没有这个片段。
 ## 参数 anim 同样走 _resolve_anim()：模型里叫 "Attack"/"Skill_01" 也能用 "attack"/"cast" 调用。
 func play_once(anim: String, blend := 0.08) -> float:
@@ -255,12 +374,17 @@ func play_once(anim: String, blend := 0.08) -> float:
 	var clip := _resolve_anim(anim)
 	if clip.is_empty():
 		return 0.0
+	_action_revision += 1
+	var revision := _action_revision
+	_anim.get_animation(clip).loop_mode = Animation.LOOP_NONE
 	_anim.play(clip, blend)
 	var dur := _anim.get_animation(clip).length
+	if anim == "dead":
+		return dur
 	var idle_clip := _resolve_anim("idle")
 	get_tree().create_timer(dur).timeout.connect(func() -> void:
-		if is_instance_valid(self) and _anim != null and not idle_clip.is_empty():
-			_anim.play(idle_clip, 0.18))
+		if is_instance_valid(self) and _anim != null and revision == _action_revision and not idle_clip.is_empty():
+			play("idle", 0.06 if clip.begins_with("compact/") else 0.18))
 	return dur
 
 

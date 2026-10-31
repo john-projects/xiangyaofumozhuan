@@ -39,6 +39,9 @@ class_name MapData
 ## 物件层：房子/树/桥/摊位等独立 PNG，按接地点做 y 排序（走到后面会被挡、走到前面挡住它）。
 ## 配了它就不要再把同样的东西画进 texture 里，否则会出现"双层房子"。
 @export var props: Array[MapProp] = []
+## 地面传送光圈：玩家走进范围就切图。适合放在地图边缘、路口、洞口这类"往外走"的地方。
+## 和 NPC 传送互补 —— NPC 要对话点按钮，光圈是**踩上去就走**。
+@export var portals: Array[MapPortal] = []
 ## 可行走掩膜：白(255)=可走、黑(0)=阻挡，尺寸必须和 texture 一样（mapgen.py 会生成）。
 ## 留空 = 整张图都能走（老地图保持原行为）。
 @export var walk_mask: Texture2D

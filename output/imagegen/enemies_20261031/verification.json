@@ -1,0 +1,202 @@
+[
+  {
+    "name": "寒潭涧-潭底蛟奴",
+    "width": 1254,
+    "height": 1254,
+    "minAlpha": 0,
+    "maxAlpha": 255,
+    "bytes": 1997186
+  },
+  {
+    "name": "黑风坳-坳中老魅",
+    "width": 1254,
+    "height": 1254,
+    "minAlpha": 0,
+    "maxAlpha": 255,
+    "bytes": 1448455
+  },
+  {
+    "name": "黑风坳-风眼枭",
+    "width": 1254,
+    "height": 1254,
+    "minAlpha": 0,
+    "maxAlpha": 255,
+    "bytes": 1701820
+  },
+  {
+    "name": "黑风坳-黑风豺",
+    "width": 1254,
+    "height": 1254,
+    "minAlpha": 0,
+    "maxAlpha": 255,
+    "bytes": 1517170
+  },
+  {
+    "name": "九霄雷池-雷池雷猿",
+    "width": 1254,
+    "height": 1254,
+    "minAlpha": 0,
+    "maxAlpha": 255,
+    "bytes": 2159158
+  },
+  {
+    "name": "九霄雷池-雷池天将",
+    "width": 1254,
+    "height": 1254,
+    "minAlpha": 0,
+    "maxAlpha": 255,
+    "bytes": 1896574
+  },
+  {
+    "name": "九霄雷池-紫电雷灵",
+    "width": 1254,
+    "height": 1254,
+    "minAlpha": 0,
+    "maxAlpha": 255,
+    "bytes": 1376463
+  },
+  {
+    "name": "乱石岗-岗山石母",
+    "width": 1254,
+    "height": 1254,
+    "minAlpha": 0,
+    "maxAlpha": 255,
+    "bytes": 2629063
+  },
+  {
+    "name": "乱石岗-碎石傀儡",
+    "width": 1254,
+    "height": 1254,
+    "minAlpha": 0,
+    "maxAlpha": 255,
+    "bytes": 1842389
+  },
+  {
+    "name": "乱石岗-铁喙岩鸦",
+    "width": 1254,
+    "height": 1254,
+    "minAlpha": 0,
+    "maxAlpha": 255,
+    "bytes": 1703273
+  },
+  {
+    "name": "落霞坡-赤睛野彘",
+    "width": 1254,
+    "height": 1254,
+    "minAlpha": 0,
+    "maxAlpha": 255,
+    "bytes": 2119340
+  },
+  {
+    "name": "落霞坡-灰尾田鼠",
+    "width": 1254,
+    "height": 1254,
+    "minAlpha": 0,
+    "maxAlpha": 255,
+    "bytes": 1847045
+  },
+  {
+    "name": "落霞坡-落霞雉",
+    "width": 1254,
+    "height": 1254,
+    "minAlpha": 0,
+    "maxAlpha": 255,
+    "bytes": 1473427
+  },
+  {
+    "name": "太虚天渊-太虚虚影",
+    "width": 1254,
+    "height": 1254,
+    "minAlpha": 0,
+    "maxAlpha": 255,
+    "bytes": 1075629
+  },
+  {
+    "name": "太虚天渊-天渊噬光蚺",
+    "width": 1254,
+    "height": 1254,
+    "minAlpha": 0,
+    "maxAlpha": 255,
+    "bytes": 2339234
+  },
+  {
+    "name": "太虚天渊-渊口石像",
+    "width": 1254,
+    "height": 1254,
+    "minAlpha": 0,
+    "maxAlpha": 253,
+    "bytes": 2207619
+  },
+  {
+    "name": "万骨墟-残骨兵俑",
+    "width": 1254,
+    "height": 1254,
+    "minAlpha": 0,
+    "maxAlpha": 255,
+    "bytes": 1483720
+  },
+  {
+    "name": "万骨墟-噬魂骨鸦",
+    "width": 1254,
+    "height": 1254,
+    "minAlpha": 0,
+    "maxAlpha": 255,
+    "bytes": 1830735
+  },
+  {
+    "name": "万骨墟-万骨将军",
+    "width": 1254,
+    "height": 1254,
+    "minAlpha": 0,
+    "maxAlpha": 255,
+    "bytes": 2191156
+  },
+  {
+    "name": "无光渊底-守渊者",
+    "width": 1254,
+    "height": 1254,
+    "minAlpha": 0,
+    "maxAlpha": 254,
+    "bytes": 1899168
+  },
+  {
+    "name": "无光渊底-无光游魂",
+    "width": 1254,
+    "height": 1254,
+    "minAlpha": 0,
+    "maxAlpha": 255,
+    "bytes": 1459647
+  },
+  {
+    "name": "无光渊底-影缚者",
+    "width": 1254,
+    "height": 1254,
+    "minAlpha": 0,
+    "maxAlpha": 255,
+    "bytes": 1552441
+  },
+  {
+    "name": "幽冥泽-鬼火萤王",
+    "width": 1254,
+    "height": 1254,
+    "minAlpha": 0,
+    "maxAlpha": 255,
+    "bytes": 1842708
+  },
+  {
+    "name": "幽冥泽-幽冥泽主",
+    "width": 1254,
+    "height": 1254,
+    "minAlpha": 0,
+    "maxAlpha": 255,
+    "bytes": 2269905
+  },
+  {
+    "name": "幽冥泽-沼中腐尸",
+    "width": 1254,
+    "height": 1254,
+    "minAlpha": 0,
+    "maxAlpha": 255,
+    "bytes": 1815938
+  }
+]
