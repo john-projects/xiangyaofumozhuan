@@ -46,6 +46,7 @@ size_flags_vertical = 4
 theme_override_constants/separation = 6
 
 [node name="PlayerFrame" type="Panel" parent="PlayerColumn"]
+unique_name_in_owner = true
 custom_minimum_size = Vector2(240, 308)
 layout_mode = 2
 theme_override_styles/panel = SubResource("StyleBoxFlat_frame")
@@ -64,6 +65,7 @@ grow_horizontal = 2
 grow_vertical = 2
 expand_mode = 1
 stretch_mode = 5
+mouse_filter = 2
 
 [node name="PlayerFallback" type="Label" parent="PlayerColumn/PlayerFrame"]
 unique_name_in_owner = true

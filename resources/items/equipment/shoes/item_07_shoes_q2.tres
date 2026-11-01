@@ -1,0 +1,43 @@
+[gd_resource type="Resource" script_class="ItemEquipment" format=3]
+
+[ext_resource type="Texture2D" path="res://assets/sprites/equipment/shoes/shoes_07.png" id="1_icon"]
+[ext_resource type="Script" path="res://resources/items/equipment/item_equipment.gd" id="2_script"]
+
+[resource]
+script = ExtResource("2_script")
+item_flavor = "雷雨夜里悬在高处引来的一道雷，紫金被劈开又重新凝合，从此常常自己噼啪作响；靴筒高及小腿，靴底包了一层铜，落地有声。"
+item_name = "追风雷靴"
+item_icon = ExtResource("1_icon")
+item_tier = 2
+item_type = 3
+req_level = 60
+req_characters = ""
+item_cost = 6270
+weapon_type = 0
+equip_type = 6
+attack = 0
+defense = 40
+health = 0
+mana = 0
+speed = 0
+spell_damage = 0
+spell_defense = 0
+attr_con = 0
+attr_mag = 3
+attr_str = 0
+attr_end = 3
+attr_agi = 27
+crit_chance = 0.0
+crit_damage_bonus = 0.0
+dodge = 0
+block_value = 0
+crit_resist = 0.0
+crit_damage_resist = 0.0
+seal_hit = 0.0
+seal_resist = 0.0
+healing = 0
+health_pct = 0.0
+defense_pct = 0.0
+speed_pct = 0.0
+physical_pct = 0.0
+spell_pct = 0.0

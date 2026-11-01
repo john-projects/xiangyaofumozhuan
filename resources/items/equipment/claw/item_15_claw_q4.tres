@@ -1,0 +1,43 @@
+[gd_resource type="Resource" script_class="ItemEquipment" format=3]
+
+[ext_resource type="Texture2D" path="res://assets/sprites/equipment/claw/claw_15.png" id="1_icon"]
+[ext_resource type="Script" path="res://resources/items/equipment/item_equipment.gd" id="2_script"]
+
+[resource]
+script = ExtResource("2_script")
+item_flavor = "天地未分时的一块原石，没打磨也没雕琢，凿开就是能用的形状；五指成爪，指节处铆钉咬得死紧，张开时寒光一片。"
+item_name = "洪荒兽爪"
+item_icon = ExtResource("1_icon")
+item_tier = 4
+item_type = 3
+req_level = 140
+req_characters = "夜魑"
+item_cost = 81000
+weapon_type = 6
+equip_type = 2
+attack = 814
+defense = 0
+health = 0
+mana = 0
+speed = 0
+spell_damage = 814
+spell_defense = 0
+attr_con = 0
+attr_mag = 7
+attr_str = 0
+attr_end = 7
+attr_agi = 0
+crit_chance = 15.0
+crit_damage_bonus = 0.0
+dodge = 0
+block_value = 0
+crit_resist = 0.0
+crit_damage_resist = 0.0
+seal_hit = 15.0
+seal_resist = 0.0
+healing = 32
+health_pct = 0.0
+defense_pct = 0.0
+speed_pct = 0.0
+physical_pct = 0.0
+spell_pct = 0.0

@@ -15,5 +15,5 @@ attr_str = 16
 attr_end = 11
 attr_agi = 13
 icon = ExtResource("2_icon")
-avatar = ExtResource("3_avatar")
 is_elite = true
+avatar = ExtResource("3_avatar")

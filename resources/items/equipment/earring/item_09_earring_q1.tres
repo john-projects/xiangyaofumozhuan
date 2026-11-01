@@ -1,0 +1,43 @@
+[gd_resource type="Resource" script_class="ItemEquipment" format=3]
+
+[ext_resource type="Texture2D" path="res://assets/sprites/equipment/earring/earring_09.png" id="1_icon"]
+[ext_resource type="Script" path="res://resources/items/equipment/item_equipment.gd" id="2_script"]
+
+[resource]
+script = ExtResource("2_script")
+item_flavor = "昆仑山顶的寒玉磨成，取雪羽为饰，霜气常年不散，盛夏握着格外舒爽；耳钩细巧，坠饰一路垂到肩上，走一步响一声。"
+item_name = "昆仑清音珰"
+item_icon = ExtResource("1_icon")
+item_tier = 1
+item_type = 3
+req_level = 80
+req_characters = ""
+item_cost = 5830
+weapon_type = 0
+equip_type = 8
+attack = 0
+defense = 0
+health = 0
+mana = 0
+speed = 0
+spell_damage = 45
+spell_defense = 45
+attr_con = 4
+attr_mag = 0
+attr_str = 0
+attr_end = 4
+attr_agi = 0
+crit_chance = 0.0
+crit_damage_bonus = 0.0
+dodge = 0
+block_value = 0
+crit_resist = 0.0
+crit_damage_resist = 0.0
+seal_hit = 0.0
+seal_resist = 0.0
+healing = 0
+health_pct = 0.0
+defense_pct = 0.0
+speed_pct = 0.0
+physical_pct = 0.0
+spell_pct = 0.0

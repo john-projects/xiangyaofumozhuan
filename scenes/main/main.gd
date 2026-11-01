@@ -28,7 +28,7 @@ const WORLD_MAP_SCENE := preload("res://scenes/world/world_map.tscn")
 const BATTLE_SCENE := preload("res://scenes/battle/battle.tscn")
 ## 默认队长；⚠ 用敌人资源当队长也安全：战斗走 start_battle(我方, 敌方) 显式传参，不读 UnitStats.type。
 ## 换人改这一行，或在 main.tscn 检查器填 default_leader 覆盖。
-const DEFAULT_LEADER := preload("res://resources/units/players/行修.tres")
+const DEFAULT_LEADER := preload("res://resources/units/players/陆孤鸣.tres")
 
 ## 精英怪出现间隔（场）。默认 6 ± 2 → 每 4~8 场战斗出现一只，最多一只。
 @export var elite_every_min := 4
@@ -41,11 +41,12 @@ const DEFAULT_LEADER := preload("res://resources/units/players/行修.tres")
 const DEBUG_LOADOUT := true
 
 ## 调试阵容：[显示名, 资源路径, 门派 id]。数组顺序 = 上阵顺序（第 1 个是队长）。
+## ⚠ DEBUG_LOADOUT 为 true 时**第一个就是队长**，DEFAULT_LEADER 不生效。
 const DEBUG_TEAM := [
+	["陆孤鸣", "res://resources/units/players/陆孤鸣.tres", "taixu"],
 	["行修", "res://resources/units/players/行修.tres", "piaomiao"],
 	["厉狂澜", "res://resources/units/players/厉狂澜.tres", "xingluo"],
 	["夜魑", "res://resources/units/players/夜魑.tres", "wanyao"],
-	["陆孤鸣", "res://resources/units/players/陆孤鸣.tres", "taixu"],
 	["霓裳", "res://resources/units/players/霓裳.tres", "zixiao"],
 	["燕如意", "res://resources/units/players/燕如意.tres", "taixu"],
 ]
@@ -108,31 +109,34 @@ static func SKILL_AOE_DECAY_STEP(n: int) -> float:
 
 ## 种族 × 基础属性 → 派生属性的系数表（**所有数值的唯一来源**）。
 ## 用法：派生值 = Σ(每项基础属性点数 × 系数)，不再叠加 .tres 里的旧基础值。
-## 数值严格按"属性点类型"表（法系两项已直接拆到法伤/法防，不再经过灵力）：
-##   体质 → 气血 / 法伤 / 法防 / 速度        魔力 → 魔法 / 法伤 / 法防
-##   力量 → 伤害 / 法伤 / 法防              耐力 → 防御 / 法伤 / 法防 / 速度
-##   敏捷 → 速度 / 躲避
+## 数值严格照「属性点类型」表来（一个点产生哪些派生值、各给多少）：
+##   体质 → 气血 5/4.5/6.5 · 法防 0.2 · 速度 0.1
+##   魔力 → 魔法 3/3.5/2.5 · 法伤 0.8/0.85/0.75 · 法防 0.2/0.3/0.2
+##   力量 → 伤害 0.75/0.7/0.8（只给伤害）
+##   耐力 → 防御 1.5/1.6/1.4 · 法防 1.0/1.1/0.9 · 速度 0.1
+##   敏捷 → 速度 0.7 · 躲避 1.0（三族一致）
+## 三族顺序：人族 / 仙族 / 魔族。
 ## 想调平衡只改这张表 —— 面板与战斗都读 derived_stats()。
 const ATTR_TABLE := {
 	UnitStats.Race.HUMAN: {
-		"con": {"hp": 5.0, "spell_damage": 0.15, "spell_defense": 0.18, "speed": 0.1},
-		"mag": {"mana": 3.0, "spell_damage": 0.35, "spell_defense": 0.42},
-		"str": {"damage": 0.75, "spell_damage": 0.2, "spell_defense": 0.24},
-		"end": {"defense": 1.5, "spell_damage": 0.1, "spell_defense": 0.12, "speed": 0.1},
+		"con": {"hp": 5.0, "spell_defense": 0.2, "speed": 0.1},
+		"mag": {"mana": 3.0, "spell_damage": 0.8, "spell_defense": 0.2},
+		"str": {"damage": 0.75},
+		"end": {"defense": 1.5, "spell_defense": 1.0, "speed": 0.1},
 		"agi": {"speed": 0.7, "dodge": 1.0},
 	},
 	UnitStats.Race.IMMORTAL: {
-		"con": {"hp": 4.5, "spell_damage": 0.15, "spell_defense": 0.18, "speed": 0.1},
-		"mag": {"mana": 3.5, "spell_damage": 0.35, "spell_defense": 0.42},
-		"str": {"damage": 0.65, "spell_damage": 0.2, "spell_defense": 0.24},
-		"end": {"defense": 1.6, "spell_damage": 0.1, "spell_defense": 0.12, "speed": 0.1},
+		"con": {"hp": 4.5, "spell_defense": 0.2, "speed": 0.1},
+		"mag": {"mana": 3.5, "spell_damage": 0.85, "spell_defense": 0.3},
+		"str": {"damage": 0.7},
+		"end": {"defense": 1.6, "spell_defense": 1.1, "speed": 0.1},
 		"agi": {"speed": 0.7, "dodge": 1.0},
 	},
 	UnitStats.Race.DEMON: {
-		"con": {"hp": 6.0, "spell_damage": 0.15, "spell_defense": 0.18, "speed": 0.1},
-		"mag": {"mana": 2.5, "spell_damage": 0.35, "spell_defense": 0.42},
-		"str": {"damage": 0.85, "spell_damage": 0.2, "spell_defense": 0.24},
-		"end": {"defense": 1.4, "spell_damage": 0.1, "spell_defense": 0.12, "speed": 0.1},
+		"con": {"hp": 5.5, "spell_defense": 0.2, "speed": 0.1},
+		"mag": {"mana": 2.5, "spell_damage": 0.75, "spell_defense": 0.2},
+		"str": {"damage": 0.8},
+		"end": {"defense": 1.4, "spell_defense": 0.9, "speed": 0.1},
 		"agi": {"speed": 0.7, "dodge": 1.0},
 	},
 }
@@ -264,6 +268,7 @@ static func exp_of(character: UnitStats) -> int:
 	return maxi(0, int(Global.exp_by_character.get(character_key(character), 0)))
 
 
+
 ## 五项基础属性总点数（1 级基础 + 自动成长 + 自由分配），顺序同 ATTR_KEYS。
 ## 自动成长按 (等级-1) 现算而不落库，永远与等级一致。
 ## 基础值来自 UnitStats 的五个 attr_* 字段（默认各 11），所以每个单位都能在 .tres 里单独配。
@@ -277,8 +282,14 @@ static func attribute_points(character: UnitStats) -> Array[int]:
 	]
 	var growth := maxi(0, level_of(character) - 1) * ATTR_PER_LEVEL
 	var alloc := _attr_alloc(character)
+	# 装备的双加基础属性也并进来（蓝品质及以上的「体质/耐力/魔力/力量/敏捷」）
+	var gear := equipment_bonus(character)
+	var gear_attrs := [
+		int(gear["attr_con"]), int(gear["attr_mag"]), int(gear["attr_str"]),
+		int(gear["attr_end"]), int(gear["attr_agi"]),
+	]
 	for i in ATTR_KEYS.size():
-		out[i] = maxi(0, int(base[i])) + growth + int(alloc[i])
+		out[i] = maxi(0, int(base[i])) + growth + int(alloc[i]) + int(gear_attrs[i])
 	return out
 
 
@@ -381,12 +392,30 @@ static func derived_stats(character: UnitStats) -> Dictionary:
 	# ③ 装备加成：直接加到派生值上。武器攻击 1:1 同时加「伤害」和「法伤」（这个 1:1 只在这里做，
 	#    equipment_bonus() 只负责累加，换个地方再乘一次就会翻倍）。
 	var eq := equipment_bonus(character)
+	# ④ 平坦加成：直接加到派生值
 	out["hp"] = float(out["hp"]) + float(eq["health"])
+	out["mana"] = float(out["mana"]) + float(eq["mana"])
+	# 物伤、法伤各自独立：物伤只加伤害，法伤只加法伤（不再 1:1 双加）
 	out["damage"] = float(out["damage"]) + float(eq["attack"])
-	out["spell_damage"] = float(out["spell_damage"]) + float(eq["attack"])
+	out["spell_damage"] = float(out["spell_damage"]) + float(eq["spell_damage"])
 	out["defense"] = float(out["defense"]) + float(eq["defense"])
+	out["spell_defense"] = float(out["spell_defense"]) + float(eq["spell_defense"])
 	out["speed"] = float(out["speed"]) + float(eq["speed"])
+	out["dodge"] = float(out["dodge"]) + float(eq["dodge"])
+	out["block_value"] = float(out["block_value"]) + float(eq["block_value"])
+	out["healing"] = float(out["healing"]) + float(eq["healing"])
 	out["crit_rate"] = float(out["crit_rate"]) + float(eq["crit_chance"])
+	out["crit_damage_bonus"] = float(out["crit_damage_bonus"]) + float(eq["crit_damage_bonus"])
+	out["crit_resist"] = float(out["crit_resist"]) + float(eq["crit_resist"])
+	out["crit_damage_resist"] = float(out["crit_damage_resist"]) + float(eq["crit_damage_resist"])
+	out["seal_hit"] = float(out["seal_hit"]) + float(eq["seal_hit"])
+	out["seal_resist"] = float(out["seal_resist"]) + float(eq["seal_resist"])
+	# ⑤ 百分比词条：对此刻的派生值做乘算（先加平坦再加百分比，口径固定）
+	out["hp"] = float(out["hp"]) * (1.0 + float(eq["health_pct"]) / 100.0)
+	out["defense"] = float(out["defense"]) * (1.0 + float(eq["defense_pct"]) / 100.0)
+	out["speed"] = float(out["speed"]) * (1.0 + float(eq["speed_pct"]) / 100.0)
+	out["damage"] = float(out["damage"]) * (1.0 + float(eq["physical_pct"]) / 100.0)
+	out["spell_damage"] = float(out["spell_damage"]) * (1.0 + float(eq["spell_pct"]) / 100.0)
 	# 气血至少 1，避免"属性全 0"时开局被判死
 	out["hp"] = maxf(1.0, float(out["hp"]))
 	return out
@@ -397,24 +426,31 @@ static func derived_stats(character: UnitStats) -> Dictionary:
 ## ⚠ 「武器攻击 1:1 同时加伤害与法伤」的口径写在 derived_stats() 里，本函数只累加原值，别在这里再乘。
 ## 只读 Global.equipment_by_character，纯函数、无副作用。
 static func equipment_bonus(character: UnitStats) -> Dictionary:
-	var out := {"attack": 0.0, "defense": 0.0, "health": 0.0, "speed": 0.0, "crit_chance": 0.0}
+	# 键名与 ItemEquipment 的字段一一对应；新加字段时这里补一行即可（derived_stats 负责换算）。
+	var out := {
+		"attack": 0.0, "defense": 0.0, "health": 0.0, "speed": 0.0, "crit_chance": 0.0,
+		"spell_damage": 0.0, "spell_defense": 0.0, "mana": 0.0,
+		"attr_con": 0.0, "attr_mag": 0.0, "attr_str": 0.0, "attr_end": 0.0, "attr_agi": 0.0,
+		"dodge": 0.0, "block_value": 0.0, "seal_hit": 0.0, "seal_resist": 0.0,
+		"crit_resist": 0.0, "crit_damage_bonus": 0.0, "crit_damage_resist": 0.0, "healing": 0.0,
+		"health_pct": 0.0, "defense_pct": 0.0, "speed_pct": 0.0,
+		"physical_pct": 0.0, "spell_pct": 0.0,
+	}
 	if character == null:
 		return out
 	for item in equipment_of(character).values():
 		var eq := item as ItemEquipment
 		if eq == null:
 			continue
-		out["attack"] += float(eq.attack)
-		out["defense"] += float(eq.defense)
-		out["health"] += float(eq.health)
-		out["speed"] += float(eq.speed)
-		out["crit_chance"] += float(eq.crit_chance)
+		for key in out.keys():
+			out[key] = float(out[key]) + float(eq.get(key))
 	return out
 
 
 ## 给某个角色加经验（唯一经验入口）；返回本次自动升的级数。
 ## 1→9 级自动连升、溢出留给下一级；10 级起只攒经验（AUTO_LEVEL_LIMIT）。
 ## **满级后经验照样攒**（最多 EXP_CAP = 100 亿）—— 升门派技能还要花它，所以不清零。
+## 顺便累加「获得经验」：这一项只增不减，升级也不扣，用来在属性面板上和升级进度分开显示。
 static func add_exp(character: UnitStats, amount: int) -> int:
 	if character == null or amount <= 0:
 		return 0
@@ -1034,11 +1070,72 @@ static func item_can_buy(item: ItemBase, coins: int, p_equipped: Array[ItemBase]
 
 
 ## 购买：扣 Global.coins 并入 Global.equipped_weapons（背包写入点之一）；不发信号，界面由调用方刷新。
+## 给一件装备掷骰：每个非 0 属性在 0~该值 之间重新取随机数，然后标记 rolled。
+## 用法：商店买装备时对副本调用，模板本身保持不变。
+## 给一件装备掷骰：**只随机基础属性和稀有词条**，主属性保持不动。
+static func roll_equipment(item: ItemBase) -> ItemBase:
+	var eq := item as ItemEquipment
+	if eq == null:
+		return item
+	var copy := eq.duplicate() as ItemEquipment
+	if copy.rolled:
+		return copy
+	var rng := RandomNumberGenerator.new()
+	rng.randomize()
+
+	# ① 基础属性：当前值 ×0.5 ~ ×1.5
+	for key in ["attr_con", "attr_mag", "attr_str", "attr_end", "attr_agi"]:
+		var v := int(copy.get(key))
+		if v > 0:
+			var lo := maxi(1, int(round(v * 0.5)))
+			var hi := maxi(lo, int(round(v * 1.5)))
+			copy.set(key, rng.randi_range(lo, hi))
+
+	# ② 稀有词条：先数出这条装备该有几条（由品质决定），再清空、从池里重抽
+	var rare_fields := ["crit_chance", "crit_damage_bonus", "dodge", "block_value",
+			"crit_resist", "crit_damage_resist", "seal_hit", "seal_resist", "healing",
+			"health_pct", "defense_pct", "speed_pct", "physical_pct", "spell_pct"]
+	# 条数由品质决定：紫 1 / 粉 2 / 橙 3（白蓝 0），不看存下来的值
+	var count := maxi(0, int(copy.item_tier) - 1)
+	for key in rare_fields:
+		copy.set(key, 0.0 if key.contains("pct") or key in
+				["crit_chance", "crit_damage_bonus", "crit_resist",
+				 "crit_damage_resist", "seal_hit", "seal_resist"] else 0)
+
+	if count > 0:
+		var pool: Array = ItemEquipment.RARE_POOL.get(int(copy.equip_type), [])
+		if not pool.is_empty():
+			var picks := pool.duplicate()
+			for i in range(picks.size() - 1, 0, -1):
+				var j := rng.randi_range(0, i)
+				var tmp = picks[i]
+				picks[i] = picks[j]
+				picks[j] = tmp
+			# 中值按套序号算：套序号 = 等级下限/10 + 1（150 级那一档是 16）
+			var set_no := int(copy.req_level) / 10 + 1
+			for i in mini(count, picks.size()):
+				var key: String = picks[i]
+				if ItemEquipment.RARE_FLAT.has(key):
+					var mid := 2 + 2 * set_no
+					var lo2 := maxi(1, int(round(mid * 0.6)))
+					var hi2 := maxi(lo2, int(round(mid * 1.4)))
+					copy.set(key, rng.randi_range(lo2, hi2))
+				else:
+					var mid3 := 1.0 * set_no
+					copy.set(key, roundf(rng.randf_range(mid3 * 0.6, mid3 * 1.4) * 10.0) / 10.0)
+
+	copy.rolled = true
+	return copy
+
+
+
 func buy_item(item: ItemBase) -> bool:
 	if not item_can_buy(item, Global.coins, Global.equipped_weapons).is_empty():
 		return false
 	Global.coins -= item.item_cost
-	Global.equipped_weapons.append(item)
+	# 装备要掷骰：复制一份模板、把属性在 0~上限 之间重新随机，再入包。
+	# 模板本身保持未掷骰状态，货架上继续显示区间。
+	Global.equipped_weapons.append(roll_equipment(item))
 	return true
 
 

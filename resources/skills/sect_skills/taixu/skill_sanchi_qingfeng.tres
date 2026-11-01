@@ -1,7 +1,7 @@
-[gd_resource type="Resource" script_class="SkillData" format=3 uid="uid://bmr2fqgndilbw"]
+[gd_resource type="Resource" script_class="SkillData" format=3]
 
 [ext_resource type="Script" uid="uid://sbgbq3puamij" path="res://resources/skills/skill_data.gd" id="1_oy7tw"]
-[ext_resource type="PackedScene" path="res://scenes/effects/skill_seq/sanchi_qingfeng_seq.tscn" id="9_seq"]
+[ext_resource type="PackedScene" path="res://scenes/effects/skill_seq/sanchi_qingfeng_v2_hit.tscn" id="9_hit"]
 
 [resource]
 script = ExtResource("1_oy7tw")
@@ -14,10 +14,13 @@ crit_bonus = 0.05
 sect_id = "taixu"
 sect_skill_key = "sanchi_qingfeng"
 max_targets = 2
-tint = Color(0.75, 0.9, 1, 1)
-hit_particles = 18
-hit_effect_on_ground = true
+projectile_speed = 1750.0
+tint = Color(0.62, 0.88, 1, 1)
+hit_particles = 0
+screen_shake = 5.0
+burst_scale = 1.0
+target_effect_scene = ExtResource("9_hit")
 hit_effect_per_target = false
 hit_effect_center = false
-screen_effect_scene = ExtResource("9_seq")
-burst_scale = 1.8
+hit_effect_on_ground = false
+instant_hit = true

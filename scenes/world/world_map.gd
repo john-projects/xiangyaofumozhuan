@@ -65,6 +65,9 @@ signal back_to_title_requested
 
 # ── 常量 ──
 ## NPC 场景。preload：加载时解析，之后每次 _add_npc() 只 instantiate()。
+## 统一的弹窗消息外观/时长（和团体面板提示共用一套）。
+const UiToast := preload("res://scenes/shared/ui_toast.gd")
+
 const NPC_SCENE := preload("res://scenes/world/world_npc.tscn")
 ## 传送光圈的脚本（纯代码绘制，没有 .tscn）。
 const PORTAL_SCRIPT := preload("res://scenes/world/world_portal.gd")
@@ -143,19 +146,15 @@ const COMPANION_FOLLOW_SPEED := 12.0
 ## 战斗结算文案停留多久（秒）后开始淡出。默认 3.0：足够读完一行"战斗胜利 + 金币"。
 @export var result_toast_time := 3.0
 ## 普通「一行弹窗」停留时间（秒）：扫一眼就走，不打断操作。
-const TOAST_TIME := 1.5
+const TOAST_TIME := UiToast.HOLD
 ## 弹窗条的宽度上限（像素）。底板按内容收缩，超过这个宽度才换行。
 const TOAST_WIDTH := 720.0
 ## 弹窗淡出动画时长（秒）。
-const TOAST_FADE_TIME := 0.35
 ## 弹窗整体上移的距离（像素）：屏幕正中会挡住角色，抬高一点更像"提示"而不是"对话框"。
 const TOAST_RISE := 150.0
 ## 弹窗文字色：暖金，不刺眼。
 ## ⚠ 别直接调低文字 alpha —— 花纹地图上会糊掉，要"更淡"请调底板 alpha，文字靠黑色描边兜住。
-const TOAST_TEXT_COLOR := Color(1.0, 0.88, 0.60, 1.0)
 ## 弹窗文字描边（保证底板变透之后仍然清晰）。
-const TOAST_OUTLINE_COLOR := Color(0.03, 0.02, 0.01, 0.9)
-const TOAST_OUTLINE_SIZE := 4
 
 # ── 运行时状态（换图 = 换节点，全部重新来）──
 ## 本屏幕要渲染的那张地图的配置。由 setup() 注入；_ready() 里若为 null 会直接 return。
@@ -257,16 +256,13 @@ var _stats_panel: StatsPanel
 @onready var player_fallback: Polygon2D = %PlayerFallback
 ## 队长的 8 方位帧动画控制器（只有配了 UnitStats.anim_dir 的角色才有，否则为 null）。
 var _player_anim: CharAnim2D = null
-## 队长的实时 3D 模型头像（3D-in-2D，只有配了 UnitStats.model_glb 才有）。
-var _player_model3d: Model3DAvatar = null
+var _player_rig: Node2D = null
 ## 当前队长的角色键（换队长时用它判断要不要重建地图立绘）。
 var _leader_key := ""
 ## 相机。它是 Player 的**子节点**，所以只要玩家移动，相机天然跟随（省掉每帧同步）。
 @onready var camera: Camera2D = %Camera
 ## 左上角地图名标签。
 @onready var map_name_label: Label = %MapNameLabel
-## 底部提示（"按 E 与 xxx 交谈"），由 _update_nearest() 每帧开关。
-@onready var hint_label: Label = %HintLabel
 ## 屏幕中央的「一行弹窗」栈（VBox）：结果提示、拜师/招募回执都往这里加。
 @onready var toast_stack: VBoxContainer = %ToastStack
 ## 中央的 NPC 对话/传送面板（Panel）。默认隐藏。
@@ -335,19 +331,19 @@ func _ready() -> void:
 	# 没有（敌人、还没做动画的角色）则完全走原来的静态贴图逻辑。
 	var stats := _leader_stats()
 	_player_anim = null
-	_player_model3d = null
-	# 优先级：实时 3D 模型（3D-in-2D） > 8 方位帧动画 > 静态立绘
-	if stats != null and not stats.model_glb.is_empty():
-		var av := Model3DAvatar.new()
-		av.name = "Model3D"
-		player.add_child(av)
-		if av.setup(stats.model_glb, _unit_height(), true):
-			_player_model3d = av
-			av.set_weapon(GameRoot.equipment_in(stats, ItemBase.EquipType.WEAPON) as ItemEquipment)
-			player_sprite.visible = false        # 2D 立绘让位给 3D 视口
-		else:
-			av.queue_free()
-	if _player_model3d == null and stats != null and not stats.anim_dir.is_empty():
+	_player_rig = null
+	# 优先级：2D 骨骼角色（剪纸动画） > 8 方位帧动画 > 静态立绘
+	if stats != null and not stats.rig_scene.is_empty():
+		var rig_ps := load(stats.rig_scene) as PackedScene
+		if rig_ps != null:
+			var rig_node := rig_ps.instantiate() as Node2D
+			rig_node.name = "Rig"
+			player.add_child(rig_node)
+			# 骨骼场景高 670（脚底原点），归一到地图角色高度
+			rig_node.scale = Vector2.ONE * (_unit_height() / 670.0)
+			_player_rig = rig_node
+			player_sprite.visible = false
+	if _player_rig == null and stats != null and not stats.anim_dir.is_empty():
 		var anim := CharAnim2D.new()
 		anim.name = "CharAnim"
 		player.add_child(anim)
@@ -357,18 +353,17 @@ func _ready() -> void:
 		else:
 			anim.queue_free()
 	var icon := _player_icon()
-	if _player_anim == null and _player_model3d == null:
+	if _player_anim == null and _player_rig == null:
 		player_sprite.texture = icon
 	# 分辨率归一：显示高度恒等于 MAP_UNIT_HEIGHT，与贴图分辨率无关。
 	# 动画模式下取的是条带图高度（480），region 高度一致，所以同一套公式照样成立。
-	# 3D 模式下 2D 精灵被隐藏，取景和缩放由 Model3DAvatar 自己算。
 	var tex := player_sprite.texture
-	if tex != null and _player_model3d == null:
+	if tex != null:
 		var denom := float(tex.get_height()) * player.scale.y
 		if denom > 0.0:
 			player_sprite.scale = Vector2.ONE * (_unit_height() / denom)
 		_anchor_sprite_feet(player_sprite)     # 脚底落到原点（阴影就在脚下）
-	player_fallback.visible = icon == null and _player_anim == null and _player_model3d == null
+	player_fallback.visible = icon == null and _player_anim == null and _player_rig == null
 	player.position = _world_pos(_spawn_normalized())
 	_style_party_shadow(player.get_node("Shadow") as Polygon2D)
 	_leader_key = GameRoot.character_key(_leader_stats())
@@ -387,8 +382,7 @@ func _ready() -> void:
 	# 面板上的按钮只连一次 pressed；本节点随场景销毁，连接会自动断，不用手动 disconnect。
 	close_button.pressed.connect(_close_panel)
 	map_name_label.text = _map.display_name
-	# 初始没有最近 NPC，提示先藏起来；面板同理。
-	hint_label.visible = false
+	# 初始没有最近 NPC，面板先藏起来。
 	panel.hide()
 	# 浮层放在 _map 已拿到之后：操作菜单要按 _map.battle_enabled 决定「进入战斗」灰不灰。
 	_setup_overlays()
@@ -435,31 +429,17 @@ func show_toast(message: String, seconds := TOAST_TIME) -> void:
 
 
 ## 加一条弹窗，seconds 秒后淡出移除。
+## 外观与时长统一走 UiToast（团体面板用的是同一套，两处长得一模一样）。
 ## 坑：await 期间可能已换地图（本节点被 queue_free），所以每次都要 is_instance_valid。
 func _add_toast_line(text: String, seconds: float) -> void:
-	var box := PanelContainer.new()
-	box.mouse_filter = Control.MOUSE_FILTER_IGNORE     # 弹窗永远不挡鼠标
-	box.add_theme_stylebox_override("panel", _toast_style())
-	var label := Label.new()
-	label.text = text
-	# 靠左对齐、垂直居中：固定 720 宽的条里居中对齐，长短不一的提示会参差不齐。
-	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	label.add_theme_font_size_override("font_size", 20)
-	# 金色文字 + 黑色描边：底板调透之后仍然清楚，只是整体"轻"了。
-	label.add_theme_color_override("font_color", TOAST_TEXT_COLOR)
-	label.add_theme_color_override("font_outline_color", TOAST_OUTLINE_COLOR)
-	label.add_theme_constant_override("outline_size", TOAST_OUTLINE_SIZE)
-	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	box.add_child(label)
+	var box := UiToast.make_box(text)
 	toast_stack.add_child(box)
 	_layout_toast_stack()
 	await get_tree().create_timer(seconds).timeout
 	if not is_instance_valid(box):
 		return
 	var tween := create_tween()
-	tween.tween_property(box, "modulate:a", 0.0, TOAST_FADE_TIME)
+	tween.tween_property(box, "modulate:a", 0.0, UiToast.FADE)
 	await tween.finished
 	if is_instance_valid(box):
 		box.queue_free()
@@ -481,23 +461,11 @@ func _layout_toast_stack() -> void:
 ## 弹窗底板：半透深色 + 细金边 + 圆角。
 ## 调色思路：整块调透比"字调透"安全 —— 字淡了在花纹地图上直接读不出，底板淡了只是"轻"。
 ## alpha 0.72 是折中：足够压住底下的花纹，又不会像对话框那样怼在脸上。
+## 底板样式统一由 UiToast 提供（地图提示与团体面板共用同一套外观）。
 func _toast_style() -> StyleBoxFlat:
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.04, 0.035, 0.03, 0.72)
-	style.border_color = Color(0.78, 0.64, 0.34, 0.85)
-	style.set_border_width_all(1)
-	style.set_corner_radius_all(10)
-	style.content_margin_left = 16
-	style.content_margin_right = 16
-	style.content_margin_top = 6
-	style.content_margin_bottom = 6
-	return style
+	return UiToast.make_style()
 
 
-# ── 坐标换算 ──
-
-## 归一化坐标 → 世界像素坐标，全文件唯一的换算入口。输入 (0,0) 是图片左上角，(1,1) 是右下角。
-## 纯函数；_map_size 为 0 时返回 (0,0)。
 func _world_pos(normalized: Vector2) -> Vector2:
 	return normalized * _map_size
 
@@ -733,13 +701,8 @@ func _update_nearest() -> void:
 		_nearest = best
 		if _nearest != null:
 			_nearest.set_highlight(true)
-
-	# 先判 _nearest != null 再访问 .data.display_name，否则属性/下标会报错。
-	if _nearest != null:
-		hint_label.text = "按 E 与 %s 交谈" % _nearest.data.display_name
-		hint_label.visible = true
-	else:
-		hint_label.visible = false
+	# 不再显示"按 E 与 xxx 交谈"的底部提示：靠近 NPC 时靠人物高亮 + 头顶名字表达，
+	# 操作提示类文案已按需求全部移除。
 
 
 # ── 每帧：走动 ──
@@ -765,9 +728,7 @@ func _move_player(delta: float) -> void:
 	var dir := _read_move_input()
 	_is_moving = dir != Vector2.ZERO
 	if dir == Vector2.ZERO:
-		if _player_model3d != null:
-			_player_model3d.play("idle")
-		elif _player_anim != null:
+		if _player_anim != null:
 			_player_anim.play("idle")
 		return
 	# 贴图朝向：移动仍是 8 向，但只取 4 个斜向（见 FACE_ONLY_DIAGONAL）。
@@ -785,10 +746,7 @@ func _move_player(delta: float) -> void:
 			player.position.y = target.y
 	player.position.x = clampf(player.position.x, EDGE_MARGIN, maxf(EDGE_MARGIN, _map_size.x - EDGE_MARGIN))
 	player.position.y = clampf(player.position.y, EDGE_MARGIN, maxf(EDGE_MARGIN, _map_size.y - EDGE_MARGIN))
-	if _player_model3d != null:
-		_player_model3d.face_from_vector(dir)     # 3D 使用真实移动方向，不受贴图四斜向限制。
-		_player_model3d.play("run")
-	elif _player_anim != null:
+	if _player_anim != null:
 		_player_anim.set_facing(_player_anim.facing_from_vector(face_dir))
 		_player_anim.play("run")
 	elif absf(dir.x) > 0.01:
@@ -854,26 +812,24 @@ func _setup_party_visuals() -> void:
 ## 队长换人后重建地图上的玩家立绘：3D 头像 / 8 方位帧动画 / 静态贴图三选一。
 ## 由 notify_party_changed() 检测到队长变化时 deferred 调用（不能在同一帧里 free 正在发信号的节点）。
 func _refresh_player_avatar() -> void:
-	if _player_model3d != null and is_instance_valid(_player_model3d):
-		_player_model3d.queue_free()
-	_player_model3d = null
 	if _player_anim != null and is_instance_valid(_player_anim):
 		_player_anim.queue_free()
 	_player_anim = null
 	player_sprite.visible = true
 
 	var stats := _leader_stats()
-	if stats != null and not stats.model_glb.is_empty():
-		var av := Model3DAvatar.new()
-		av.name = "Model3D"
-		player.add_child(av)
-		if av.setup(stats.model_glb, _unit_height(), true):
-			_player_model3d = av
-			av.set_weapon(GameRoot.equipment_in(stats, ItemBase.EquipType.WEAPON) as ItemEquipment)
+	# 优先级：2D 骨骼角色（剪纸动画） > 8 方位帧动画 > 静态立绘
+	if stats != null and not stats.rig_scene.is_empty():
+		var rig_ps := load(stats.rig_scene) as PackedScene
+		if rig_ps != null:
+			var rig_node := rig_ps.instantiate() as Node2D
+			rig_node.name = "Rig"
+			player.add_child(rig_node)
+			# 骨骼场景高 670（脚底原点），归一到地图角色高度
+			rig_node.scale = Vector2.ONE * (_unit_height() / 670.0)
+			_player_rig = rig_node
 			player_sprite.visible = false
-		else:
-			av.queue_free()
-	if _player_model3d == null and stats != null and not stats.anim_dir.is_empty():
+	if _player_rig == null and stats != null and not stats.anim_dir.is_empty():
 		var anim := CharAnim2D.new()
 		anim.name = "CharAnim"
 		player.add_child(anim)
@@ -884,7 +840,7 @@ func _refresh_player_avatar() -> void:
 			anim.queue_free()
 
 	var icon := _player_icon()
-	if _player_anim == null and _player_model3d == null:
+	if _player_anim == null and _player_rig == null:
 		player_sprite.texture = icon
 		var tex := player_sprite.texture
 		if tex != null:
@@ -892,7 +848,7 @@ func _refresh_player_avatar() -> void:
 			if denom > 0.0:
 				player_sprite.scale = Vector2.ONE * (_unit_height() / denom)
 			_anchor_sprite_feet(player_sprite)
-	player_fallback.visible = icon == null and _player_anim == null and _player_model3d == null
+	player_fallback.visible = icon == null and _player_anim == null and _player_rig == null
 	_update_leader_name()
 
 
@@ -965,16 +921,6 @@ func _make_companion(stats: UnitStats) -> Node2D:
 		sprite.scale = Vector2.ONE * (_unit_height() / float(stats.icon.get_height()))
 	_anchor_sprite_feet(sprite)            # 和玩家一样脚底锚定，否则阴影在腰上
 	node.add_child(sprite)
-	# 和队长一致：配了 model_glb 就用 3D-in-2D（实时模型头像），2D 立绘让位。
-	if not stats.model_glb.is_empty():
-		var av := Model3DAvatar.new()
-		av.name = "Model3D"
-		node.add_child(av)
-		if av.setup(stats.model_glb, _unit_height(), true):
-			sprite.visible = false
-			av.set_weapon(GameRoot.equipment_in(stats, ItemBase.EquipType.WEAPON) as ItemEquipment)
-		else:
-			av.queue_free()
 	var label := _make_name_plate(node, 16, NAME_COLOR_ALLY, stats)
 	label.text = stats.name
 	return node
@@ -1072,14 +1018,6 @@ func _update_companions(delta: float) -> void:
 		var before := node.position
 		node.position = before.lerp(target, weight)
 		var moved := node.position - before
-		# 3D 头像：朝移动方向转，走 run、停 idle（模型没有动画时 play() 内部自动忽略）
-		var avatar := node.get_node_or_null(^"Model3D") as Model3DAvatar
-		if avatar != null:
-			if moved.length() > 0.15:
-				avatar.face_from_vector(moved)
-				avatar.play("run")
-			else:
-				avatar.play("idle")
 		var sprite := node.get_node_or_null(^"Sprite") as Sprite2D
 		if sprite != null and sprite.visible and absf(moved.x) > 0.05:
 			sprite.flip_h = moved.x < 0.0
@@ -1276,8 +1214,7 @@ func _open_bag(from_menu := false, as_companion := false) -> void:
 		_menu_open = false        # 菜单确实不显示了，状态位要跟着诚实（关闭时由 _close_bag 再弹回来）
 	_bag_panel.clear_message()
 	# 单独开背包（非交易）时点格子是穿装备，把这条提示写在信息行。
-	if not as_companion:
-		_bag_panel.show_message("点背包里的装备即可给当前角色穿上 · ◀/▶ 换人 · 点已穿的装备栏可脱下")
+	# 不再显示"点装备即可穿上 / ◀▶ 换人 / 点栏位可脱下"这类操作提示（已按需求移除）
 	_bag_panel.reset_view()       # 重新打开时先看队长（买卖引起的重建不会重置，见 show_bag 说明）
 	_bag_panel.set_slot_focus_enabled(true)
 	_rebuild_bag()
@@ -1547,9 +1484,11 @@ func notify_shop_changed(message := "") -> void:
 
 
 ## 延迟同步商人面板的焦点环（重建是 deferred 的，环也得晚一步再取，否则拿到的是旧按钮）。
+## 延迟同步商人面板的焦点环（重建是 deferred 的，环也得晚一步再取，否则拿到的是旧按钮）。
+## ⚠ grab = false：只更新环、不抢焦点 —— 焦点由面板的 _restore_focus 负责留在原商品上。
 func _sync_merchant_focus() -> void:
 	if _shop_open and _merchant_panel != null:
-		_set_focus_ring(_merchant_panel.focus_ring())
+		_set_focus_ring(_merchant_panel.focus_ring(), false)
 
 
 ## 背包/装备变化后刷新（GameRoot 穿脱装备后调用；失败也调，用来显示原因）。
@@ -1575,15 +1514,7 @@ func notify_bag_changed(message := "") -> void:
 
 ## 装备/卸下后就地更新外观，不重建角色，不打断跑步或改变站位。
 func _refresh_weapon_visuals() -> void:
-	if is_instance_valid(_player_model3d):
-		_player_model3d.set_weapon(GameRoot.equipment_in(_leader_stats(), ItemBase.EquipType.WEAPON) as ItemEquipment)
-	for companion in _companions:
-		if not is_instance_valid(companion):
-			continue
-		var avatar := companion.get_node_or_null("Model3D") as Model3DAvatar
-		if avatar != null:
-			var character := companion.get_meta("character") as UnitStats
-			avatar.set_weapon(GameRoot.equipment_in(character, ItemBase.EquipType.WEAPON) as ItemEquipment)
+	pass
 
 
 ## 延迟同步背包焦点环（理由同上）；属性面板也开着时用合并环，否则「＋」会从 W/S 候选里消失。
@@ -1599,9 +1530,14 @@ func refresh_coins() -> void:
 
 
 ## 设置焦点环并聚焦第一个。⚠ 调用前浮层必须已经 show()：grab_focus() 对隐藏控件静默失败，键盘会整片失灵。
-func _set_focus_ring(controls: Array[Control]) -> void:
+## 更新键盘焦点环（W/S 循环切换用）。
+## 参数 grab：是否立刻把焦点抓到环里第一个控件。
+##   ⚠ 商人面板买完东西重建货架时要用 grab = false —— 面板自己会把焦点
+##     抓回"刚才买的那件商品"（见 MerchantPanel._restore_focus），
+##     这里再抓一次就会把它覆盖成第一格，看起来就是"买完光标跳回最前面"。
+func _set_focus_ring(controls: Array[Control], grab := true) -> void:
 	_focus_ring = controls
-	if not _focus_ring.is_empty():
+	if grab and not _focus_ring.is_empty():
 		_focus_ring[0].grab_focus()
 
 
@@ -1703,11 +1639,10 @@ func _rebuild_panel_buttons() -> void:
 			_build_sect_buttons(_panel_npc.data)
 		MapNPC.Action.TELEPORT:
 			_build_teleport_buttons(_panel_npc.data)
-		MapNPC.Action.SELL_WEAPONS:
-			# 正常走不到这里：商人在 _open_panel() 就分流了；留一句人话而不是误导的传送说明。
-			_add_panel_note("（商人：按 E 直接开商店面板，不在这个小窗口里卖）")
 		_:
-			_add_panel_note("（这个 NPC 目前不送人去别处）")
+			# SELL_WEAPONS 正常走不到这里（商人在 _open_panel() 就分流了）；
+			# 剩下的都是纯对话 NPC，不需要额外的操作说明。
+			pass
 	# 选项统一改样式：铺满整行、文字居左、留左内边距；能点的染金色；高度/字号也在这里统一。
 	for child in panel_buttons.get_children():
 		if child is Button:

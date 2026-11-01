@@ -465,7 +465,7 @@ func _on_command_selected(command: StringName) -> void:
 			_begin_target_select()
 
 		&"defend":
-			# 防御立刻生效（伤害 ×0.5、下限 1，见 BattleUnit.take_damage）；await 前把该做的做完。
+			# 防御立刻生效（伤害 ×0.5、下限 1，见 BattleUnit.take_damage 的 ⑤）；await 前把该做的做完。
 			actor.set_defending(true)
 			create_floating_text(actor, "防御", block_color)
 			await get_tree().create_timer(action_delay).timeout
@@ -625,7 +625,7 @@ func _on_unit_clicked(unit: BattleUnit) -> void:
 
 
 ## 普攻：冲过去 → 格挡 → 伤害/暴击 → 飘字/受击 → 停顿 → 判胜负或收尾回合（协程）。
-## 数值口径：roll_damage() → 暴击 ×1.5 → **BattleUnit.take_damage() 内部**做防御减伤 + 格挡值固定减去，
+## 数值口径：roll_damage() → 暴击 ×1.5 → **BattleUnit.take_damage() 内部**做攻防差 + 上下限保底 + 格挡值固定减去，
 ##   返回实际扣血量，飘字用这个值（不显示未减伤的原始伤害）。坑：校验失败也必须 _finish_turn()，否则卡死。
 func _perform_attack(attacker: BattleUnit, target: BattleUnit) -> void:
 	# 三重校验：两个节点都有效、目标还活着。
@@ -857,18 +857,28 @@ func _cast_aoe(caster: BattleUnit, skill: SkillData, victims: Array[BattleUnit],
 		hold := 0.35) -> void:
 	var center := _group_center(victims)
 
-	# ① 一颗飞行体飞向敌阵中心（序列帧/粒子来自 SkillData）
-	var projectile: SkillProjectile = SKILL_PROJECTILE_SCENE.instantiate() as SkillProjectile
-	fx_root.add_child(projectile)
-	projectile.setup(skill, caster.body_center())
-	await projectile.fly_to(center)
+	# ① 飞行体（instant_hit 的技能跳过这一步）
+	# 全屏/逐目标特效类技能的视觉完全在特效场景里，弹体是隐形的 ——
+	# 白等 0.12~0.5 秒只会让玩家觉得"点了没反应"，所以直接不飞。
+	var projectile: SkillProjectile = null
+	if not skill.instant_hit:
+		projectile = SKILL_PROJECTILE_SCENE.instantiate() as SkillProjectile
+		fx_root.add_child(projectile)
+		projectile.setup(skill, caster.body_center())
+		await projectile.fly_to(center)
 
 	# ② 中心大爆炸：burst() 内部读 skill.hit_effect_scene / burst_scale，并自毁
 	# 贴地类特效（雷动九天）把落点压到敌人脚下的地面线，否则地面法阵会浮在半空。
 	# hit_effect_center = false 时中心不炸（群星陨落只在每个目标脚下各落一颗陨星）。
-	if skill.hit_effect_on_ground:
-		projectile.global_position = Vector2(center.x, _group_ground_y(victims))
-	projectile.burst(not skill.hit_effect_center)
+	if projectile != null:
+		if skill.hit_effect_on_ground:
+			projectile.global_position = Vector2(center.x, _group_ground_y(victims))
+		projectile.burst(not skill.hit_effect_center)
+	elif skill.hit_effect_center:
+		# 无弹道版：直接在阵型中心放一份命中特效
+		var burst_pos: Vector2 = Vector2(center.x, _group_ground_y(victims)) \
+				if skill.hit_effect_on_ground else center
+		_spawn_instant_burst(skill, burst_pos, caster.body_center())
 	_play_sfx(skill.hit_sfx)
 	if skill.screen_shake > 0.0:
 		_shake_camera(skill.screen_shake)

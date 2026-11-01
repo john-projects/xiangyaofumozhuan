@@ -67,8 +67,6 @@ var _shadow: Polygon2D = null
 @onready var fallback: Polygon2D = %Fallback
 ## 头顶的名字标签，内容取 data.display_name。
 @onready var name_label: Label = %NameLabel
-## 头顶的"按 E 交谈"提示标签。默认隐藏，只有被高亮时显示（见 set_highlight）。
-@onready var mark: Label = %Mark
 
 
 ## 用配置数据初始化本 NPC 的外观。
@@ -153,12 +151,9 @@ func _fit_sprite_to_height() -> void:
 		_shadow.polygon = ellipse
 		for child in _shadow.get_children():
 			(child as Polygon2D).polygon = ellipse
-	# 头顶名字与提示跟着身高走
+	# 头顶名字跟着身高走（"按 E 交谈"提示已移除，不再有第二个要跟着挪的标签）
 	name_label.offset_top = -display_height - 30.0
 	name_label.offset_bottom = -display_height - 4.0
-	if mark != null:
-		mark.offset_top = -display_height - 56.0
-		mark.offset_bottom = -display_height - 32.0
 
 
 ## 给名字上色（并补一圈黑描边，地图底色再花也看得清）。
@@ -169,11 +164,11 @@ func _apply_name_style(color: Color) -> void:
 	name_label.add_theme_constant_override("outline_size", 5)
 
 
-## 切换"可交谈"高亮表现：显示/隐藏头顶提示 + 平滑放大/还原。
+## 切换"可交谈"高亮表现：名字变红 + 平滑放大/还原。
 ## 参数 value：true = 玩家在交互半径内（高亮）；false = 恢复常态。
 ## 返回值：无。
 ## 副作用：
-##   · 改 mark.visible；
+##   · 改名字颜色；
 ##   · create_tween() 新建一条 tween，0.1 秒内把 self.scale 补间到目标值。
 ## 为什么用 tween 而不是直接赋 scale：直接跳变太生硬；0.1 秒是"够快不拖沓"的折中。
 ## 坑：
@@ -182,7 +177,6 @@ func _apply_name_style(color: Color) -> void:
 ##   · 每次都新建 tween：短时间内连续调用（例如每帧）会让多条 tween 同时改 scale，
 ##     所以调用方必须做"只在状态变化时调用"的优化（WorldMap._update_nearest 已这么做）。
 func set_highlight(value: bool) -> void:
-	mark.visible = value
 	# 能交互时名字变红，离开交互半径恢复金色。
 	_apply_name_style(NAME_COLOR_INTERACT if value else NAME_COLOR_NPC)
 	var tween := create_tween()

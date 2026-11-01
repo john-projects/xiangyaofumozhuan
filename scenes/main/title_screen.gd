@@ -170,5 +170,13 @@ func _on_quit_pressed() -> void:
 
 ## 统一的按钮点击音效（三处调用一致，以后换音效只改这里）。
 ## ⚠ SoundManager 池子只有 10 个播放器，同一帧点太多按钮会静默丢音（不影响逻辑）。
+var _last_click_frame := -1
+
 func _click() -> void:
+	# 同帧去重：鼠标/键盘/焦点回调理论上只会来一次，真来了两次也只响一声，
+	# 避免"点一下响两下"。
+	var frame := Engine.get_process_frames()
+	if frame == _last_click_frame:
+		return
+	_last_click_frame = frame
 	SoundManager.play_sound(SoundManager.Sound.UI)

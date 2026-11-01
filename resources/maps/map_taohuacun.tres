@@ -18,15 +18,6 @@
 [ext_resource type="Script" path="res://resources/maps/map_portal.gd" id="p_portal"]
 [ext_resource type="Texture2D" path="res://assets/sprites/npc/商人-防具商.png" id="n_fangju"]
 
-[sub_resource type="Resource" id="Resource_signpost"]
-script = ExtResource("3_npc")
-id = "taohuacun_signpost"
-display_name = "路牌"
-position = Vector2(0.44, 0.5)
-dialogue = "桃花村 · 村口的路牌。（牌上原刻着往南的旧路名，字迹已被雨水磨平）"
-destinations = Array[String]([])
-teleport_label = ""
-
 [sub_resource type="Resource" id="Resource_chuanfu"]
 script = ExtResource("3_npc")
 id = "chuanfu"
@@ -128,7 +119,7 @@ position = Vector2(0.34, 0.565)
 texture = ExtResource("n_fangju")
 dialogue = "头盔、铠甲、靴子，一副好甲能救命。"
 action = 4
-sell_types = Array[int]([1, 5, 6])
+sell_types = Array[int]([1, 3, 5, 6])
 
 [sub_resource type="Resource" id="Resource_shangren_jewel"]
 script = ExtResource("3_npc")
@@ -138,7 +129,7 @@ position = Vector2(0.26, 0.565)
 texture = ExtResource("n_fangju")
 dialogue = "项链与腰带，护身又养气。首饰商暂时借了防具商的铺面。"
 action = 4
-sell_types = Array[int]([3, 4])
+sell_types = Array[int]([4, 7, 8])
 
 [resource]
 script = ExtResource("1_mapdata")
@@ -148,7 +139,7 @@ texture = ExtResource("2_texture")
 map_scale = 1.0
 unit_height = 230.0
 spawn_point = Vector2(0.4, 0.44)
-npcs = Array[ExtResource("3_npc")]([SubResource("Resource_signpost"), SubResource("Resource_chuanfu"), SubResource("Resource_shuoshu"), SubResource("Resource_taixu"), SubResource("Resource_piaomiao"), SubResource("Resource_zixiao"), SubResource("Resource_wanyao"), SubResource("Resource_xingluo"), SubResource("Resource_shangren_weapon"), SubResource("Resource_shangren_armor"), SubResource("Resource_shangren_jewel")])
+npcs = Array[ExtResource("3_npc")]([SubResource("Resource_chuanfu"), SubResource("Resource_shuoshu"), SubResource("Resource_taixu"), SubResource("Resource_piaomiao"), SubResource("Resource_zixiao"), SubResource("Resource_wanyao"), SubResource("Resource_xingluo"), SubResource("Resource_shangren_weapon"), SubResource("Resource_shangren_armor"), SubResource("Resource_shangren_jewel")])
 next_id = ""
 exit_center = Vector2(0.62, 0.5)
 portals = Array[ExtResource("p_portal")]([SubResource("Resource_portal_taohuatan"), SubResource("Resource_portal_taolin")])

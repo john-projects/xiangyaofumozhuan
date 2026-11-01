@@ -10,22 +10,25 @@ const FLOATING_TEXT_SCENE = preload("uid://btdihrlsugqm0")      # 飘字（Float
 ## 稀有度样式（StyleBoxFlat），配 get_tier_style() 用；卡片侧 add_theme_stylebox_override("panel", ...)。
 const COMMON_STYLE = preload("uid://c383vl8xrt17p")             # 普通（无描边）
 const EPIC_STYLE = preload("uid://bvy27iuomo6rx")               # 史诗（紫）
-const LEGENDARY_STYLE = preload("uid://v4id7ydojihc")           # 传说（红）
+const LEGENDARY_STYLE = preload("uid://v4id7ydojihc")           # 传说（粉）
+const MYTHIC_STYLE = preload("res://styles/mythic_style.tres")  # 神话（橙）
 const RARE_STYLE = preload("uid://5vcw7m8i2ilu")                # 稀有（蓝）。注意本组顺序是 C/E/L/R，不是按枚举顺序排的，读的时候别被绕到
 
 ## 稀有度 → 描边颜色（0~1 浮点 RGB）。故意没有 COMMON：调用方一律用 .get(tier, 兜底色)。
 const TIER_COLORS: Dictionary[UpgradeTier, Color] = {
 	UpgradeTier.RARE: Color(0.0, 0.557, 0.741),        # 蓝（约 #008EBD）
 	UpgradeTier.EPIC: Color(0.478, 0.251, 0.71),       # 紫（约 #7A40B5）
-	UpgradeTier.LEGENDARY: Color(0.906, 0.212, 0.212), # 红（约 #E73636）
+	UpgradeTier.LEGENDARY: Color(0.91, 0.42, 0.66),    # 粉（约 #E86BA8）
+	UpgradeTier.MYTHIC: Color(0.98, 0.62, 0.23),      # 橙（约 #FA9E3B）
 }
 
 ## 道具稀有度。数值必须与 .tres 里存的整数一致，只能在末尾追加成员。
 enum UpgradeTier{
-	COMMON,     # 0：普通。没有专属配色，get_tier_style() 返回 COMMON_STYLE
+	COMMON,     # 0：普通（白）
 	RARE,       # 1：稀有（蓝）
 	EPIC,       # 2：史诗（紫）
-	LEGENDARY   # 3：传说（红）。它同时是 get_tier_style() 的 _ 兜底分支，所以非法值看起来会"像传说"
+	LEGENDARY,  # 3：传说（粉）
+	MYTHIC      # 4：神话（橙）。它同时是 get_tier_style() 的 _ 兜底分支
 }
 
 ## 五个门派的固定规则（id → 名字 / 收哪些种族 / 介绍）。门派是规则不是内容，放常量里只改一处。
@@ -69,92 +72,117 @@ const SECT_SKILLS := {
 	"taixu": {
 		"passives": [
 			{"id": "taixu_jiandian", "name": "太虚剑典", "stat": "damage_pct", "per_level": 1.0,
+				"lore": "太虚剑宗入门心法，讲的是「剑不在锋，在意」。弟子每日以指画剑，画满三年才授真剑。",
 				"desc": "太虚剑意淬体：每级提升 1% 伤害。"},
 			{"id": "jianxin_tongming", "name": "剑心通明", "stat": "crit_rate", "per_level": 0.5,
+				"lore": "心若明镜，剑自来。相传创此心法者，在一场雷雨里看剑入神，醒来时剑已在手，人已在檐上。",
 				"desc": "剑心澄澈：每级提升 0.5% 暴击率。"},
 		],
 		"actives": [
-			{"id": "sanchi_qingfeng", "name": "三尺清风", "damage": true,
+			{"id": "sanchi_qingfeng", "name": "三尺青锋", "damage": true,
 				"desc": "攻击 2 个目标；技能达到 30 级后攻击 3 个目标。",
+			"lore": "剑出三尺，清风自随。太虚弟子最爱这招——收剑之后，风还在。",
 				"targets": [{"level": 1, "count": 2}, {"level": 30, "count": 3}]},
 			{"id": "taixu_shenjian", "name": "太虚神剑", "damage": true, "hits": 3,
 				"desc": "对单个目标连续攻击 3 次。",
+			"lore": "一剑分三，三剑同至。这一式原是给守山门的人练的，一敌十不够用，便练成一敌三十。",
 				"targets": [{"level": 1, "count": 1}]},
 			{"id": "renjian_heyi", "name": "人剑合一", "buff": "crit_rate", "buff_per_level": 1.0, "buff_self": true,
+				"lore": "剑即是我，我即是剑。练到这层的人往往话很少，因为已经没什么可说的了。",
 				"desc": "进入状态：一段时间内暴击率提升（随技能等级成长）。"},
 		],
 	},
 	"piaomiao": {
 		"passives": [
 			{"id": "yunhai_xinfa", "name": "云海心法", "stat": "speed", "per_level": 0.5,
+				"lore": "缥缈仙府建在云上，弟子入门第一课是学走路——云上走路，脚不能重。",
 				"desc": "云海吐纳：每级提升 0.5 点速度。"},
 			{"id": "piaomiao_fengxin", "name": "缥缈封心", "stat": "seal_hit", "per_level": 0.5,
+				"lore": "封的从来不是别人，是自己那颗不安分的心。心不动，念不生，法术自锁。",
 				"desc": "封心锁念：每级提升 0.5% 封印命中率。"},
 		],
 		"actives": [
 			{"id": "taixu_fengtian", "name": "太虚封天", "seal": true, "targets_all": true,
+				"lore": "一府之力封一城天。仙府每一任府主都会这一招，但只用过一次的那位，把整座城封了七年。",
 				"desc": "群体封印：封住全部敌人。"},
 			{"id": "fengling_jue", "name": "封灵诀", "silence": true,
 				"desc": "封住单个目标的法术，使其无法施法。",
+			"lore": "指尖一点，咒文断在喉咙里。被它封过的人说，那感觉像突然忘了怎么呼吸。",
 				"targets": [{"level": 1, "count": 1}]},
 			{"id": "piaomiao_jianzhi", "name": "缥缈剑指", "fixed_damage": true,
 				"desc": "造成固定伤害，攻击 2 个目标；技能达到 30 级后攻击 3 个目标。",
+			"lore": "不带剑的剑法。仙府的人说：真正的剑客，一根指头就够了。",
 				"targets": [{"level": 1, "count": 2}, {"level": 30, "count": 3}]},
 		],
 	},
 	"zixiao": {
 		"passives": [
 			{"id": "zixiao_leiti", "name": "紫霄雷体", "stat": "spell_damage", "per_level": 1.5,
+				"lore": "紫霄的弟子入门要过雷池。过得去的叫体，过不去的叫命。",
 				"desc": "雷法淬炼：每级提升 1.5 点法伤。"},
 			{"id": "tianlei_cuiti", "name": "天雷淬体", "stat": "defense", "per_level": 1.0,
+				"lore": "别人怕雷，紫霄的弟子拿雷洗澡。洗三年，皮肉翻新一遍。",
 				"desc": "雷劫炼体：每级提升 1 点防御。"},
 		],
 		"actives": [
 			{"id": "wulei_zhengfa", "name": "五雷正法", "damage": true,
 				"desc": "对单个目标降下雷法。",
+			"lore": "五雷归一道，天罡正气落。道家正统雷法讲究一个「正」字——劈谁不劈谁，得讲理。",
 				"targets": [{"level": 1, "count": 1}]},
 			{"id": "leidong_jiutian", "name": "雷动九天", "damage": true,
 				"desc": "攻击 3 个目标；技能达到 60 级后攻击 5 个目标。",
+			"lore": "雷一直动，天一直在抖。老一辈说，这是紫霄开山真人渡劫时没散掉的那一道。",
 				"targets": [{"level": 1, "count": 3}, {"level": 60, "count": 5}]},
 			{"id": "zixiao_ningshen", "name": "紫霄凝神", "buff": "spell_damage", "buff_per_level": 1.0, "buff_self": true,
+				"lore": "心聚一处，神凝一点。凝到极处，人身上会浮起一层薄薄的紫气。",
 				"desc": "进入状态：一段时间内法伤提升（随技能等级成长）。"},
 		],
 	},
 	"wanyao": {
 		"passives": [
 			{"id": "baicao_xinjing", "name": "百草心经", "stat": "healing", "per_level": 1.0,
+				"lore": "谷中弟子先学认草，再学辨毒，最后才学用药。认错一株草，可能就少一个同门。",
 				"desc": "百草入药：每级提升 1 点治疗量。"},
 			{"id": "yaowang_tipo", "name": "药王体魄", "stat": "hp_pct", "per_level": 0.8,
+				"lore": "药王谷的祖师爷活了三百岁，临终只说了一句：药补不如食补，食补不如心宽。",
 				"desc": "药王淬体：每级提升 0.8% 气血上限。"},
 		],
 		"actives": [
 			{"id": "huichun_jue", "name": "回春诀", "heal": true, "hot": true,
 				"hot_base_turns": 2, "hot_turns_per_levels": 20,
 				"desc": "为队友回复气血，并附加持续回血状态（Lv.1 持续 2 回合，每 20 级 +1 回合）；目标数 1 级 2 个、25 级 3 个、50 级 4 个、75 级 5 个。",
+			"lore": "一点青气入血肉，断骨能续，枯血能生。万药谷的人走到哪里，哪里就少死人。",
 				"targets": [{"level": 1, "count": 2}, {"level": 25, "count": 3},
 						{"level": 50, "count": 4}, {"level": 75, "count": 5}]},
 			{"id": "yaowu_miman", "name": "药雾弥漫", "fixed_damage": true,
 				"desc": "造成固定伤害，攻击 2 个目标；30 级 3 个、60 级 4 个。",
+			"lore": "雾里有毒。谷里人自己闻不出来，外人一进去，眼泪先流。",
 				"targets": [{"level": 1, "count": 2}, {"level": 30, "count": 3}, {"level": 60, "count": 4}]},
 			{"id": "wanling_zhufu", "name": "万灵祝福", "buff": "damage_spell", "buff_per_level": 1.0, "buff_all": true,
+				"lore": "草木有灵，人亦有。谷里人把这份灵气分给别人用，分得越多，自己反而越旺。",
 				"desc": "为全体队友附加状态：提升伤害与法伤（随技能等级成长）。"},
 		],
 	},
 	"xingluo": {
 		"passives": [
 			{"id": "xingxiang_mogong", "name": "星象魔功", "stat": "damage_pct", "per_level": 1.0,
+				"lore": "抬头看星，低头看心。星罗教的功法就八个字，练多了，人会变得很像夜里的人。",
 				"desc": "星象入魔：每级提升 1% 伤害。"},
 			{"id": "souhun_zhou", "name": "摄魂咒", "stat": "crit_damage_bonus", "per_level": 0.5,
+				"lore": "魂不守舍的时候，一句咒就够了。教里人说这不是邪术，只是「请他过来坐坐」。",
 				"desc": "摄魂夺魄：每级提升 0.5% 暴击伤害。"},
 		],
 		"actives": [
 			{"id": "xingluo_mozhua", "name": "星罗魔爪", "damage": true, "hits": 2,
 				"desc": "对单个目标连续攻击 2 次。",
+			"lore": "爪出如星落，五指成阵。被捉住的人，往往只看见一瞬的星光。",
 				"targets": [{"level": 1, "count": 1}]},
 			{"id": "qunxing_yunluo", "name": "群星陨落", "damage": true,
 				"desc": "攻击 3 个目标；技能达到 30 级后攻击 4 个目标。",
+			"lore": "天塌下来的样子，星罗教的人见过一次。后来他们照着那个样子，练了一式。",
 				"targets": [{"level": 1, "count": 3}, {"level": 30, "count": 4}]},
 			{"id": "xingluo_shaji", "name": "星罗杀机", "buff": "crit_damage_bonus", "buff_per_level": 1.0, "buff_self": true,
+				"lore": "杀机起于星象，落于一念。练成这式的人眼睛会变得很亮，像有星在里面。",
 				"desc": "进入状态：一段时间内暴击伤害提升（随技能等级成长）。"},
 		],
 	},
@@ -237,6 +265,19 @@ const EQUIPMENT_DIR := "res://resources/items/equipment/"
 var _equipment_cache: Array[ItemBase] = []
 
 
+## 货架排序键：等级下限 → 品质 → 名字。
+## 只按价格排会让不同套的装备交错（低套高品比高套低品还贵），看起来一片乱。
+static func equip_sort_less(a: ItemBase, b: ItemBase) -> bool:
+	var ea := a as ItemEquipment
+	var eb := b as ItemEquipment
+	var la: int = ea.req_level if ea != null else 0
+	var lb: int = eb.req_level if eb != null else 0
+	if la != lb:
+		return la < lb
+	if a.item_tier != b.item_tier:
+		return a.item_tier < b.item_tier
+	return a.item_name < b.item_name
+
 ## 递归扫描 EQUIPMENT_DIR，按"栏位 → 价格 → 名字"排序返回。refresh = 忽略缓存。
 ## 排序是为了货架顺序稳定（买完不会整排挪位），且按栏位分组与背包 6 个装备栏对应。
 ## 只收 item_ 前缀，同目录的其他资源不会被当商品。
@@ -248,9 +289,7 @@ func get_all_equipment(refresh := false) -> Array[ItemBase]:
 	found.sort_custom(func(a: ItemBase, b: ItemBase) -> bool:
 		if a.get_equip_type() != b.get_equip_type():
 			return a.get_equip_type() < b.get_equip_type()
-		if a.item_cost != b.item_cost:
-			return a.item_cost < b.item_cost
-		return a.item_name < b.item_name)
+		return equip_sort_less(a, b))
 	if found.is_empty():
 		push_warning("Global: %s 里没扫到任何装备（目录结构应为 <类型>/item_*.tres）" % EQUIPMENT_DIR)
 	_equipment_cache = found
@@ -463,12 +502,16 @@ func activate_focused(context: Node) -> bool:
 	return false
 
 
-## 是否是交互事件（E 或 Enter）：优先 InputMap 的 interact 动作，没配则回落到硬编码按键。
+## 是否是交互事件（E / Enter / 空格）：优先 InputMap 的 interact 动作，没配则回落到硬编码按键。
+## 空格也接受，是因为"空格 = 确认/交互"是大多数玩家的肌肉记忆；
+##   keycode 在非 QWERTY 布局下可能是 0，所以同时看 physical_keycode 兜底。
 func is_interact_event(event: InputEvent) -> bool:
 	if InputMap.has_action(&"interact") and event.is_action_pressed(&"interact"):
 		return true
-	return event is InputEventKey and event.pressed and not event.echo \
-		and (event.keycode == KEY_E or event.keycode == KEY_ENTER)
+	if not (event is InputEventKey) or not event.pressed or event.echo:
+		return false
+	var code: int = event.keycode if event.keycode != 0 else event.physical_keycode
+	return code == KEY_E or code == KEY_ENTER or code == KEY_KP_ENTER or code == KEY_SPACE
 
 
 ## 方格布局用 W A S D 移动焦点（背包格子、商人货架共用）。返回是否消费了事件。
@@ -509,5 +552,7 @@ func get_tier_style(tier: UpgradeTier) -> StyleBoxFlat:
 			return RARE_STYLE
 		UpgradeTier.EPIC:
 			return EPIC_STYLE
+		UpgradeTier.MYTHIC:
+			return MYTHIC_STYLE
 		_:
 			return LEGENDARY_STYLE

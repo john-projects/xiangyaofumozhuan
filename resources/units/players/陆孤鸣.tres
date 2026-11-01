@@ -15,3 +15,4 @@ portrait = ExtResource("2_portrait")
 speed = 350.0
 metadata/_custom_type_script = "uid://j6ibt5vlkg3t"
 avatar = ExtResource("1_avatar")
+rig_scene = "res://scenes/characters/rig_陆孤鸣.tscn"

@@ -60,11 +60,12 @@ enum Race {
 ## down / down_right / right / up_right / up / up_left / left / down_left。
 ## 留空 = 继续用静态 icon（敌人和还没做动画的角色都是这样）。
 @export var anim_dir: String = ""
-## 3D 模型路径（可选）。填了就改用「实时渲染 3D 模型」代替 2D 贴图（3D-in-2D）：
-## 例 "res://assets/models/players/行修.glb"（六个玩家角色的模型都在 assets/models/players/）。
-## 该 .glb 需带骨骼 + idle/run/attack/cast 动画（由 xx3d 的 export_glb.py 生成）。
-## 优先级：model_glb > anim_dir > icon。留空则走下面两者。
-@export var model_glb: String = ""
+## 2D 骨骼场景路径（可选）。填了就用「骨骼角色」代替静态立绘：
+##   res://scenes/characters/rig_<角色名>.tscn
+## 骨骼角色自带 idle / walk / attack / cast 四条动画（由 rig_player.gd 在运行时生成）。
+## 优先级：rig_scene > anim_dir > icon。
+@export var rig_scene: String = ""
+
 ## 战斗副本的武器外观快照，由 GameRoot 从原角色装备栏写入。
 ## duplicate() 后 resource_path 为空，不能拿副本重新查原角色的装备。
 var weapon_visual: ItemEquipment = null

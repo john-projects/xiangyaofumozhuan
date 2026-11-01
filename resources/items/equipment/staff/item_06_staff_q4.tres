@@ -1,0 +1,43 @@
+[gd_resource type="Resource" script_class="ItemEquipment" format=3]
+
+[ext_resource type="Texture2D" path="res://assets/sprites/equipment/staff/staff_06.png" id="1_icon"]
+[ext_resource type="Script" path="res://resources/items/equipment/item_equipment.gd" id="2_script"]
+
+[resource]
+script = ExtResource("2_script")
+item_flavor = "南明离火落到人间的碎片，赤金在火里反复淬过，摸上去还带着烫人的热；杖身笔直，杖首嵌着一颗法器，走动时轻轻作响。"
+item_name = "朱雀焰心杖"
+item_icon = ExtResource("1_icon")
+item_tier = 4
+item_type = 3
+req_level = 50
+req_characters = "霓裳"
+item_cost = 12960
+weapon_type = 5
+equip_type = 2
+attack = 302
+defense = 0
+health = 0
+mana = 0
+speed = 0
+spell_damage = 302
+spell_defense = 0
+attr_con = 0
+attr_mag = 0
+attr_str = 3
+attr_end = 3
+attr_agi = 0
+crit_chance = 6.0
+crit_damage_bonus = 0.0
+dodge = 0
+block_value = 0
+crit_resist = 0.0
+crit_damage_resist = 0.0
+seal_hit = 6.0
+seal_resist = 0.0
+healing = 14
+health_pct = 0.0
+defense_pct = 0.0
+speed_pct = 0.0
+physical_pct = 0.0
+spell_pct = 0.0

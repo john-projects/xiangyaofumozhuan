@@ -1,18 +1,113 @@
-[gd_scene load_steps=3 format=3]
+[gd_scene load_steps=9 format=3]
 
 [ext_resource type="Script" path="res://scenes/ui/party_panel/party_panel.gd" id="1_partypanel"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_panel"]
-bg_color = Color(0.07058824, 0.07058824, 0.09019608, 0.94)
+bg_color = Color(0.043, 0.047, 0.067, 0.965)
 border_width_left = 2
 border_width_top = 2
 border_width_right = 2
 border_width_bottom = 2
-border_color = Color(0.45490196, 0.38039216, 0.23921569, 1)
+border_color = Color(0.639, 0.518, 0.286, 1)
 corner_radius_top_left = 16
 corner_radius_top_right = 16
 corner_radius_bottom_right = 16
 corner_radius_bottom_left = 16
+shadow_color = Color(0, 0, 0, 0.5)
+shadow_size = 16
+shadow_offset = Vector2(0, 6)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_popup"]
+bg_color = Color(0.043, 0.047, 0.067, 0.985)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.639, 0.518, 0.286, 1)
+corner_radius_top_left = 10
+corner_radius_top_right = 10
+corner_radius_bottom_right = 10
+corner_radius_bottom_left = 10
+shadow_color = Color(0, 0, 0, 0.6)
+shadow_size = 12
+shadow_offset = Vector2(0, 4)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_pbtn_normal"]
+content_margin_left = 12.0
+content_margin_top = 5.0
+content_margin_right = 12.0
+content_margin_bottom = 5.0
+bg_color = Color(1, 1, 1, 0.045)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.545, 0.463, 0.294, 0.4)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_pbtn_hover"]
+content_margin_left = 12.0
+content_margin_top = 5.0
+content_margin_right = 12.0
+content_margin_bottom = 5.0
+bg_color = Color(0.639, 0.518, 0.286, 0.18)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.851, 0.706, 0.4, 0.85)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_pbtn_focus"]
+content_margin_left = 12.0
+content_margin_top = 5.0
+content_margin_right = 12.0
+content_margin_bottom = 5.0
+bg_color = Color(0.639, 0.518, 0.286, 0.24)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(1, 0.855, 0.502, 1)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_pbtn_disabled"]
+content_margin_left = 12.0
+content_margin_top = 5.0
+content_margin_right = 12.0
+content_margin_bottom = 5.0
+bg_color = Color(1, 1, 1, 0.02)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.545, 0.463, 0.294, 0.12)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[sub_resource type="Theme" id="Theme_popup"]
+Button/colors/font_color = Color(0.878, 0.847, 0.78, 1)
+Button/colors/font_disabled_color = Color(0.545, 0.522, 0.478, 0.45)
+Button/colors/font_focus_color = Color(1, 0.918, 0.667, 1)
+Button/colors/font_hover_color = Color(1, 0.898, 0.627, 1)
+Button/colors/font_pressed_color = Color(1, 0.949, 0.788, 1)
+Button/font_sizes/font_size = 20
+Button/styles/disabled = SubResource("StyleBoxFlat_pbtn_disabled")
+Button/styles/focus = SubResource("StyleBoxFlat_pbtn_focus")
+Button/styles/hover = SubResource("StyleBoxFlat_pbtn_hover")
+Button/styles/normal = SubResource("StyleBoxFlat_pbtn_normal")
+Button/styles/pressed = SubResource("StyleBoxFlat_pbtn_focus")
 
 [node name="PartyPanel" type="Control"]
 anchors_preset = 15
@@ -38,10 +133,10 @@ anchor_left = 0.5
 anchor_top = 0.5
 anchor_right = 0.5
 anchor_bottom = 0.5
-offset_left = -470.0
-offset_top = -384.0
-offset_right = 470.0
-offset_bottom = 384.0
+offset_left = -350.0
+offset_top = -340.0
+offset_right = 350.0
+offset_bottom = 340.0
 grow_horizontal = 2
 grow_vertical = 2
 theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
@@ -60,29 +155,16 @@ theme_override_constants/margin_bottom = 18
 
 [node name="VBox" type="VBoxContainer" parent="Panel/Margin"]
 layout_mode = 2
-theme_override_constants/separation = 8
-
-[node name="TitleLabel" type="Label" parent="Panel/Margin/VBox"]
-unique_name_in_owner = true
-layout_mode = 2
-theme_override_font_sizes/font_size = 30
-text = "团队管理"
-horizontal_alignment = 1
-
-[node name="MessageLabel" type="Label" parent="Panel/Margin/VBox"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 26)
-layout_mode = 2
-theme_override_font_sizes/font_size = 18
-horizontal_alignment = 1
-modulate = Color(1, 0.9, 0.55, 1)
+theme_override_constants/separation = 10
 
 [node name="TeamTitle" type="Label" parent="Panel/Margin/VBox"]
 unique_name_in_owner = true
 layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.855, 0.5, 1)
+theme_override_colors/font_outline_color = Color(0.06, 0.04, 0.02, 0.9)
+theme_override_constants/outline_size = 4
 theme_override_font_sizes/font_size = 20
 text = "队伍中"
-modulate = Color(1, 0.85, 0.5, 1)
 
 [node name="TeamRow" type="HBoxContainer" parent="Panel/Margin/VBox"]
 unique_name_in_owner = true
@@ -93,9 +175,11 @@ alignment = 1
 [node name="ReserveTitle" type="Label" parent="Panel/Margin/VBox"]
 unique_name_in_owner = true
 layout_mode = 2
+theme_override_colors/font_color = Color(0.82, 0.78, 0.7, 1)
+theme_override_colors/font_outline_color = Color(0.06, 0.04, 0.02, 0.9)
+theme_override_constants/outline_size = 4
 theme_override_font_sizes/font_size = 20
 text = "未上阵"
-modulate = Color(1, 1, 1, 0.75)
 
 [node name="ReserveRow" type="GridContainer" parent="Panel/Margin/VBox"]
 unique_name_in_owner = true
@@ -105,43 +189,59 @@ theme_override_constants/h_separation = 10
 theme_override_constants/v_separation = 8
 columns = 5
 
-[node name="Buttons" type="HBoxContainer" parent="Panel/Margin/VBox"]
+[node name="ToastStack" type="VBoxContainer" parent="."]
 unique_name_in_owner = true
-layout_mode = 2
-theme_override_constants/separation = 12
-alignment = 1
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -360.0
+offset_top = -150.0
+offset_right = 360.0
+offset_bottom = -150.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+theme_override_constants/separation = 8
 
-[node name="DeployButton" type="Button" parent="Panel/Margin/VBox/Buttons"]
+[node name="ActionPopup" type="PanelContainer" parent="."]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(150, 52)
+visible = false
+layout_mode = 0
+offset_right = 150.0
+offset_bottom = 200.0
+theme_override_styles/panel = SubResource("StyleBoxFlat_popup")
+
+[node name="PopupMargin" type="MarginContainer" parent="ActionPopup"]
 layout_mode = 2
-theme_override_font_sizes/font_size = 21
+theme_override_constants/margin_left = 10
+theme_override_constants/margin_top = 10
+theme_override_constants/margin_right = 10
+theme_override_constants/margin_bottom = 10
+
+[node name="PopupVBox" type="VBoxContainer" parent="ActionPopup/PopupMargin"]
+layout_mode = 2
+theme = SubResource("Theme_popup")
+theme_override_constants/separation = 6
+
+[node name="DeployButton" type="Button" parent="ActionPopup/PopupMargin/PopupVBox"]
+unique_name_in_owner = true
+layout_mode = 2
 text = "上阵"
 
-[node name="UndeployButton" type="Button" parent="Panel/Margin/VBox/Buttons"]
+[node name="UndeployButton" type="Button" parent="ActionPopup/PopupMargin/PopupVBox"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(150, 52)
 layout_mode = 2
-theme_override_font_sizes/font_size = 21
 text = "下阵"
 
-[node name="RemoveButton" type="Button" parent="Panel/Margin/VBox/Buttons"]
+[node name="LeadButton" type="Button" parent="ActionPopup/PopupMargin/PopupVBox"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(150, 52)
 layout_mode = 2
-theme_override_font_sizes/font_size = 21
-text = "移出团队"
-
-[node name="LeadButton" type="Button" parent="Panel/Margin/VBox/Buttons"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(150, 52)
-layout_mode = 2
-theme_override_font_sizes/font_size = 21
 text = "设为队长"
 
-[node name="CloseButton" type="Button" parent="Panel/Margin/VBox/Buttons"]
+[node name="RemoveButton" type="Button" parent="ActionPopup/PopupMargin/PopupVBox"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(150, 52)
 layout_mode = 2
-theme_override_font_sizes/font_size = 21
-text = "返回"
+text = "移出团队"

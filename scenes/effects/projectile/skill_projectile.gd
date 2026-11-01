@@ -71,7 +71,9 @@ func fly_to(target_pos: Vector2) -> void:
 	if _skill == null:
 		return
 	var distance := global_position.distance_to(target_pos)
-	var duration := clampf(distance / maxf(1.0, _skill.projectile_speed), 0.18, 1.2)
+	# 0.12~0.5 秒：原来上限 1.2 秒太长（默认速度下每招都要等 1 秒以上才见伤害），
+	# 现在最慢 0.5 秒；下限 0.12 只用来防止"贴脸瞬移"。
+	var duration := clampf(distance / maxf(1.0, _skill.projectile_speed), 0.12, 0.5)
 
 	# 拖尾：Line2D 设了 top_level，所以它的点用世界坐标（不跟着弹体跑）
 	trail.clear_points()

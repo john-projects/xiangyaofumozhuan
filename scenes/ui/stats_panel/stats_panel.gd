@@ -283,20 +283,16 @@ func _build_stats_grid(character: UnitStats, derived: Dictionary) -> void:
 	stats_box.add_child(grid)
 
 	# 等级/经验都是**这个角色自己的**（团队模式下按人练级，见 GameRoot.add_exp）
+	# 两个数拆成两行显示：
+	#   「获得经验」= 当前已攒的经验（原来的分子）
+	#   「升级经验」= 升到下一级还需要多少（原来的分母）
+	# 不再显示百分比，也不再拼成 "120 / 500" 一条。
 	var level := GameRoot.level_of(character)
 	var cur_exp := GameRoot.exp_of(character)
-	var exp_text := "已满级"
-	if level >= GameRoot.MAX_LEVEL:
-		# 满级后经验照样能攒（用来升门派技能），所以把数字显示出来而不是只写"已满级"
-		exp_text = "%s 经验（已满级，可用于升技能）" % Global.format_stat(cur_exp)
-	else:
-		var need := GameRoot.exp_to_next(level)
-		if cur_exp >= need:
-			# 10 级起不再自动升级：经验够了就提示玩家去点右边的「升级」
-			exp_text = "%s / %s（可升级）" % [Global.format_stat(cur_exp), Global.format_stat(need)]
-		else:
-			var pct := int(roundf(100.0 * cur_exp / maxf(1.0, need)))
-			exp_text = "%s / %s（%d%%）" % [Global.format_stat(cur_exp), Global.format_stat(need), pct]
+	var gained_exp_text := Global.format_stat(cur_exp)
+	var need_exp_text := "已满级"
+	if level < GameRoot.MAX_LEVEL:
+		need_exp_text = Global.format_stat(GameRoot.exp_to_next(level))
 	var sect_id := GameRoot.sect_of(character)
 	var sect_text := Global.sect_name(sect_id) if not sect_id.is_empty() else "无门派"
 
@@ -352,10 +348,34 @@ func _build_stats_grid(character: UnitStats, derived: Dictionary) -> void:
 	#   左边从"左列数值框"的起点开始，右端停在"右列数值框"的右缘（= 面板宽 − ACTION_WIDTH）。
 	#   做法：separation 0 + 手动 8px 间隔（对齐表格的 h_separation）+ 右侧留 ACTION_WIDTH 给升级按钮。
 	# ⚠ 按钮必须在长条**外面**：直接塞进表格里会被 ＋/－ 的按钮区挤短。
+	# 顺序：先「获得经验」（当前攒了多少），再「升级经验」（还差多少）。升级按钮挂在第二行。
+	var gained_row := HBoxContainer.new()
+	gained_row.name = "GainedExpRow"
+	gained_row.add_theme_constant_override("separation", 0)
+	gained_row.add_child(_make_grid_label("获得经验"))
+	var gained_gap := Control.new()
+	gained_gap.custom_minimum_size = Vector2(8, 0)
+	gained_row.add_child(gained_gap)
+	var gained_bar := PanelContainer.new()
+	gained_bar.name = "GainedExpBar"
+	gained_bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	gained_bar.custom_minimum_size = Vector2(0, VALUE_HEIGHT)
+	gained_bar.add_theme_stylebox_override("panel", _value_style())
+	var gained_label := Label.new()
+	gained_label.text = gained_exp_text
+	gained_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	gained_label.add_theme_font_size_override("font_size", 17)
+	gained_bar.add_child(gained_label)
+	gained_row.add_child(gained_bar)
+	# 这一行没有按钮，补 ACTION_WIDTH 占位让两行值框右缘对齐
+	var gained_spacer := Control.new()
+	gained_spacer.custom_minimum_size = Vector2(ACTION_WIDTH, 0)
+	gained_row.add_child(gained_spacer)
+
 	var exp_row := HBoxContainer.new()
 	exp_row.name = "ExpRow"
 	exp_row.add_theme_constant_override("separation", 0)
-	exp_row.add_child(_make_grid_label("经验"))
+	exp_row.add_child(_make_grid_label("升级经验"))
 	var gap := Control.new()
 	gap.custom_minimum_size = Vector2(8, 0)
 	exp_row.add_child(gap)
@@ -365,13 +385,15 @@ func _build_stats_grid(character: UnitStats, derived: Dictionary) -> void:
 	exp_bar.custom_minimum_size = Vector2(0, VALUE_HEIGHT)
 	exp_bar.add_theme_stylebox_override("panel", _value_style())
 	var exp_label := Label.new()
-	exp_label.text = exp_text
+	exp_label.text = need_exp_text
 	exp_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	exp_label.add_theme_font_size_override("font_size", 17)
 	exp_bar.add_child(exp_label)
 	exp_row.add_child(exp_bar)
 	exp_row.add_child(_make_level_up_button(character))
+	# 顺序：先「升级经验」（还差多少，带升级按钮），再「获得经验」（当前攒了多少）
 	stats_box.add_child(exp_row)
+	stats_box.add_child(gained_row)
 
 
 ## 经验条右侧的「升级」按钮：经验够（且没满级）才能点，点一下扣经验升一级。
@@ -617,15 +639,33 @@ func _build_other_skills_page(character: UnitStats) -> void:
 
 ## 技能表的表头：名称 / 等级 / 类型 / 目标 / 消耗。
 func _make_skill_table_header() -> Control:
+	var box := PanelContainer.new()
+	box.name = "SkillTableHeader"
+	box.add_theme_stylebox_override("panel", _skill_header_style())
 	var row := HBoxContainer.new()
-	row.name = "SkillTableHeader"
 	row.add_theme_constant_override("separation", 6)
 	row.add_child(_make_table_cell("名称", 0, 15, Color(1, 0.86, 0.55, 0.9)))
 	row.add_child(_make_table_cell("等级", SKILL_COL_LEVEL, 15, Color(1, 0.86, 0.55, 0.9)))
 	row.add_child(_make_table_cell("类型", SKILL_COL_TYPE, 15, Color(1, 0.86, 0.55, 0.9)))
 	row.add_child(_make_table_cell("目标", SKILL_COL_TARGET, 15, Color(1, 0.86, 0.55, 0.9)))
 	row.add_child(_make_table_cell("消耗", SKILL_COL_COST, 15, Color(1, 0.86, 0.55, 0.9)))
-	return row
+	box.add_child(row)
+	return box
+
+
+## 表头底板：深色 + 只有下边框的一条金线。
+func _skill_header_style() -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.0, 0.0, 0.0, 0.35)
+	style.border_color = Color(0.72, 0.58, 0.32, 0.75)
+	style.border_width_bottom = 1
+	style.corner_radius_top_left = 5
+	style.corner_radius_top_right = 5
+	style.content_margin_left = 10
+	style.content_margin_right = 10
+	style.content_margin_top = 5
+	style.content_margin_bottom = 5
+	return style
 
 
 ## 技能表的一行。整行可点：点了就选中它，下面显示它的描述/升级按钮。
@@ -636,7 +676,7 @@ func _make_skill_table_row(index: int, skill: Dictionary, character: UnitStats, 
 	var box := PanelContainer.new()
 	box.name = "SkillRow_%s" % skill_id
 	box.mouse_filter = Control.MOUSE_FILTER_STOP
-	box.add_theme_stylebox_override("panel", _skill_row_style(selected))
+	box.add_theme_stylebox_override("panel", _skill_row_style(selected, index))
 	box.gui_input.connect(_on_skill_row_input.bind(index))
 	box.tooltip_text = "点一下选中这个技能"
 
@@ -670,16 +710,23 @@ func _make_table_cell(text: String, width: float, font_size: int, color := Color
 
 
 ## 技能行的底板样式：选中行金色边框 + 浅底，未选中行透明底（只靠 hover 提示可点）。
-func _skill_row_style(selected: bool) -> StyleBoxFlat:
+func _skill_row_style(selected: bool, index := 0) -> StyleBoxFlat:
 	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.18, 0.16, 0.12, 0.9) if selected else Color(0.10, 0.10, 0.12, 0.55)
-	style.border_color = Color(0.95, 0.80, 0.42, 0.95) if selected else Color(0.30, 0.27, 0.22, 0.8)
-	style.set_border_width_all(1)
-	style.set_corner_radius_all(4)
-	style.content_margin_left = 8
-	style.content_margin_right = 8
-	style.content_margin_top = 4
-	style.content_margin_bottom = 4
+	if selected:
+		style.bg_color = Color(0.28, 0.22, 0.12, 0.95)
+		style.border_color = Color(1, 0.84, 0.45, 1.0)
+		style.set_border_width_all(2)
+	else:
+		# 斑马纹：奇偶行底色略有差别，密集列表更好读
+		style.bg_color = Color(0.14, 0.14, 0.17, 0.55) if index % 2 == 0 \
+				else Color(0.10, 0.10, 0.12, 0.45)
+		style.border_color = Color(0.26, 0.23, 0.18, 0.7)
+		style.set_border_width_all(1)
+	style.set_corner_radius_all(6)
+	style.content_margin_left = 10
+	style.content_margin_right = 10
+	style.content_margin_top = 6
+	style.content_margin_bottom = 6
 	return style
 
 
@@ -716,14 +763,28 @@ func _skill_cost_text(level: int) -> String:
 
 ## 选中技能后，下面那一块：描述 + 升级条件 + 拥有 + 「升级 / 升级10次」。
 ## 参数 skill：选中的技能字典；character：当前角色。
+## 技能详情卡：深底 + 2px 暗金描边 + 大内边距，和上面的列表区分开。
+func _skill_detail_style() -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.09, 0.08, 0.07, 0.92)
+	style.border_color = Color(0.72, 0.58, 0.32, 0.9)
+	style.set_border_width_all(2)
+	style.set_corner_radius_all(8)
+	style.content_margin_left = 14
+	style.content_margin_right = 14
+	style.content_margin_top = 12
+	style.content_margin_bottom = 12
+	return style
+
+
 func _add_skill_detail(skill: Dictionary, character: UnitStats) -> void:
 	var skill_id := String(skill["id"])
 	var level := GameRoot.sect_skill_level(character, skill_id)
 	var box := PanelContainer.new()
 	box.name = "SkillDetail"
-	box.add_theme_stylebox_override("panel", _skill_row_style(true))
+	box.add_theme_stylebox_override("panel", _skill_detail_style())
 	var box_content := VBoxContainer.new()
-	box_content.add_theme_constant_override("separation", 4)
+	box_content.add_theme_constant_override("separation", 6)
 	box.add_child(box_content)
 
 	var title := Label.new()
@@ -733,9 +794,20 @@ func _add_skill_detail(skill: Dictionary, character: UnitStats) -> void:
 	title.modulate = Color(0.95, 0.82, 0.45)
 	box_content.add_child(title)
 
+	# 【描述】放风味文案，【效果】放机制说明
+	var lore := String(skill.get("lore", ""))
+	if not lore.is_empty():
+		var lore_label := Label.new()
+		lore_label.text = "【描述】" + lore
+		lore_label.add_theme_font_size_override("font_size", 14)
+		lore_label.modulate = Color(0.88, 0.83, 0.72, 0.95)
+		lore_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		box_content.add_child(lore_label)
+
 	var desc := Label.new()
-	desc.text = "【描述】" + String(skill["desc"])
+	desc.text = "【效果】" + String(skill["desc"])
 	desc.add_theme_font_size_override("font_size", 14)
+	desc.modulate = Color(0.85, 0.92, 1.0, 0.95)
 	desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	box_content.add_child(desc)
 

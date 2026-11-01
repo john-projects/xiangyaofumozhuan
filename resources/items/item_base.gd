@@ -28,17 +28,32 @@ enum EquipType{
 	BELT,
 	NECKLACE,
 	ARMOR,
-	BOOTS
+	BOOTS,
+	RING,      # 7 戒指
+	EARRING,   # 8 耳饰
 }
 
 @export var item_name: String                # 显示名。背包格子 / 商人货架 / 属性卡标题都用它；也是商人"持×n"的判定键
 @export var item_icon: Texture2D             # 图标。BagPanel / MerchantPanel / HoverItemCard 都直接取这张贴图
+## 装备文案：一段风味描述，显示在提示卡最上方（参考梦幻西游的装备说明）。
+## 只做展示，不参与任何数值计算。
+@export var item_flavor: String = ""
+
 @export var item_tier: Global.UpgradeTier    # 稀有度（COMMON=0 / RARE=1 / EPIC=2 / LEGENDARY=3）。只影响描边颜色，不直接改数值
 @export var item_type: ItemType              # 道具大类，见上面的 ItemType 注释（新资源一律填 EQUIPMENT）
 @export var item_cost: int                   # 商店售价（单位：金币，常见 20~60）。0 表示非卖品；卖出时按 75% 向下取整返还
 ## 能穿到哪个装备栏，见 EquipType。默认 NONE = 不能装备（材料 / 消耗品都保持默认）。
 ## 现在的装备资源（ItemEquipment）都在 .tres 里显式填了它；忘了填会穿上不去（能买、但点了没反应）。
 @export var equip_type: EquipType = EquipType.NONE
+
+
+## 品质 → 颜色（0 白 / 1 蓝 / 2 紫 / 3 粉 / 4 橙）。提示卡用它给装备名上色。
+const TIER_COLORS_HEX := ["#d8d8d8", "#5aa9ff", "#b46bff", "#ff7bd0", "#ff9f3a"]
+
+
+## 品质下标 → Color。越界会被夹到 0~4，所以老资源存了奇怪的数也不会崩。
+static func tier_color(tier: int) -> Color:
+	return Color(TIER_COLORS_HEX[clampi(tier, 0, 4)])
 
 ## 返回 BBCode 富文本描述，供 RichTextLabel.set_text() 直接使用（支持 [color=...]、[code] 等标签）。
 ## 基类返回空串：描述长什么样由子类决定（ItemEquipment 拼攻击/防御/生命/暴击/速度/格挡）；纯函数，无副作用。
@@ -68,6 +83,10 @@ static func equip_type_name(slot_type: int) -> String:
 			return "衣服"
 		EquipType.BOOTS:
 			return "鞋子"
+		EquipType.RING:
+			return "戒指"
+		EquipType.EARRING:
+			return "耳饰"
 		_:
 			return "装备"
 

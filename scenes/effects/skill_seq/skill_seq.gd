@@ -67,6 +67,25 @@ var _frame := -1
 var _playing := false
 ## 当前播放的帧区间：从 _from 播到 _to（不含 _to）。
 var _from := 0
+## 帧推进的节奏曲线。1.0 = 线性；< 1 = 前段快后段慢；
+## > 1 = 前段慢后段快。三尺青锋用它做"剑飞得快、莲花开得慢"。
+@export var speed_curve := 1.0
+
+## 把精灵整体往上抬多少（按帧高的比例）。0 = 帧中心贴地；
+## 0.5 = 帧底边贴地（特效从脚下往上长）。缥缈剑指用 0.45。
+@export var ground_offset := 0.0
+
+## true = 按「施法者 → 目标」的方向旋转、并从施法者身上滑向目标（三尺青锋）；
+## false = 原地播放，不旋转也不滑行（缥缈剑指这种「就在脚下开一朵」的特效）。
+## 默认 false：其它序列帧技能原本就是原地播，别因为新增这个接口被带偏。
+@export var fly_from_caster := false
+
+## 命中特效在帧内的横向位置（0~1）。三尺青锋的素材里莲花约在 88% 处，
+## 用它把「莲花中心」而不是「精灵中心」对准目标。
+@export var impact_anchor := 0.88
+
+## 从中心滑向目标的那条 tween（重复调用时先 kill 掉旧的）
+var _fly_tween: Tween = null
 var _to := 0
 
 
@@ -84,10 +103,15 @@ func _ready() -> void:
 	_sprite.scale = Vector2.ONE * scale_mul
 	_sprite.rotation = deg_to_rad(rotation_deg)
 	# 加色混合：黑像素 = 不发光 = 不可见，所以不需要 alpha。
-	_sprite.material = EffectTex.additive()
+	# additive = false 时不设材质，走普通 alpha 混合（素材已经烘过 alpha）。
+	if additive:
+		_sprite.material = EffectTex.additive()
 	# 全屏模式要盖住所有单位（默认 z=1 会被立绘挡住）。
 	_sprite.z_index = 60 if autoplay else 1
 	add_child(_sprite)
+	if ground_offset != 0.0:
+		var fh := float(sheet.get_height()) / float(maxi(1, rows))
+		_sprite.position.y = -fh * scale_mul * ground_offset
 	visible = false
 	if autoplay:
 		play()
@@ -191,6 +215,51 @@ func duration() -> float:
 	return float(maxi(n, 1)) / maxf(fps, 1.0)
 
 
+## true = 加色混合（默认，适合黑底发光素材）；
+## false = 普通混合，靠 alpha 叠加 —— 素材本身是浅色/粉色时用它，
+## 否则加色会把 RGB 三通道一起顶满，粉色变纯白（缥缈剑指踩过这个坑）。
+@export var additive := true
+
+
+## 按「施法者 → 目标」的方向旋转精灵。由 Battle._spawn_hit_burst() 调用。
+## 素材本身是「剑在左、莲在右」（指向右），所以直接取 dir.angle() 即可：
+##   我方在右打左边敌人 → dir 指向左 → 旋转 180° → 剑从右往左扎
+##   敌人在左打我方向右 → dir 指向右 → 旋转 0° → 剑从左往右扎
+## 这样同一个素材两边都能用，不需要 rotation_deg_enemy 那种双套配置。
+func set_impact_direction(dir: Vector2) -> void:
+	if _sprite == null or dir.length() < 0.01:
+		return
+	if not fly_from_caster:
+		return      # 原地播放的特效：不转、不滑，保持原样
+	var d := dir.normalized()
+	var dist := dir.length()
+	_sprite.rotation = d.angle()
+	# 素材里「剑在左、莲在右」，所以旋转后 +X 指向目标。
+	# 终点：把精灵按「莲花在帧内的位置」往后挪，让莲花中心压在节点原点（= 目标）。
+	# 起点：再往施法者方向退 dist×0.45（≈ 战场中心），然后滑到终点 ——
+	#   观感就是「剑从场地中央飞出来，落到目标身上」。
+	var frame_w := float(_sprite.texture.get_width()) / float(maxi(1, cols))
+	# 帧内莲花在 impact_anchor 处（0.88），精灵中心在 0.5，差多少就退多少，
+	# 这样「莲花中心」正好落在节点原点（= 目标身体中心）上。
+	var shift := float(impact_anchor) - 0.5
+	var frame_h := float(sheet.get_height()) / float(maxi(1, rows))
+	var end_pos := -d * frame_w * scale_mul * shift \
+			+ Vector2(0, -frame_h * scale_mul * ground_offset)
+	# 起点：让精灵的**左端（剑尾）**正好落在施法者身体中心。
+	# 精灵中心在 p 时，左端在 p - d × 半宽；要它等于 -d × dist（施法者位置，相对目标）
+	#   → p = -d × (dist - 半宽)
+	var half := frame_w * scale_mul * 0.5
+	var start_pos := -d * maxf(0.0, dist - half) \
+			+ Vector2(0, -frame_h * scale_mul * ground_offset)
+	_sprite.position = start_pos
+	if _fly_tween != null and _fly_tween.is_valid():
+		_fly_tween.kill()
+	var fly := create_tween()
+	_fly_tween = fly
+	fly.tween_property(_sprite, "position", end_pos, maxf(0.18, duration() * 0.30)) \
+			.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+
+
 ## 全屏播放时，如果特效铺在**我方**阵地上（= 敌方放的技能），换成敌方专用的角度。
 ## 为什么不是简单的镜像：镜像角度（-rotation_deg）实测不如单独调好看，
 ## 所以给一个独立的 rotation_deg_enemy，两边各调各的。
@@ -205,7 +274,10 @@ func _process(delta: float) -> void:
 	if not _playing:
 		return
 	_t += delta
-	var f := _from + int(_t * fps)
+	# 按 speed_curve 做一次幂变换：curve < 1 时前段帧推进得快、后段慢。
+	# 三段都用同一个 p，保证最后一帧仍然落在 duration() 上（时长不变）。
+	var p := clampf(_t / maxf(0.001, duration()), 0.0, 1.0)
+	var f := _from + int(pow(p, speed_curve) * float(_to - _from))
 	if f >= _to:
 		_playing = false
 		finished.emit()

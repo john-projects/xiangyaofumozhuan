@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="ItemEquipment" format=3 uid="uid://c2fiib4suv38"]
+
+[ext_resource type="Texture2D" uid="uid://c7ba3lh3uadd5" path="res://assets/sprites/equipment/belt/belt_11.png" id="1_icon"]
+[ext_resource type="Script" uid="uid://bayogw03dided" path="res://resources/items/equipment/item_equipment.gd" id="2_script"]
+
+[resource]
+script = ExtResource("2_script")
+req_level = 100
+defense = 55
+health = 210
+item_name = "天罡束星带"
+item_icon = ExtResource("1_icon")
+item_flavor = "三十六天罡星君的制式之物，符箓一层压一层，甲片严整得像是列队的兵；带身厚实，正中一枚大扣，两侧垂着短绦。"
+item_type = 3
+item_cost = 4840
+equip_type = 3

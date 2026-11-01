@@ -1,0 +1,43 @@
+[gd_resource type="Resource" script_class="ItemEquipment" format=3]
+
+[ext_resource type="Texture2D" path="res://assets/sprites/equipment/belt/belt_12.png" id="1_icon"]
+[ext_resource type="Script" path="res://resources/items/equipment/item_equipment.gd" id="2_script"]
+
+[resource]
+script = ExtResource("2_script")
+item_flavor = "九霄雷池里被劫雷劈出来的，边缘的金属熔了又凝，紫雷至今还在裂缝里游走；带身厚实，正中一枚大扣，两侧垂着短绦。"
+item_name = "天罚雷纹带"
+item_icon = ExtResource("1_icon")
+item_tier = 1
+item_type = 3
+req_level = 110
+req_characters = ""
+item_cost = 10370
+weapon_type = 0
+equip_type = 3
+attack = 0
+defense = 65
+health = 251
+mana = 0
+speed = 0
+spell_damage = 0
+spell_defense = 0
+attr_con = 0
+attr_mag = 6
+attr_str = 6
+attr_end = 0
+attr_agi = 0
+crit_chance = 0.0
+crit_damage_bonus = 0.0
+dodge = 0
+block_value = 0
+crit_resist = 0.0
+crit_damage_resist = 0.0
+seal_hit = 0.0
+seal_resist = 0.0
+healing = 0
+health_pct = 0.0
+defense_pct = 0.0
+speed_pct = 0.0
+physical_pct = 0.0
+spell_pct = 0.0

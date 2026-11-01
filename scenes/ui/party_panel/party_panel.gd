@@ -37,8 +37,16 @@ const TEAM_SLOTS := 5
 const RESERVE_SLOTS := 10
 
 ## 坑位尺寸 —— **两排一致**（未上阵也是同样大的框，只是排成两行）。
-const SLOT_SIZE := Vector2(96, 150)
-const SLOT_ICON := 88.0
+## 尺寸放大到 118×180：原来 96×150 时面板 940×768 里空了一大片，
+## 放大后内容刚好填满收紧到 700×706 的面板。
+## 统一的弹窗消息外观/时长（和地图提示共用一套）。
+const UiToast := preload("res://scenes/shared/ui_toast.gd")
+
+## 提示栈相对屏幕中心上移多少（和 WorldMap 的 TOAST_RISE 保持一致）。
+const TOAST_RISE := 150.0
+
+const SLOT_SIZE := Vector2(118, 180)
+const SLOT_ICON := 108.0
 
 # ── 选中态配色 ──
 # 用样式盒明确定义，而不是吃主题默认的 pressed 样式：
@@ -50,18 +58,18 @@ const SLOT_BORDER_HOVER := Color(1, 0.95, 0.8, 0.45)
 const SLOT_BG_SELECTED := Color(1.0, 0.82, 0.35, 0.20)
 const SLOT_BORDER_SELECTED := Color(1.0, 0.84, 0.42, 1.0)
 
-@onready var title_label: Label = %TitleLabel
-@onready var message_label: Label = %MessageLabel
 @onready var team_title: Label = %TeamTitle
 @onready var team_row: HBoxContainer = %TeamRow
 @onready var reserve_title: Label = %ReserveTitle
 ## 未上阵那一块：GridContainer（5 列 × 2 行），不是单行 HBox。
 @onready var reserve_row: Container = %ReserveRow
+## 提示栈：屏幕中央偏上的一个 VBox，和地图提示的位置/宽度完全一致。
+@onready var toast_stack: VBoxContainer = %ToastStack
+@onready var action_popup: PanelContainer = %ActionPopup
 @onready var deploy_button: Button = %DeployButton
 @onready var undeploy_button: Button = %UndeployButton
 @onready var remove_button: Button = %RemoveButton
 @onready var lead_button: Button = %LeadButton
-@onready var close_button: Button = %CloseButton
 
 ## 当前选中的成员（点击坑位设置）；null = 没选。
 var _selected: UnitStats = null
@@ -72,24 +80,23 @@ var _team: Array[UnitStats] = []
 
 func _ready() -> void:
 	hide()
-	close_button.pressed.connect(_emit_close)
 	deploy_button.pressed.connect(_on_deploy_pressed)
 	undeploy_button.pressed.connect(_on_undeploy_pressed)
 	remove_button.pressed.connect(_on_remove_pressed)
 	lead_button.pressed.connect(_on_lead_pressed)
+	action_popup.hide()
 	_refresh_buttons()
 
 
 ## 按当前"团队 + 上阵名单"重建两排坑位并显示面板。
 ## 参数 team：团队（大名单）；deployed：上阵名单 —— 都是 GameRoot 的数组引用，只读。
 ## 副作用：show()、改三处计数文字、清空并重建两排坑位；尽量保留上次选中的那个人。
-## ⚠ 不清空 message_label：WorldMap 是"先 show_message()、再 call_deferred 重建"。
+## ⚠ WorldMap 是"先 show_message()、再 call_deferred 重建"；消息栏已移除，show_message 现为空实现。
 func show_party(team: Array[UnitStats], deployed: Array[UnitStats]) -> void:
 	_team = team
 	_deployed = deployed
 	show()
 	# 标题固定不带人数（上阵/团队人数由下面的两排直接看出来，别在标题里再报一遍）。
-	title_label.text = "团队管理"
 	team_title.text = "队伍中"
 	reserve_title.text = "未上阵"
 
@@ -100,6 +107,7 @@ func show_party(team: Array[UnitStats], deployed: Array[UnitStats]) -> void:
 	var reserved := _reserved_members()
 	_rebuild_row(team_row, deployed, TEAM_SLOTS, SLOT_SIZE, SLOT_ICON)
 	_rebuild_row(reserve_row, reserved, RESERVE_SLOTS, SLOT_SIZE, SLOT_ICON)
+	action_popup.hide()
 	_refresh_buttons()
 	# 重建后把焦点还给选中的坑位：否则坑位全被换掉，焦点落空，键盘方向键会失效。
 	_focus_selected.call_deferred()
@@ -116,28 +124,72 @@ func _focus_selected() -> void:
 				return
 
 
-## 在面板上显示一句提示（"XXX 已上阵。" / "至少要留 1 人上阵。" 等）。
+## 弹窗式提示：和地图上的提示条**完全同一套** ——
+## 同样的 UiToast 外观、同样的 720 宽、同样的屏幕中央偏上位置（上移 150px）、
+## 同样的停留/淡出时长。实现方式也照搬 WorldMap：往一个居中的 VBox 里压条、淡出后释放。
+## 参数 text：提示内容（上阵成功/失败、人数上限等原因），可用 \n 分多条。
 func show_message(text: String) -> void:
-	message_label.text = text
+	if toast_stack == null:
+		return
+	if text.strip_edges().is_empty():
+		return
+	for line in text.split("\n"):
+		var one := line.strip_edges()
+		if not one.is_empty():
+			_add_toast_line(one)
 
 
-## 清掉提示文字（WorldMap 每次打开本面板时调一次）。
+## 加一条提示：压进 ToastStack、按内容撑高、HOLD 秒后淡出释放（与地图提示一致）。
+func _add_toast_line(text: String) -> void:
+	var box := UiToast.make_box(text)
+	toast_stack.add_child(box)
+	_layout_toast_stack()
+	await get_tree().create_timer(UiToast.HOLD).timeout
+	if not is_instance_valid(box):
+		return
+	var tween := create_tween()
+	tween.tween_property(box, "modulate:a", 0.0, UiToast.FADE)
+	await tween.finished
+	if is_instance_valid(box):
+		box.queue_free()
+		_layout_toast_stack.call_deferred()
+
+
+## VBoxContainer 不会自己长高：先按内容算高度再撑开 rect，否则子节点会被压成 0 高。
+## 位置：屏幕中央、整体上移 150px（和 WorldMap 的提示栈同一个落点）。
+func _layout_toast_stack() -> void:
+	if toast_stack == null:
+		return
+	toast_stack.offset_left = -UiToast.WIDTH * 0.5
+	toast_stack.offset_right = UiToast.WIDTH * 0.5
+	toast_stack.offset_top = -TOAST_RISE
+	toast_stack.offset_bottom = toast_stack.get_combined_minimum_size().y - TOAST_RISE
+
+
+## 清掉所有还在的提示（关面板时调，避免下次打开还挂着上次的残影）。
 func clear_message() -> void:
-	message_label.text = ""
+	if toast_stack == null:
+		return
+	for child in toast_stack.get_children():
+		child.queue_free()
+	_layout_toast_stack.call_deferred()
 
 
-## 按视觉顺序返回可聚焦的控件（WorldMap 做 W/S 循环切换用）：
-## 第一排坑位 → 第二排坑位 → 可用的操作按钮 → 「返回」。
+## 按视觉顺序返回可聚焦的控件（WorldMap 做 W/S 循环切换用）。
+## ⚠ **操作弹窗打开时，焦点环里只放弹窗里那几个按钮** ——
+##   否则方向键会从弹窗跳回坑位、甚至跳出面板，看着像"光标跑出去了"。
 func focus_ring() -> Array[Control]:
+	if action_popup != null and action_popup.visible:
+		var popup_ring: Array[Control] = []
+		for button in [deploy_button, undeploy_button, lead_button, remove_button]:
+			if not button.disabled:
+				popup_ring.append(button)
+		return popup_ring
 	var out: Array[Control] = []
 	for row in [team_row, reserve_row]:
 		for child in row.get_children():
 			if child is Button and not (child as Button).disabled:
 				out.append(child as Control)
-	for button in [deploy_button, undeploy_button, remove_button, lead_button]:
-		if not button.disabled:
-			out.append(button)
-	out.append(close_button)
 	return out
 
 
@@ -175,7 +227,8 @@ func _make_slot(stats: UnitStats, slot_size: Vector2, icon_size: float) -> Butto
 	# 焦点圈：**向外**扩 3px 画一圈细白线（expand_margin），不盖住选中态的金框。
 	# 之前设成 StyleBoxEmpty，方向键移动时完全看不出光标在哪 —— 这就是"移动选择框消失了"。
 	slot.add_theme_stylebox_override("focus", _focus_style())
-	slot.pressed.connect(_on_slot_pressed.bind(stats))
+	# 把格子自己也传过去：选中后要在它旁边弹出操作框
+	slot.pressed.connect(_on_slot_pressed.bind(stats, slot))
 
 	var box := VBoxContainer.new()
 	box.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -288,6 +341,9 @@ func _refresh_buttons() -> void:
 	undeploy_button.disabled = not (s != null and on_field and GameRoot.deploy_can_remove(_deployed, s))
 	lead_button.disabled = not (on_field and deploy_index > 0)
 	remove_button.disabled = not can_remove
+	# 可用项变了就要重连焦点环：否则方向键会停在刚被置灰的那个按钮上
+	if action_popup != null and action_popup.visible:
+		_link_popup_focus()
 
 
 ## 团队里但没上阵的人（保持团队顺序）。
@@ -300,12 +356,96 @@ func _reserved_members() -> Array[UnitStats]:
 	return out
 
 
-## 点坑位：只改选中，不动数据。
-func _on_slot_pressed(stats: UnitStats) -> void:
+## 点坑位：改选中 + 在这个角色格子旁边弹出操作框。
+## 再点一次同一个角色 = 收起操作框。
+func _on_slot_pressed(stats: UnitStats, slot: Button = null) -> void:
 	SoundManager.play_sound(SoundManager.Sound.UI)
+	if stats == _selected and action_popup.visible:
+		_close_action_popup()
+		return
 	_selected = stats
 	_sync_slot_selection()
 	_refresh_buttons()
+	_open_action_popup(slot)
+
+
+## 在选中角色格子的旁边弹出操作框。
+## 位置：优先放格子右侧；右侧放不下就放左侧。
+## ⚠ 边界只用**面板本身**（$Panel）来夹，不用整个视口 ——
+##   用视口夹的话，靠边的格子会把弹窗甩到面板外面，看着像"跑出去了"。
+## 弹出后把焦点交给第一个可用的操作，键盘玩家按一下就能选。
+func _open_action_popup(slot: Button) -> void:
+	if slot == null or not is_instance_valid(slot):
+		return
+	action_popup.show()
+	action_popup.reset_size()
+	var rect := slot.get_global_rect()
+	var size := action_popup.size
+	var box := ($Panel as Control).get_global_rect()
+	var margin := 6.0
+	var x := rect.end.x + 8.0
+	if x + size.x > box.end.x - margin:
+		x = rect.position.x - size.x - 8.0
+	x = clampf(x, box.position.x + margin, maxf(box.position.x + margin, box.end.x - size.x - margin))
+	var y := clampf(rect.position.y, box.position.y + margin,
+			maxf(box.position.y + margin, box.end.y - size.y - margin))
+	action_popup.global_position = Vector2(x, y)
+	# ⚠ 关键：**把坑位的焦点关掉**。
+	# Godot 的方向键走的是引擎自带的"空间邻居"查找，不看 focus_ring()；
+	# 坑位只要能聚焦，方向键就会从弹窗跳到坑位上，甚至跳出面板 —— 这就是"光标跑出去"。
+	_set_slots_focusable(false)
+	_link_popup_focus()
+	for button in [deploy_button, undeploy_button, lead_button, remove_button]:
+		if not button.disabled:
+			button.grab_focus()
+			break
+
+
+## 开关坑位的可聚焦性。弹窗打开时关掉，关闭时恢复 ——
+## 这样方向键只会在弹窗里那几个按钮之间移动。
+func _set_slots_focusable(enabled: bool) -> void:
+	var mode := Control.FOCUS_ALL if enabled else Control.FOCUS_NONE
+	for row in [team_row, reserve_row]:
+		for child in row.get_children():
+			if child is Button:
+				(child as Button).focus_mode = mode
+
+
+## 把弹窗内**当前可用**的按钮连成一个上下闭环，不让引擎在找不到邻居时
+## 按空间位置跳到面板别的地方；同时**跳过置灰项** —— 置灰按钮 grab_focus 无效，
+## 留在环里会让方向键卡住不动。
+func _link_popup_focus() -> void:
+	var ring: Array[Button] = []
+	for button in [deploy_button, undeploy_button, lead_button, remove_button]:
+		if not button.disabled:
+			ring.append(button)
+	var n := ring.size()
+	if n == 0:
+		return
+	for i in n:
+		var button := ring[i]
+		button.focus_neighbor_top = button.get_path_to(ring[(i - 1 + n) % n])
+		button.focus_neighbor_bottom = button.get_path_to(ring[(i + 1) % n])
+		# 左右不往外跳：指回自己等于"按了也不动"
+		button.focus_neighbor_left = button.get_path_to(button)
+		button.focus_neighbor_right = button.get_path_to(button)
+	# 环外的（置灰的）也别留着旧邻居，免得从别处跳进来
+	for button in [deploy_button, undeploy_button, lead_button, remove_button]:
+		if button.disabled:
+			button.focus_mode = Control.FOCUS_NONE
+			button.focus_neighbor_top = NodePath()
+			button.focus_neighbor_bottom = NodePath()
+			button.focus_neighbor_left = NodePath()
+			button.focus_neighbor_right = NodePath()
+		else:
+			button.focus_mode = Control.FOCUS_ALL
+
+
+## 收起操作框，焦点回到当前选中的格子（坑位恢复可聚焦）。
+func _close_action_popup() -> void:
+	action_popup.hide()
+	_set_slots_focusable(true)
+	_focus_selected()
 
 
 ## 让"按下态"严格等于"只有选中那一个是按下的"。
@@ -326,6 +466,7 @@ func _on_deploy_pressed() -> void:
 		return
 	SoundManager.play_sound(SoundManager.Sound.UI)
 	deploy_requested.emit(_selected)
+	_close_action_popup()
 
 
 ## 「下阵」回调：同上。
@@ -334,6 +475,7 @@ func _on_undeploy_pressed() -> void:
 		return
 	SoundManager.play_sound(SoundManager.Sound.UI)
 	undeploy_requested.emit(_selected)
+	_close_action_popup()
 
 
 ## 「移出团队」回调：同上。
@@ -342,6 +484,7 @@ func _on_remove_pressed() -> void:
 		return
 	SoundManager.play_sound(SoundManager.Sound.UI)
 	remove_requested.emit(_selected)
+	_close_action_popup()
 
 
 ## 「设为队长」回调：同上。
@@ -350,6 +493,20 @@ func _on_lead_pressed() -> void:
 		return
 	SoundManager.play_sound(SoundManager.Sound.UI)
 	lead_requested.emit(_selected)
+	_close_action_popup()
+
+
+## 面板里点空白处 / 按 Esc：先收弹窗，再关面板（WorldMap 的 Esc 也走这里）。
+func _unhandled_input(event: InputEvent) -> void:
+	if not visible:
+		return
+	if event.is_action_pressed("ui_cancel"):
+		if action_popup.visible:
+			_close_action_popup()
+			get_viewport().set_input_as_handled()
+			return
+		_emit_close()
+		get_viewport().set_input_as_handled()
 
 
 func _emit_close() -> void:

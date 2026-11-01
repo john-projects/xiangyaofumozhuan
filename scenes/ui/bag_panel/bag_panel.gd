@@ -32,21 +32,24 @@ const SLOT_SIZE := 68.0
 const SLOT_ICON_MARGIN := 8
 
 ## 形象左右各几个装备栏。
-const EQUIP_SLOTS_PER_SIDE := 3
-## 六个装备栏的固定顺序（左列→右列）。长度须为 EQUIP_SLOTS_PER_SIDE×2；类型定义在 ItemBase.EquipType。
+const EQUIP_SLOTS_PER_SIDE := 4
+## 八个装备栏的固定顺序（左列→右列）。长度须为 EQUIP_SLOTS_PER_SIDE×2；类型定义在 ItemBase.EquipType。
+## 左列：武器 / 衣服 / 腰带 / 鞋子　右列：头盔 / 项链 / 戒指 / 耳饰
 const EQUIP_LAYOUT: Array[int] = [
-	ItemBase.EquipType.HELMET,
 	ItemBase.EquipType.WEAPON,
-	ItemBase.EquipType.BELT,
-	ItemBase.EquipType.NECKLACE,
 	ItemBase.EquipType.ARMOR,
+	ItemBase.EquipType.BELT,
 	ItemBase.EquipType.BOOTS,
+	ItemBase.EquipType.HELMET,
+	ItemBase.EquipType.NECKLACE,
+	ItemBase.EquipType.RING,
+	ItemBase.EquipType.EARRING,
 ]
 ## 栏位名行高；装备栏 StyleBox 的 content_margin_bottom 要留出这么多。
 const EQUIP_LABEL_HEIGHT := 20.0
 ## 装备栏边长。比背包格子大：形象框要保持竖长，装备栏也更醒目。
-const EQUIP_SLOT_SIZE := 96.0
-## 形象框尺寸；高度 = 三个装备栏叠起来。
+const EQUIP_SLOT_SIZE := 84.0
+## 形象框尺寸；高度 = 一列装备栏叠起来（4 个 × 84 + 3 × 间距）。
 const PLAYER_FRAME_WIDTH := 240.0
 const PLAYER_FRAME_HEIGHT := EQUIP_SLOTS_PER_SIDE * EQUIP_SLOT_SIZE \
 		+ (EQUIP_SLOTS_PER_SIDE - 1) * GRID_SEPARATION
@@ -57,6 +60,15 @@ const ARROW_HEIGHT := 60.0
 const PLAYER_ROW_SEPARATION := 16.0
 ## 角色区总高（金币已挪到信息行）。
 const PLAYER_ROW_HEIGHT := PLAYER_FRAME_HEIGHT
+
+# ── 全队头像选择器（点形象框弹出）──
+## 每格人像边长（不含底部名字行）。
+const PICKER_SLOT_SIZE := 96.0
+const PICKER_BG := Color(1, 1, 1, 0.05)
+const PICKER_BG_HOVER := Color(1.0, 0.82, 0.35, 0.20)
+const PICKER_BORDER := Color(1, 1, 1, 0.16)
+const PICKER_BORDER_HOVER := Color(1.0, 0.84, 0.42, 1.0)
+const PICKER_TEXT := Color(0.88, 0.85, 0.78, 1.0)
 
 ## 窗口外边距与面板内边距（16 省高度）。
 const WINDOW_MARGIN := 16.0
@@ -72,7 +84,12 @@ const SCROLLBAR_ALLOWANCE := 16.0
 
 @onready var coins_label: Label = %CoinsLabel
 @onready var count_label: Label = %CountLabel
-@onready var message_label: Label = %MessageLabel
+## 弹窗消息栈（原来的底部信息行已移除）。
+@onready var toast_stack: VBoxContainer = get_node_or_null(^"%ToastStack") as VBoxContainer
+## 提示栈相对屏幕中心上移多少（与地图 / 团队 / 商人面板一致）。
+const TOAST_RISE := 150.0
+## 统一的弹窗消息外观（四处共用一套）。
+const UiToast := preload("res://scenes/shared/ui_toast.gd")
 @onready var grid: GridContainer = %Grid
 ## 角色区节点可能缺失（场景被旧副本覆盖），缺失就整块跳过。
 @onready var player_view: TextureRect = get_node_or_null(^"%PlayerView") as TextureRect
@@ -82,6 +99,8 @@ const SCROLLBAR_ALLOWANCE := 16.0
 @onready var next_button: Button = get_node_or_null(^"%NextPlayerButton") as Button
 @onready var left_slots: VBoxContainer = get_node_or_null(^"%LeftSlots") as VBoxContainer
 @onready var right_slots: VBoxContainer = get_node_or_null(^"%RightSlots") as VBoxContainer
+## 形象框：点它弹出"全队头像选择器"（见 _open_picker）。
+@onready var player_frame: Control = get_node_or_null(^"%PlayerFrame") as Control
 
 ## 滚动容器由 _ensure_scroll() 解析：%Scroll 为 null 时直接取 custom_minimum_size 会崩。
 var scroll: ScrollContainer
@@ -96,6 +115,13 @@ var _slot_focus_enabled := true
 ## 展示中的团队名册（引用 WorldMap._party，只读）与下标；只决定"看谁 / 穿给谁"，不写回游戏数据。
 var _party: Array[UnitStats] = []
 var _view_index := 0
+## 全队头像选择器（点形象框弹出；懒创建，见 _ensure_picker）。
+var _picker: PanelContainer = null
+var _picker_grid: GridContainer = null
+## 打开选择器时焦点该落到哪一格（当前角色那一格）。
+var _picker_focus_target: Button = null
+## 形象框的原始样式（聚焦时临时换金边，失去焦点要还原）。
+var _frame_base_style: StyleBox = null
 
 
 func _ready() -> void:
@@ -106,6 +132,16 @@ func _ready() -> void:
 		prev_button.pressed.connect(_step_player.bind(-1))
 	if next_button != null:
 		next_button.pressed.connect(_step_player.bind(1))
+	# 点形象框 = 打开全队头像选择器（比一格格 ◀/▶ 翻快得多）
+	if player_frame != null:
+		player_frame.mouse_filter = Control.MOUSE_FILTER_STOP
+		player_frame.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+		# 键盘也要能选中它：Panel 默认 focus_mode = NONE，Tab / 方向键根本到不了
+		player_frame.focus_mode = Control.FOCUS_ALL
+		_frame_base_style = player_frame.get_theme_stylebox("panel")
+		player_frame.focus_entered.connect(_on_player_frame_focus.bind(true))
+		player_frame.focus_exited.connect(_on_player_frame_focus.bind(false))
+		player_frame.gui_input.connect(_on_player_frame_input)
 	_refresh_player_view()
 	grid.columns = GRID_COLUMNS
 	# 间距也由代码统一设，保证尺寸算式和实际排布是同一套数字（.tscn 里填的会被这里覆盖）
@@ -177,13 +213,11 @@ func set_slot_focus_enabled(enabled: bool) -> void:
 
 
 ## 在信息行显示一句提示（留给卖出 / 合成）。
-func show_message(text: String) -> void:
-	message_label.text = text
+
 
 
 ## 清空提示文字（WorldMap 每次打开时调）。
-func clear_message() -> void:
-	message_label.text = ""
+
 
 
 ## 当前焦点环：有东西的背包格子 → 已穿装备栏 → 可用的切换箭头。W/S 走格只看 _slots。
@@ -249,7 +283,7 @@ func _make_equip_slot(slot_type: int) -> Button:
 	return slot
 
 
-## 按当前展示角色刷新 6 个装备栏（换人 / 穿 / 脱都走这里），并重建 _equip_slots 焦点环。
+## 按当前展示角色刷新 8 个装备栏（换人 / 穿 / 脱都走这里），并重建 _equip_slots 焦点环。
 func _refresh_equip_slots() -> void:
 	_equip_slots.clear()
 	for container in [left_slots, right_slots]:
@@ -290,10 +324,11 @@ func _refresh_equip_slot(slot: Button, slot_type: int) -> void:
 	slot.focus_mode = Control.FOCUS_ALL if _slot_focus_enabled else Control.FOCUS_NONE
 	slot.tooltip_text = ""      # 有属性卡就不再设原生 tooltip，免得两个框叠一起
 	var tier_color: Color = Global.TIER_COLORS.get(item.item_tier, Color(1, 1, 1, 0.4))
-	slot.add_theme_stylebox_override("normal", _slot_style(tier_color, Color(1, 1, 1, 0.07), bottom_margin))
-	slot.add_theme_stylebox_override("hover", _slot_style(tier_color, Color(1, 1, 1, 0.18), bottom_margin))
-	slot.add_theme_stylebox_override("focus", _slot_style(Color(1, 0.9, 0.5, 1.0), Color(1, 1, 1, 0.18), bottom_margin))
-	slot.add_theme_stylebox_override("pressed", _slot_style(Color(1, 0.9, 0.5, 1.0), Color(1, 1, 1, 0.24), bottom_margin))
+	# 底色也跟品质走（和背包方格、商人货架同一套）
+	slot.add_theme_stylebox_override("normal", _slot_style(tier_color, _tier_bg(tier_color, 0.30), bottom_margin))
+	slot.add_theme_stylebox_override("hover", _slot_style(tier_color, _tier_bg(tier_color, 0.48), bottom_margin))
+	slot.add_theme_stylebox_override("focus", _slot_style(Color(1, 0.9, 0.5, 1.0), _tier_bg(tier_color, 0.42), bottom_margin))
+	slot.add_theme_stylebox_override("pressed", _slot_style(Color(1, 0.9, 0.5, 1.0), _tier_bg(tier_color, 0.55), bottom_margin))
 	if tag != null:
 		_set_tag_bottom(tag)
 		tag.modulate = Color(1, 1, 1, 0.85)
@@ -378,6 +413,205 @@ func _step_player(step: int) -> void:
 	TooltipManager.hide_tip()      # 换人了，上一位角色的属性卡不该留在屏幕上
 	# 通知 WorldMap：让并排的角色属性面板也切到同一个人
 	character_view_changed.emit(current_character())
+
+
+# ── 全队头像选择器 ──
+
+## 点形象框 → 弹出/收起全队头像选择器。
+## 键盘聚焦在形象框上时，Enter / 空格 / E 同样能弹出（见 _unhandled_input）。
+func _on_player_frame_input(event: InputEvent) -> void:
+	if event is InputEventMouseButton and event.pressed \
+			and (event as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT:
+		if _picker != null and _picker.visible:
+			_close_picker()
+		else:
+			_open_picker()
+		accept_event()
+
+
+## 形象框获得/失去键盘焦点：描一圈金边，让玩家看得到光标停在这儿。
+func _on_player_frame_focus(focused: bool) -> void:
+	if player_frame == null:
+		return
+	if focused:
+		var style: StyleBoxFlat = null
+		if _frame_base_style is StyleBoxFlat:
+			style = (_frame_base_style as StyleBoxFlat).duplicate() as StyleBoxFlat
+		else:
+			style = StyleBoxFlat.new()
+		style.border_color = Color(1.0, 0.84, 0.42, 1.0)
+		style.set_border_width_all(3)
+		player_frame.add_theme_stylebox_override("panel", style)
+	elif _frame_base_style != null:
+		player_frame.add_theme_stylebox_override("panel", _frame_base_style)
+
+
+## 造（只造一次）选择器：一个居中的面板 + 一排人像格。
+## 用代码建而不是写进 .tscn，是为了让"队伍有几个人就排几个"完全跟着 _party 走。
+func _ensure_picker() -> void:
+	if _picker != null:
+		return
+	_picker = PanelContainer.new()
+	_picker.name = "CharacterPicker"
+	_picker.visible = false
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.043, 0.047, 0.067, 0.985)
+	style.border_color = Color(0.639, 0.518, 0.286, 1.0)
+	style.set_border_width_all(2)
+	style.set_corner_radius_all(12)
+	style.content_margin_left = 14
+	style.content_margin_right = 14
+	style.content_margin_top = 12
+	style.content_margin_bottom = 12
+	_picker.add_theme_stylebox_override("panel", style)
+	_picker_grid = GridContainer.new()
+	_picker_grid.name = "PickerGrid"
+	_picker_grid.columns = 5
+	_picker_grid.add_theme_constant_override("h_separation", 10)
+	_picker_grid.add_theme_constant_override("v_separation", 10)
+	_picker.add_child(_picker_grid)
+	add_child(_picker)
+
+
+## 打开选择器：按团队顺序铺头像，当前角色高亮。
+## 位置：贴在**角色形象框正下方**，水平与形象框居中对齐（不是屏幕中央）。
+func _open_picker() -> void:
+	if _party.size() <= 1:
+		return                       # 只有一个人，没什么可选的
+	_ensure_picker()
+	for child in _picker_grid.get_children():
+		_picker_grid.remove_child(child)
+		child.queue_free()
+	var current := current_character()
+	var focus_index := _view_index if _view_index >= 0 and _view_index < _party.size() else 0
+	for i in _party.size():
+		var slot := _make_picker_slot(i, _party[i], _party[i] == current)
+		_picker_grid.add_child(slot)
+		if i == focus_index:
+			_picker_focus_target = slot
+	_picker.reset_size()
+	_place_picker_below_frame()
+	_link_picker_focus()
+	# 选择器开着时：焦点锁在人像格子里，方向键不会跑到背包方格上
+	set_slot_focus_enabled(false)
+	_picker.show()
+	# grab_focus 对隐藏控件无效，必须 show() 之后再抓
+	if _picker_focus_target != null and is_instance_valid(_picker_focus_target):
+		_picker_focus_target.grab_focus()
+	TooltipManager.hide_tip()
+
+
+## 把选择器摆到角色形象框正下方：水平与形象框居中，下方空间不够就翻到形象框上方。
+## 最后再夹进窗口，避免贴边时被切掉。
+func _place_picker_below_frame() -> void:
+	var view := get_viewport_rect().size
+	var gap := 8.0
+	if player_frame == null:
+		_picker.global_position = ((view - _picker.size) * 0.5).floor()
+		return
+	var frame_rect := player_frame.get_global_rect()
+	var x := frame_rect.position.x + (frame_rect.size.x - _picker.size.x) * 0.5
+	var y := frame_rect.end.y + gap
+	# 下方放不下就翻到形象框上方
+	if y + _picker.size.y > view.y - gap:
+		y = frame_rect.position.y - _picker.size.y - gap
+	x = clampf(x, gap, maxf(gap, view.x - _picker.size.x - gap))
+	y = clampf(y, gap, maxf(gap, view.y - _picker.size.y - gap))
+	_picker.global_position = Vector2(x, y).floor()
+
+
+## 把选择器里所有格子连成左右闭环、上下指回自己：
+## 团队最多 5 人刚好一行，所以左右循环就够，上下不往外跳。
+func _link_picker_focus() -> void:
+	var slots: Array[Button] = []
+	for child in _picker_grid.get_children():
+		if child is Button:
+			slots.append(child as Button)
+	var n := slots.size()
+	if n == 0:
+		return
+	for i in n:
+		var slot := slots[i]
+		slot.focus_neighbor_left = slot.get_path_to(slots[(i - 1 + n) % n])
+		slot.focus_neighbor_right = slot.get_path_to(slots[(i + 1) % n])
+		slot.focus_neighbor_top = slot.get_path_to(slot)
+		slot.focus_neighbor_bottom = slot.get_path_to(slot)
+
+
+## 一格人像：头像 + 名字，当前角色描金边。点击切过去。
+func _make_picker_slot(index: int, stats: UnitStats, is_current: bool) -> Button:
+	var button := Button.new()
+	button.name = "PickerSlot_%d" % index
+	button.custom_minimum_size = Vector2(PICKER_SLOT_SIZE, PICKER_SLOT_SIZE + 24.0)
+	button.toggle_mode = false
+	button.focus_mode = Control.FOCUS_ALL
+	button.tooltip_text = stats.name
+	button.add_theme_stylebox_override("normal",
+			_equip_slot_style(PICKER_BG, PICKER_BORDER, 2 if is_current else 1))
+	button.add_theme_stylebox_override("hover", _equip_slot_style(PICKER_BG_HOVER, PICKER_BORDER_HOVER, 2))
+	button.add_theme_stylebox_override("pressed", _equip_slot_style(PICKER_BG_HOVER, PICKER_BORDER_HOVER, 2))
+	button.add_theme_stylebox_override("focus", _equip_slot_style(PICKER_BG_HOVER, PICKER_BORDER_HOVER, 2))
+	button.pressed.connect(_pick_character.bind(index))
+
+	var icon := TextureRect.new()
+	icon.name = "Icon"
+	icon.texture = stats.portrait if stats.portrait != null else stats.icon
+	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	icon.set_anchors_preset(Control.PRESET_FULL_RECT)
+	icon.offset_left = 6
+	icon.offset_top = 6
+	icon.offset_right = -6
+	icon.offset_bottom = -24
+	button.add_child(icon)
+
+	var label := Label.new()
+	label.name = "Name"
+	label.text = stats.name
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	label.add_theme_font_size_override("font_size", 14)
+	label.add_theme_color_override("font_color",
+			PICKER_BORDER_HOVER if is_current else PICKER_TEXT)
+	label.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+	label.offset_top = -22
+	label.offset_bottom = -2
+	button.add_child(label)
+	return button
+
+
+## 选了某个人像：切过去、收起选择器、通知 WorldMap 让属性面板跟上。
+func _pick_character(index: int) -> void:
+	_close_picker()
+	if index < 0 or index >= _party.size() or index == _view_index:
+		_focus_player_frame()
+		return
+	_view_index = index
+	SoundManager.play_sound(SoundManager.Sound.UI)
+	_refresh_player_view()
+	_refresh_equip_slots()
+	TooltipManager.hide_tip()
+	character_view_changed.emit(current_character())
+	# ⚠ 必须最后再抓一次焦点：_refresh_equip_slots() 会重建装备栏，
+	#   刚被销毁的节点上挂着焦点，重建后焦点就悬空了（表现就是"切换后失焦"）。
+	_focus_player_frame()
+
+
+## 把键盘焦点放回角色形象框 —— 选择器关掉之后光标应该回到这里，
+## 按 Enter 可以再次弹出选择器，而不是掉到不知道哪儿去。
+func _focus_player_frame() -> void:
+	if player_frame != null and is_instance_valid(player_frame) and player_frame.is_visible_in_tree():
+		player_frame.grab_focus()
+
+
+func _close_picker() -> void:
+	if _picker != null:
+		_picker.hide()
+	# 选择器关了，背包方格恢复可聚焦（键盘还能继续挑装备）
+	set_slot_focus_enabled(true)
+	# 光标回到角色形象框：不管是通过选中角色还是 Esc 退出，都不该失焦
+	_focus_player_frame()
 
 
 ## 当前主角在名册里的下标；不在名册时返回 0（展示第一个人）。
@@ -493,10 +727,13 @@ func _make_slot(item: ItemBase) -> Button:
 	slot.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	# 描边颜色跟稀有度走（TIER_COLORS 是 Global 上的共享常量，只读不改）
 	var tier_color: Color = Global.TIER_COLORS.get(item.item_tier, Color(1, 1, 1, 0.4))
-	slot.add_theme_stylebox_override("normal", _slot_style(tier_color, Color(1, 1, 1, 0.05)))
-	slot.add_theme_stylebox_override("hover", _slot_style(tier_color, Color(1, 1, 1, 0.16)))
-	slot.add_theme_stylebox_override("focus", _slot_style(Color(1, 0.9, 0.5, 1.0), Color(1, 1, 1, 0.18)))
-	slot.add_theme_stylebox_override("pressed", _slot_style(Color(1, 0.9, 0.5, 1.0), Color(1, 1, 1, 0.24)))
+	# 底色也跟品质走：同一色相、极低透明度，既不抢图标又能分辨档次
+	var tier_bg := _tier_bg(tier_color, 0.30)
+	var tier_bg_hover := _tier_bg(tier_color, 0.48)
+	slot.add_theme_stylebox_override("normal", _slot_style(tier_color, tier_bg))
+	slot.add_theme_stylebox_override("hover", _slot_style(tier_color, tier_bg_hover))
+	slot.add_theme_stylebox_override("focus", _slot_style(Color(1, 0.9, 0.5, 1.0), _tier_bg(tier_color, 0.42)))
+	slot.add_theme_stylebox_override("pressed", _slot_style(Color(1, 0.9, 0.5, 1.0), _tier_bg(tier_color, 0.55)))
 
 	# 悬停 / 键盘焦点都弹同一张属性卡（TooltipManager 会把卡片锚到这个格子的右上角）
 	slot.mouse_entered.connect(TooltipManager.show_for_control.bind(slot, item))
@@ -530,14 +767,34 @@ func _slot_style(border: Color, bg: Color, bottom_margin := SLOT_ICON_MARGIN) ->
 	return style
 
 
+## 头像选择器方格样式（可选描边宽度，用来把"当前角色"框加粗）。
+func _equip_slot_style(bg: Color, border: Color, width := 1) -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	style.bg_color = bg
+	style.border_color = border
+	style.set_border_width_all(width)
+	style.set_corner_radius_all(10)
+	return style
+
+
 func _emit_close() -> void:
 	close_requested.emit()
 
 
 ## W A S D 在方格上移动焦点（方向键交给 Godot 的几何导航）。
 ## 实现在 Global.grid_nav()，与商人货架共用；WorldMap 的线性焦点环在方格上会斜着走。
+## 选择器开着时先处理 Esc（只收选择器）；形象框聚焦时 Enter/空格/E 弹选择器。
 func _unhandled_input(event: InputEvent) -> void:
 	if not visible:
+		return
+	if _picker != null and _picker.visible and event.is_action_pressed("ui_cancel"):
+		_close_picker()
+		get_viewport().set_input_as_handled()
+		return
+	# 焦点在形象框上：交互键 = 打开选择器
+	if player_frame != null and player_frame.has_focus() and Global.is_interact_event(event):
+		_open_picker()
+		get_viewport().set_input_as_handled()
 		return
 	Global.grid_nav(event, self)
 
@@ -547,3 +804,58 @@ func _default_character() -> UnitStats:
 	if not _party.is_empty() and _party[0] != null:
 		return _party[0]
 	return Global.main_player_selected
+
+
+# ── 弹窗消息（和地图提示 / 团队面板 / 商人面板共用 UiToast 那一套）──
+
+## 推一条提示；HOLD 秒后淡出释放。可以分多条（用换行分隔）。
+func show_message(text: String) -> void:
+	if toast_stack == null:
+		return
+	if text.strip_edges().is_empty():
+		return
+	for line in text.split("\n"):
+		var one := line.strip_edges()
+		if not one.is_empty():
+			_add_toast_line(one)
+
+
+func _add_toast_line(text: String) -> void:
+	var box := UiToast.make_box(text)
+	toast_stack.add_child(box)
+	_layout_toast_stack()
+	await get_tree().create_timer(UiToast.HOLD).timeout
+	if not is_instance_valid(box):
+		return
+	var tween := create_tween()
+	tween.tween_property(box, "modulate:a", 0.0, UiToast.FADE)
+	await tween.finished
+	if is_instance_valid(box):
+		box.queue_free()
+		_layout_toast_stack.call_deferred()
+
+
+## 屏幕中央、整体上移 150px —— 和其他三处提示同一个落点。
+func _layout_toast_stack() -> void:
+	if toast_stack == null:
+		return
+	toast_stack.offset_left = -UiToast.WIDTH * 0.5
+	toast_stack.offset_right = UiToast.WIDTH * 0.5
+	toast_stack.offset_top = -TOAST_RISE
+	toast_stack.offset_bottom = toast_stack.get_combined_minimum_size().y - TOAST_RISE
+
+
+## 清掉还在的提示（关面板时调）。
+func clear_message() -> void:
+	if toast_stack == null:
+		return
+	for child in toast_stack.get_children():
+		child.queue_free()
+	_layout_toast_stack.call_deferred()
+
+
+## 品质底色：取品质色的色相，把明度压暗、透明度压到 alpha，得到一个淡淡的染色底。
+## 普通（白）没有配色，会走调用方的兜底色，不会调用本函数。
+func _tier_bg(color: Color, alpha: float) -> Color:
+	var c := Color(color.r, color.g, color.b, 1.0)
+	return Color(c.r * 0.7, c.g * 0.7, c.b * 0.7, alpha)

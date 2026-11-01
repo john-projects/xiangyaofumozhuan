@@ -24,3 +24,4 @@ hit_effect_per_target = false
 hit_effect_center = false
 screen_effect_scene = ExtResource("9_seq")
 burst_scale = 1.4
+instant_hit = true

@@ -1,0 +1,52 @@
+[
+  {
+    "frame": 1,
+    "path": "C:\\Users\\yong\\.codex\\generated_images\\01a16d36-5f3e-7863-bc2d-2fc8f4b7d970\\exec-07d16330-6c33-4ef1-9276-013a591232ac.png",
+    "prompt": "Use case: precise-object-edit. Create animation frame 1/10 from the reference. Keep same 16:9 canvas, 1920x1080, locked camera. No text, labels, panels. TEMPORAL STATE: Opening black frame. Remove ALL flowers, ribbons, mist, particles and central star. Entire canvas absolutely uniform RGB 0 black. This blank exposure is intentional for a seamless loop. Keep exact same 16:9 canvas."
+  },
+  {
+    "frame": 2,
+    "path": "C:\\Users\\yong\\.codex\\generated_images\\01a16d36-5f3e-7863-bc2d-2fc8f4b7d970\\exec-46f18540-e22e-433a-9271-b16ff2eae9f7.png",
+    "prompt": "Use case: precise-object-edit. Create independent animation frame 2/10 by editing the supplied reference. The reference is frame 6. Preserve exact canvas, fixed camera, spatial composition, visual style and palette. No text, labels, panels, weapons, swords, straight beams, ground or environment. Pure black background. Output one single 1920x1080 16:9 frame. TEMPORAL STATE: Early gathering. Remove all three flowers and all three long ribbons. Only a tiny dim white star at exact center remains with a small delicate inward curling cloud-white mist vortex within 8% of canvas width around it. The rest is pure black. Very sparse inward gathering white pinpricks, no rings."
+  },
+  {
+    "frame": 3,
+    "path": "C:\\Users\\yong\\.codex\\generated_images\\01a16d36-5f3e-7863-bc2d-2fc8f4b7d970\\exec-4626c895-4309-44d6-be41-07c8db9037c6.png",
+    "prompt": "Use case: precise-object-edit. Create independent animation frame 3/10 by editing the supplied reference. The reference is frame 6. Preserve exact canvas, fixed camera, spatial composition, visual style and palette. No text, labels, panels, weapons, swords, straight beams, ground or environment. Pure black background. Output one single 1920x1080 16:9 frame. TEMPORAL STATE: Drawing out qi. Remove all three flowers and all endpoint mist. Three extremely thin translucent soft S-shaped ribbons have been drawn only one third of the distance from center to the fixed future flower positions. Their tips curl softly, no rigid points. Keep center star, localized source mist and tiny pink-white falling points. Overall slender, delicate, mostly black."
+  },
+  {
+    "frame": 4,
+    "path": "C:\\Users\\yong\\.codex\\generated_images\\01a16d36-5f3e-7863-bc2d-2fc8f4b7d970\\exec-c61a3096-c42f-44e3-85ff-3398c31a7ec6.png",
+    "prompt": "Use case: precise-object-edit. Create independent animation frame 4/10 by editing the supplied reference. The reference is frame 6. Preserve exact canvas, fixed camera, spatial composition, visual style and palette. No text, labels, panels, weapons, swords, straight beams, ground or environment. Pure black background. Output one single 1920x1080 16:9 frame. TEMPORAL STATE: Three long delicate S-shaped qi ribbons now gently reach the exact three original flower positions. Replace each flower with only a small closed lotus-pink bud, about 20% of original flower size, gently emerging from local white mist. No open petals yet. Source star remains. Keep ribbon paths close to reference but with subtle waviness."
+  },
+  {
+    "frame": 5,
+    "path": "C:\\Users\\yong\\.codex\\generated_images\\01a16d36-5f3e-7863-bc2d-2fc8f4b7d970\\exec-0cb5011a-4b74-4a54-bd05-2fe2f8188853.png",
+    "prompt": "Use case: precise-object-edit. Create independent animation frame 5/10 by editing the supplied reference. Reference is frame 6. Preserve exact canvas, fixed camera, exact flower positions, composition, petal details, style and palette. No text, labels, panels, weapons, swords, straight beams, ground or environment. Pure black background. Output single 1920x1080 16:9 frame. TEMPORAL STATE: Three lotus buds at identical centers slowly start unfurling their first outer petal layer. Flowers are 40% open and approximately 65% of reference size. Preserve ribbon paths and star position. Tiny dewdrops and soft watery petal edges, sparse falling pink-white points. Gentle growth, no explosions."
+  },
+  {
+    "frame": 6,
+    "path": "C:\\Users\\yong\\.codex\\generated_images\\01a16d36-5f3e-7863-bc2d-2fc8f4b7d970\\exec-d88a4d35-30d9-4e0c-b9e8-0b2024c7eb9a.png",
+    "prompt": "Use case: stylized-concept. Asset: a single 1920x1080 landscape animation keyframe, 16:9, frame 6 of a coherent 10-frame Chinese xianxia qi invocation VFX cycle. Pure black RGB 0 background and negative space, clean additive compositing, fixed orthographic camera. NO TEXT. Composition: tiny cold white star at exact center (50%,50%), sole magic source, no hands. Three delicate hair-thin translucent ethereal silk ribbons drawn slowly out of this star meander in beautiful S-shaped curves toward three fixed lotus sites at (25%,58%), (75%,58%), (50%,27%). Ribbons are cloudy white and pale jade, softer than silk, never straight, never weapon-like. Three pale lotus-pink flowers are 70% open at the sites, petals delicately unfolding in several layers from buds, translucent watery petal edges, tiny dew highlights, one tiny glass-gold dot in each heart. A few pink-white light motes fall along the ribbons. Only localized very sparse white mist around flowers and source, no broad grey fog. Refined painterly high-end game VFX, exquisite soft pink petal details, clean glow, ethereal restrained elegance. Everything fully inside frame with generous black margins. No swords, blades, sword shadows, sword filaments, weapons, hard-edged beams, straight trails, blasts, explosions, shockwave rings, scattering petals, fire, lightning, orange-red light. No people, faces, fingers, hands, characters, ground, horizon, environment, buildings, logo, watermark, captions, borders, panel divisions. A single full-size frame, not a contact sheet. All later frames must preserve these exact spatial anchors."
+  },
+  {
+    "frame": 7,
+    "path": "C:\\Users\\yong\\.codex\\generated_images\\01a16d36-5f3e-7863-bc2d-2fc8f4b7d970\\exec-208c6b7d-7b6c-4d6c-a1db-b04ba2940e48.png",
+    "prompt": "Use case: precise-object-edit. Create independent animation frame 7/10 by editing the supplied reference. Reference is frame 6. Preserve exact canvas, fixed camera, exact flower positions, composition, petal details, style and palette. No text, labels, panels, weapons, swords, straight beams, ground or environment. Pure black background. Output single 1920x1080 16:9 frame. TEMPORAL STATE: Three lotus flowers at identical centers are fully bloomed, 10% broader than reference, no change to flower positions. Thin curved ribbons are starting to dissolve at half their former brightness; central star dims slightly. Glass gold only tiny points in flower hearts. Preserve pure black background and soft translucent pink-white petals."
+  },
+  {
+    "frame": 8,
+    "path": "C:\\Users\\yong\\.codex\\generated_images\\01a16d36-5f3e-7863-bc2d-2fc8f4b7d970\\exec-67f6de5d-c98f-4cb6-977f-af6f9696bf9c.png",
+    "prompt": "Use case: precise-object-edit. Create independent animation frame 8/10 by editing the supplied reference. Reference is frame 6. Preserve exact canvas, fixed camera, exact flower positions, composition, petal details, style and palette. No text, labels, panels, weapons, swords, straight beams, ground or environment. Pure black background. Output single 1920x1080 16:9 frame. TEMPORAL STATE: Dissolving. Keep three flowers at exact centers but make their upper petals softly disappear into localized pink-white drifting mist; approximately half of each flower remains visible. All connecting qi ribbons now extremely faint ghostly curved traces. Central star almost gone. Soft sparse mist rises vertically. No detached flying petals, no explosion."
+  },
+  {
+    "frame": 9,
+    "path": "C:\\Users\\yong\\.codex\\generated_images\\01a16d36-5f3e-7863-bc2d-2fc8f4b7d970\\exec-b5cf2748-aebc-4c32-bdd5-fe1fd207a96a.png",
+    "prompt": "Use case: precise-object-edit. Create animation frame 9/10 from the reference. Keep same 16:9 canvas, 1920x1080, locked camera. No text, labels, panels. TEMPORAL STATE: Near-black end. Remove all solid lotus petals, buds and ribbons and the source star. Only three VERY faint small tufts of pink-white luminous mist lingering just above original flower centers, softly drifting upward, with a few dim specks. At least 95% of frame pure black, no broad haze."
+  },
+  {
+    "frame": 10,
+    "path": "C:\\Users\\yong\\.codex\\generated_images\\01a16d36-5f3e-7863-bc2d-2fc8f4b7d970\\exec-9c7099fa-e229-4f80-9e50-d11d238afee4.png",
+    "prompt": "Use case: precise-object-edit. Create animation frame 10/10 from the reference. Keep same 16:9 canvas, 1920x1080, locked camera. No text, labels, panels. TEMPORAL STATE: Final black frame. Remove ALL flowers, ribbons, mist, particles and central star. Entire canvas absolutely uniform RGB 0 black. This blank exposure is intentional for a seamless loop. Keep exact same 16:9 canvas."
+  }
+]

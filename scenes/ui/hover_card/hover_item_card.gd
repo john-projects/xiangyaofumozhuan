@@ -46,7 +46,7 @@ class_name HoverItemCard
 ## ── 节点引用 ──────────────────────────────────────────────────────────────
 @onready var item_icon: TextureRect = %ItemIcon
 @onready var item_name: Label = %ItemName
-@onready var item_type: Label = %ItemType
+@onready var item_type: RichTextLabel = %ItemType
 @onready var item_desc: RichTextLabel = %ItemDesc
 
 ## item 的 setter：把道具数据灌进卡片。
@@ -71,18 +71,35 @@ func _set_item(value: ItemBase) -> void:
 		return
 	item_icon.texture = value.item_icon
 	item_name.text = value.item_name
+	# 装备名按品质上色（原来是单独一行「品质：橙色品质」，太占地方）
+	item_name.add_theme_color_override("font_color", ItemBase.tier_color(int(value.item_tier)))
 	# 枚举转名字：ItemType 是 WEAPON=0 / UPGRADE=1 / PASSIVE=2，keys() 拿到成员名数组再按下标取，
 	# 所以卡上显示的是 "WEAPON" 这样的英文枚举名，而不是数字。
 	# ⚠ 下标存在 .tres 里，枚举成员顺序一改，所有旧资源都会静默错位显示。
-	# 类型行用中文名（"装备"/"武器"/"被动"…），以前直接显示枚举名，卡片上会出现 "EQUIPMENT"。
-	# ⚠ 下标存在 .tres 里，枚举成员顺序一改，所有旧资源都会静默错位显示。
-	item_type.text = ItemBase.item_type_name(value.item_type)
+	var slot_type: int = value.get_equip_type()
+	if slot_type != ItemBase.EquipType.NONE:
+		var shown := ItemBase.equip_type_name(slot_type)
+		# 武器再细分到具体类型（剑/刀/扇/枪/杖/爪），玩家一眼知道谁能用
+		if slot_type == ItemBase.EquipType.WEAPON:
+			var eq := value as ItemEquipment
+			if eq != null:
+				var detail := ItemEquipment.weapon_type_name(eq.weapon_type)
+				if not detail.is_empty():
+					shown = detail
+		# 三行一起塞进 ItemType：部位 / 装备条件 / 装备角色
+		var tl: Array[String] = []
+		tl.append("[color=#a89678]【部位】[/color]%s" % shown)
+		if value is ItemEquipment:
+			var e := value as ItemEquipment
+			tl.append("[color=#a89678]【装备条件】[/color]等级 %d" % e.req_level)
+			if not e.req_characters.is_empty():
+				tl.append("[color=#a89678]【装备角色】[/color][color=#7fd6a0]%s[/color]" % e.req_characters)
+		item_type.text = "\n".join(tl)
+	else:
+		item_type.text = "[color=#a89678]【%s】[/color]" % ItemBase.item_type_name(value.item_type)
 	# 能装备的话把栏位也带上（"WEAPON · 武器栏"），玩家才知道这件东西点一下能穿、穿到哪个格子
 	# （见 ItemBase.EquipType）。用短名而不是"可装备到「武器」栏"：这行标签只有 90px 宽，
 	# 长文案会溢出卡片右边缘（.tscn 里也把它的 offset_right 放宽了）。
-	var slot_type: int = value.get_equip_type()
-	if slot_type != ItemBase.EquipType.NONE:
-		item_type.text += " · %s栏" % ItemBase.equip_type_name(slot_type)
 	item_desc.text = value.get_description()
 	
 	# 按稀有度换面板描边（"panel" 是 Panel 控件的主题项名；Button 类要覆盖 "normal"）

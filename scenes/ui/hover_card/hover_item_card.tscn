@@ -7,7 +7,7 @@
 bg_color = Color(0.29411766, 0.29411766, 0.29411766, 0.78431374)
 
 [node name="HoverItemCard" type="Panel" unique_id=1756811679]
-custom_minimum_size = Vector2(320, 400)
+custom_minimum_size = Vector2(370, 600)
 offset_right = 40.0
 offset_bottom = 40.0
 theme_override_styles/panel = ExtResource("1_t8nmi")
@@ -28,46 +28,53 @@ theme_override_constants/margin_bottom = 16
 [node name="Control" type="Control" parent="MarginContainer" unique_id=2009563611]
 layout_mode = 2
 
-[node name="IconBG" type="Panel" parent="MarginContainer/Control" unique_id=2075341514]
-custom_minimum_size = Vector2(100, 100)
-layout_mode = 1
-anchors_preset = -1
-anchor_right = 0.3472222
-anchor_bottom = 0.27173913
-theme_override_styles/panel = SubResource("StyleBoxFlat_pi0uk")
-
 [node name="ItemIcon" type="TextureRect" parent="MarginContainer/Control" unique_id=1712908623]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(100, 100)
+custom_minimum_size = Vector2(104, 104)
 layout_mode = 0
-offset_right = 40.0
-offset_bottom = 40.0
+offset_left = 0.0
+offset_top = 6.0
+offset_right = 104.0
+offset_bottom = 110.0
 expand_mode = 1
 stretch_mode = 5
+
 
 [node name="ItemName" type="Label" parent="MarginContainer/Control" unique_id=557080037]
 unique_name_in_owner = true
 layout_mode = 0
-offset_left = 120.0
-offset_right = 210.0
-offset_bottom = 20.0
+offset_left = 112.0
+offset_top = 2.0
+offset_right = 336.0
+offset_bottom = 40.0
+theme_override_colors/font_outline_color = Color(0.06, 0.04, 0.02, 0.95)
+theme_override_constants/outline_size = 4
+theme_override_font_sizes/font_size = 24
 text = "item name"
 
-[node name="ItemType" type="Label" parent="MarginContainer/Control" unique_id=301180157]
+
+[node name="ItemType" type="RichTextLabel" parent="MarginContainer/Control" unique_id=301180157]
 unique_name_in_owner = true
 layout_mode = 0
-offset_left = 120.0
-offset_top = 30.0
-offset_right = 288.0
-offset_bottom = 50.0
-text = "item type"
+offset_left = 112.0
+offset_top = 44.0
+offset_right = 336.0
+offset_bottom = 122.0
+mouse_filter = 2
+bbcode_enabled = true
+scroll_active = false
+theme_override_font_sizes/normal_font_size = 16
+text = "【部位】"
+
 
 [node name="ItemDesc" type="RichTextLabel" parent="MarginContainer/Control" unique_id=1506487696]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(290, 190)
+custom_minimum_size = Vector2(338, 420)
 layout_mode = 0
-offset_top = 120.0
-offset_right = 290.0
-offset_bottom = 370.0
+offset_left = 0.0
+offset_top = 128.0
+offset_right = 338.0
+offset_bottom = 548.0
 bbcode_enabled = true
 text = "desc"
+

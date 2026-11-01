@@ -145,8 +145,9 @@ var _base_scale := Vector2.ONE
 var body_center_offset := 0.0
 ## 8 方位帧动画控制器。只有 UnitStats.anim_dir 非空的角色才有，否则为 null（走静态贴图）。
 var _anim: CharAnim2D = null
-## 实时 3D 头像（3D-in-2D）。只有 UnitStats.model_glb 非空的角色才有，优先级最高。
-var _model3d: Model3DAvatar = null
+## 2D 骨骼角色（剪纸动画）。只有 UnitStats.rig_scene 非空的角色才有；
+## 优先级低于 3D 模型、高于 8 方位帧动画和静态立绘。
+var _rig: Node2D = null
 
 # ── 节点引用（%Xxx = unique_name_in_owner，改层级也不失效）──
 # 这些 @onready 在 _ready() 之前赋值；_refresh_* 依赖它们，所以 setup() 必须在 add_child() 之后调。
@@ -288,25 +289,27 @@ func _setup_anim() -> void:
 	_anim.play("idle", BATTLE_FACING_PLAYER if is_player else BATTLE_FACING_ENEMY)
 
 
-## 建实时 3D 头像（只在 stats.model_glb 非空时）。优先级高于帧动画和静态贴图。
-## 战斗里朝向固定：3D 模型和帧动画共用同一组斜向朝向常量。
-func _setup_model3d() -> void:
-	if _model3d != null:
+## 2D 骨骼角色：实例化 rig 场景，按战斗显示高度缩放，静态立绘让位。
+## rig 场景的原点在脚底、总高 670，所以缩放 = UNIT_DISPLAY_HEIGHT / 670。
+## 动画由 rig 自带的 AnimationPlayer 播（idle/walk/attack/cast）。
+func _setup_rig() -> void:
+	if stats == null or stats.rig_scene.is_empty():
 		return
-	if stats == null or stats.model_glb.is_empty():
+	var ps := load(stats.rig_scene) as PackedScene
+	if ps == null:
 		return
-	var av := Model3DAvatar.new()
-	av.name = "Model3D"
-	add_child(av)
-	if not av.setup(stats.model_glb, UNIT_DISPLAY_HEIGHT, true):
-		av.queue_free()
+	var node := ps.instantiate() as Node2D
+	if node == null:
 		return
-	_model3d = av
-	_model3d.set_weapon(stats.weapon_visual if is_player else null)
+	node.name = "Rig"
+	add_child(node)
+	node.scale = Vector2.ONE * (UNIT_DISPLAY_HEIGHT / 670.0)
+	# 我方朝右、敌方朝左（和 2D 立绘的翻转规则保持一致）
+	node.scale.x *= 1.0 if is_player else -1.0
+	if not is_player:
+		node.position.x = 0.0
+	_rig = node
 	sprite.visible = false
-	# 保持与 2D 帧动画一致：我方朝左上，敌方朝右下。
-	_model3d.face_dir(BATTLE_FACING_PLAYER if is_player else BATTLE_FACING_ENEMY)
-	_model3d.play("idle", 0.0)
 
 
 ## 帧动画换帧钩子：以前用来同步"描边"的 region；高亮改成脚下光环后不再需要，
@@ -316,9 +319,9 @@ func _on_anim_frame() -> void:
 
 
 func _refresh_visuals() -> void:
-	# 优先级：实时 3D 模型 > 8 方位帧动画 > 静态立绘
-	_setup_model3d()
-	if _model3d == null:
+	# 优先级：2D 骨骼角色 > 8 方位帧动画 > 静态立绘
+	_setup_rig()
+	if _rig == null:
 		_setup_anim()
 		if _anim == null:
 			sprite.texture = stats.icon
@@ -326,20 +329,15 @@ func _refresh_visuals() -> void:
 	# 脚锚定：Sprite2D 居中绘制贴图，offset 上移半个高度后底边正好落在 y=0
 	var tex_h := 0.0
 	var head := 0.0
-	if _model3d != null:
-		# 3D 头像自己按 UNIT_DISPLAY_HEIGHT 算缩放，这里只用它来排头顶 UI。
-		tex_h = UNIT_DISPLAY_HEIGHT
-		head = -tex_h
-	else:
-		if sprite.texture != null:
-			tex_h = float(sprite.texture.get_height())
-			# 按贴图高度反推缩放：不管立绘是 150px（老的蛋形头像）还是 320px（新立绘），
-			# 显示出来都是 UNIT_DISPLAY_HEIGHT 这么高。这样提高素材分辨率只会更清晰，
-			# 不会让单位变大，也不会影响还没换图的敌人。
-			var s := UNIT_DISPLAY_HEIGHT / tex_h
-			sprite.scale = Vector2(s, s)
-			_base_scale = sprite.scale          # play_cast() 涨大后要回到这个基准
-			sprite.offset = Vector2(0.0, -tex_h * 0.5)
+	if sprite.texture != null:
+		tex_h = float(sprite.texture.get_height())
+		# 按贴图高度反推缩放：不管立绘是 150px（老的蛋形头像）还是 320px（新立绘），
+		# 显示出来都是 UNIT_DISPLAY_HEIGHT 这么高。这样提高素材分辨率只会更清晰，
+		# 不会让单位变大，也不会影响还没换图的敌人。
+		var s := UNIT_DISPLAY_HEIGHT / tex_h
+		sprite.scale = Vector2(s, s)
+		_base_scale = sprite.scale          # play_cast() 涨大后要回到这个基准
+		sprite.offset = Vector2(0.0, -tex_h * 0.5)
 		head = -tex_h * sprite.scale.y          # 头顶（负值 = 向上）
 	body_center_offset = head * 0.5              # 身体中心（飘字/弹道落点都瞄这里）
 	# 头顶信息块：从头顶往上依次是 蓝条 / 血条 / 名字，整块都在角色头顶之上。
@@ -357,9 +355,9 @@ func _refresh_visuals() -> void:
 	health_bar.offset_bottom = hp_bottom
 	name_label.offset_top = name_top
 	name_label.offset_bottom = name_bottom
-	# 静态立绘（没有 8 方位帧动画、也没有 3D 模型）才补程序化空闲动作。
+	# 静态立绘（没有 8 方位帧动画、也没有骨骼角色）才补程序化空闲动作。
 	# 有帧动画的单位自带 idle，再叠一层会打架。
-	if _anim == null and _model3d == null:
+	if _anim == null and _rig == null:
 		_start_idle_motion()
 	# 名字紧贴血条顶边（标签框比文字高，居中的话会空出一截，看着像"名字飘太高"）。
 	name_label.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
@@ -432,25 +430,42 @@ func roll_turn_speed() -> float:
 	return round_speed
 
 
-## 防御减伤曲线的常数：减伤率 = 防御 / (防御 + DEF_SOFT)，防越高收益越平缓。
-## 梦幻西游里这条是 [攻 − 防×K2]×K3 的攻防差公式；我们的数值小（攻 9 / 防 18），
-## 直接相减会变成"全部打 1 血"，所以换成等价意图的百分比曲线。
-const DEF_SOFT := 60.0
+## 伤害曲线的三个常数，照梦幻西游的「攻防差 + 上下限保底」：
+##   ① 减法：原始伤害 − 防御（法系用法防）
+##   ② 浮动 ±10%
+##   ③ 保底：至少打出「本次原始伤害」的 10% —— 防御再高也打得动
+##      封顶：最多打出 95% —— 防御再低也不会一击秒
+const DAMAGE_SWING := 0.10
+const DAMAGE_FLOOR := 0.10
+const DAMAGE_CAP := 0.95
 
 
 ## 扣血（战斗里唯一的伤害入口，普攻和技能最后都走这里）。
-## 公式：最终伤害 = max(1, 伤害 × (1 − 防护/(防护+60)) − 格挡值)（防御姿态再 ×0.5）
-##   · 参数 magic = true 时防护用 `spell_defense`（法防），否则用 `defense`（物理防御）
-##   · 格挡值：**最后一步固定减法**（不乘任何系数），所以对高频低伤特别有效
+## 公式（梦幻西游口径的攻防差 + 上下限保底）：
+##   ① final = amount − 防护              （参数 magic = true 时用 spell_defense，否则 defense）
+##   ② final ×= randf(0.9, 1.1)           （±10% 浮动）
+##   ③ final = clamp(final, amount×0.10, amount×0.95)
+##       保底 10%：对方防御堆到再高，也至少吃 10% 伤害 → 不存在"完全打不动"
+##       封顶 95%：防御为 0 也不会一击秒 → 高攻仍有意义但不是绝对
+##   ④ final −= 格挡值，再 max(1)         （格挡是**最后一步固定减法**，不参与保底/封顶，
+##                                          所以它对"高频低伤"特别有效，和梦幻一致）
+##   ⑤ 防御姿态 final ×= 0.5
 ## 返回值：实际扣掉的血量（Battle 用它飘伤害数字，避免显示未减伤的值）。
 ## 副作用：改 hp、_refresh_hp()；归零调 _die()。已死单位直接 return 0（防鞭尸/重复 _die()）。
 func take_damage(amount: float, magic := false) -> float:
 	if not alive:
 		return 0.0
 	var guard := float(stats.spell_defense) if magic else float(stats.defense)
-	var def_ratio := guard / (guard + DEF_SOFT)
-	var final := maxf(1.0, amount * (1.0 - def_ratio))
+	# ① 攻防差
+	var final := amount - guard
+	# ② 浮动
+	final *= randf_range(1.0 - DAMAGE_SWING, 1.0 + DAMAGE_SWING)
+	# ③ 保底 / 封顶（相对本次原始伤害，也就是出手强度）
+	final = maxf(final, amount * DAMAGE_FLOOR)
+	final = minf(final, amount * DAMAGE_CAP)
+	# ④ 格挡值：固定减法，放在保底之后
 	final = maxf(1.0, final - float(stats.block_value))
+	# ⑤ 防御姿态
 	if defending:
 		final = maxf(1.0, final * 0.5)
 	hp = maxf(0.0, hp - final)
@@ -502,9 +517,6 @@ func _die() -> void:
 	if _idle_tween != null and _idle_tween.is_valid():
 		_idle_tween.kill()
 
-	# 3D 模型如果配了 dead 动作就先播它（有就播，没有拉倒）
-	if _model3d != null:
-		_model3d.play_once("dead")
 	# 两种死法：
 	#   怪物 —— 不倒、不留尸体，直接淡出（战场干净，也不挡后面的人）
 	#   人物 —— 快速隐去身体，由 Battle 在原地补一团幽火（见 _on_unit_died）
@@ -851,29 +863,11 @@ func attack_approach(target: BattleUnit) -> void:
 	var t := clampf(dist / ATTACK_DASH_SPEED, ATTACK_DASH_MIN, ATTACK_DASH_MAX)
 	var tween := create_tween()
 	tween.tween_property(self, "position", to, t)
-	if _model3d != null:
-		_model3d.face_from_vector(to - position)
-		_model3d.play("run")
 	await tween.finished
-	if _model3d != null:
-		_model3d.face_from_vector(target.global_position - global_position)
-		_model3d.play("idle")
 
 
 ## 普攻第二段：出招（播 attack 动作并等它播完）。近战门派技能不需要它 —— 那些有自己的特效。
 func attack_swing(on_impact: Callable = Callable()) -> void:
-	if _model3d != null:
-		var duration := _model3d.play_once("attack", 0.04)
-		if duration > 0.0:
-			await get_tree().create_timer(duration * 0.44).timeout
-			if on_impact.is_valid():
-				on_impact.call()
-			await get_tree().create_timer(duration * 0.56).timeout
-		else:
-			if on_impact.is_valid():
-				on_impact.call()
-			await _procedural_swing()
-		return
 	if on_impact.is_valid():
 		on_impact.call()
 	if _anim != null:
@@ -889,9 +883,9 @@ func attack_swing(on_impact: Callable = Callable()) -> void:
 	await _procedural_swing()
 
 
-## 程序化反馈作用于当前可见的形象；3D 模式的原 Sprite 已隐藏。
+## 程序化反馈作用于当前可见的形象。
 func _visual_body() -> Node2D:
-	return _model3d if _model3d != null else sprite
+	return sprite
 
 
 ## 缺少攻击剪辑时，蓄力后仰 → 突刺前倾 → 回正。
@@ -899,7 +893,7 @@ func _procedural_swing() -> void:
 	var body := _visual_body()
 	if body == null:
 		return
-	var rest_scale := Vector2.ONE if _model3d != null else _base_scale
+	var rest_scale := _base_scale
 	var sx := rest_scale.x
 	var sy := rest_scale.y
 	var tween := create_tween()
@@ -952,14 +946,8 @@ func attack_return(from_position: Vector2) -> void:
 	var dist := (position - from_position).length()
 	var t := clampf(dist / ATTACK_DASH_SPEED, ATTACK_DASH_MIN, ATTACK_DASH_MAX)
 	var tween := create_tween()
-	if _model3d != null:
-		_model3d.face_from_vector(from_position - position)
-		_model3d.play("run")
 	tween.tween_property(self, "position", from_position, t)
 	await tween.finished
-	if _model3d != null:
-		_model3d.face_dir(BATTLE_FACING_PLAYER if is_player else BATTLE_FACING_ENEMY)
-		_model3d.play("idle")
 	z_index = _z_before
 
 
@@ -974,12 +962,10 @@ func attack_finish(from_position: Vector2) -> void:
 ## parallel() 让缩放与染色同时进行；收尾色 DEFEND_TINT if defending else WHITE（防御中施法保持淡蓝）。
 func play_cast() -> void:
 	var body := _visual_body()
-	var rest_scale := Vector2.ONE if _model3d != null else _base_scale
+	var rest_scale := _base_scale
 	body.modulate = Color.WHITE
 	# 帧动画：播放施法动作（一次性）。涨大/染色 tween 与它并行，不冲突。
-	if _model3d != null:
-		_model3d.play_once("cast")
-	elif _anim != null:
+	if _anim != null:
 		_anim.play_once("cast")
 	var tween := create_tween()
 	tween.tween_property(body, "scale", rest_scale * 1.14, 0.14)

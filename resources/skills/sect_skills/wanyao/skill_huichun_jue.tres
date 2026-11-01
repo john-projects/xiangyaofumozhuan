@@ -22,3 +22,4 @@ hot_power = 0.35
 tint = Color(0.55, 1, 0.65, 1)
 target_effect_scene = ExtResource("9_seq")
 burst_scale = 1.4
+instant_hit = true

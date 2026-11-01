@@ -1,0 +1,43 @@
+[gd_resource type="Resource" script_class="ItemEquipment" format=3]
+
+[ext_resource type="Texture2D" path="res://assets/sprites/equipment/blade/blade_10.png" id="1_icon"]
+[ext_resource type="Script" path="res://resources/items/equipment/item_equipment.gd" id="2_script"]
+
+[resource]
+script = ExtResource("2_script")
+item_flavor = "北斗垂下来的星光照了百年，帝紫金与星曜石一层层叠成，据说只在帝阙里出过；刀身带弧，刀背厚实，劈下去只听见风断。"
+item_name = "紫微北辰刀"
+item_icon = ExtResource("1_icon")
+item_tier = 2
+item_type = 3
+req_level = 90
+req_characters = "厉狂澜"
+item_cost = 12800
+weapon_type = 2
+equip_type = 2
+attack = 459
+defense = 0
+health = 0
+mana = 0
+speed = 0
+spell_damage = 459
+spell_defense = 0
+attr_con = 0
+attr_mag = 5
+attr_str = 0
+attr_end = 5
+attr_agi = 0
+crit_chance = 0.0
+crit_damage_bonus = 0.0
+dodge = 0
+block_value = 0
+crit_resist = 0.0
+crit_damage_resist = 0.0
+seal_hit = 10.0
+seal_resist = 0.0
+healing = 0
+health_pct = 0.0
+defense_pct = 0.0
+speed_pct = 0.0
+physical_pct = 0.0
+spell_pct = 0.0

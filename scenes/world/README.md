@@ -61,11 +61,12 @@ WorldMap (Node2D, y_sort_enabled = true)   [world_map.gd]
   文字取 `Global.main_player_selected.name`。因为它是 `Player` 的子节点，走动时自动跟着走，不用每帧同步。
 - **上阵队友**：`_rebuild_companions()` 给 `deployed` 里除队长外的每个人生成一个 `Companion` 节点
   （Shadow + Sprite2D + 名字 Label，立绘用各自的 `UnitStats.icon`，缩放 1.3 和玩家一致）。
-- **3D-in-2D**：`UnitStats.model_glb` 非空就用 `Model3DAvatar`（实时 3D 模型渲染进 SubViewport 再贴回 2D），
-  2D 立绘自动隐藏；六个玩家角色现在都配了 `res://assets/models/players/<角色名>.glb`，
-  队长和跟随者、以及战斗单位共用同一套优先级：**model_glb > anim_dir > icon**。
+- **2D 骨骼角色**：`UnitStats.rig_scene` 非空就实例化骨骼场景（`scenes/characters/rig_<角色名>.tscn`，
+  由 `Skeleton2D`/`Node2D` 关节 + 每个部件一张 `Sprite2D` 组成，自带 idle/walk/attack/cast），
+  2D 立绘自动隐藏。目前只有**陆孤鸣**配了。
+  优先级：**rig_scene > anim_dir > icon**（3D 模型方案已移除）。
 - **跟随方式**：队长每走 **2px** 就往"面包屑轨迹" `_trail` 头部插一个点（`_update_trail()`）；
-  第 i 个队友的目标是轨迹里第 `i × 32` 个点（= 身后约 64px/人，3D 头像比像素小人宽所以间隔放大），再用
+  第 i 个队友的目标是轨迹里第 `i × 32` 个点（= 身后约 64px/人，骨骼角色比像素小人宽所以间隔放大），再用
   `1 - exp(-12 × delta)` 插值挪过去（`_update_companions()`）——
   拐弯时队友是沿着队长**走过的路**跟过来，不会斜穿墙角，也不会几个小人叠在一起。
 - **队友也会转向**：`_update_companions()` 每帧算出位移，3D 头像用 `face_from_vector(位移)` 转模型

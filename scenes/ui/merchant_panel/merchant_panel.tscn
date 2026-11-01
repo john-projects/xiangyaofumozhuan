@@ -1,4 +1,4 @@
-[gd_scene load_steps=4 format=3]
+[gd_scene load_steps=9 format=3]
 
 [ext_resource type="Script" path="res://scenes/ui/merchant_panel/merchant_panel.gd" id="1_merchant"]
 
@@ -25,6 +25,86 @@ corner_radius_top_left = 12
 corner_radius_top_right = 12
 corner_radius_bottom_right = 12
 corner_radius_bottom_left = 12
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_tab_normal"]
+content_margin_left = 14.0
+content_margin_top = 2.0
+content_margin_right = 14.0
+content_margin_bottom = 2.0
+bg_color = Color(1, 1, 1, 0.045)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.545, 0.463, 0.294, 0.45)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_tab_hover"]
+content_margin_left = 14.0
+content_margin_top = 2.0
+content_margin_right = 14.0
+content_margin_bottom = 2.0
+bg_color = Color(0.639, 0.518, 0.286, 0.18)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.851, 0.706, 0.4, 0.85)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_tab_pressed"]
+content_margin_left = 14.0
+content_margin_top = 2.0
+content_margin_right = 14.0
+content_margin_bottom = 2.0
+bg_color = Color(0.639, 0.518, 0.286, 0.3)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(1, 0.855, 0.502, 1)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_tab_focus"]
+content_margin_left = 14.0
+content_margin_top = 2.0
+content_margin_right = 14.0
+content_margin_bottom = 2.0
+bg_color = Color(0.639, 0.518, 0.286, 0.24)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(1, 0.918, 0.667, 1)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+expand_margin_left = 1.0
+expand_margin_top = 1.0
+expand_margin_right = 1.0
+expand_margin_bottom = 1.0
+
+[sub_resource type="Theme" id="Theme_tabs"]
+Button/colors/font_color = Color(0.816, 0.784, 0.71, 1)
+Button/colors/font_focus_color = Color(1, 0.918, 0.667, 1)
+Button/colors/font_hover_color = Color(1, 0.898, 0.627, 1)
+Button/colors/font_pressed_color = Color(1, 0.949, 0.788, 1)
+Button/font_sizes/font_size = 17
+Button/styles/focus = SubResource("StyleBoxFlat_tab_focus")
+Button/styles/hover = SubResource("StyleBoxFlat_tab_hover")
+Button/styles/hover_pressed = SubResource("StyleBoxFlat_tab_pressed")
+Button/styles/normal = SubResource("StyleBoxFlat_tab_normal")
+Button/styles/pressed = SubResource("StyleBoxFlat_tab_pressed")
 
 [node name="MerchantPanel" type="Control"]
 anchors_preset = 15
@@ -61,7 +141,7 @@ theme_override_constants/margin_bottom = 16
 
 [node name="VBox" type="VBoxContainer" parent="Panel/Margin"]
 layout_mode = 2
-theme_override_constants/separation = 8
+theme_override_constants/separation = 4
 
 [node name="TitleLabel" type="Label" parent="Panel/Margin/VBox"]
 unique_name_in_owner = true
@@ -70,13 +150,39 @@ theme_override_font_sizes/font_size = 26
 text = "商人"
 horizontal_alignment = 1
 
-[node name="MessageLabel" type="Label" parent="Panel/Margin/VBox"]
+
+
+
+[node name="Tabs" type="HBoxContainer" parent="Panel/Margin/VBox"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 26)
 layout_mode = 2
-theme_override_font_sizes/font_size = 18
-horizontal_alignment = 1
-modulate = Color(1, 0.9, 0.55, 1)
+theme = SubResource("Theme_tabs")
+theme_override_constants/separation = 8
+alignment = 0
+
+[node name="RuleRow" type="Control" parent="Panel/Margin/VBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 2)
+layout_mode = 2
+mouse_filter = 2
+
+[node name="LineLeft" type="Line2D" parent="Panel/Margin/VBox/RuleRow"]
+unique_name_in_owner = true
+width = 3.0
+default_color = Color(1, 0.855, 0.502, 1)
+joint_mode = 2
+begin_cap_mode = 2
+end_cap_mode = 2
+antialiased = true
+
+[node name="LineRight" type="Line2D" parent="Panel/Margin/VBox/RuleRow"]
+unique_name_in_owner = true
+width = 3.0
+default_color = Color(1, 0.855, 0.502, 1)
+joint_mode = 2
+begin_cap_mode = 2
+end_cap_mode = 2
+antialiased = true
 
 [node name="Scroll" type="ScrollContainer" parent="Panel/Margin/VBox"]
 unique_name_in_owner = true
@@ -93,6 +199,23 @@ layout_mode = 2
 theme_override_constants/h_separation = 10
 theme_override_constants/v_separation = 10
 columns = 6
+
+[node name="ToastStack" type="VBoxContainer" parent="."]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -360.0
+offset_top = -150.0
+offset_right = 360.0
+offset_bottom = -150.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+theme_override_constants/separation = 8
 
 [node name="ConfirmBox" type="Panel" parent="."]
 unique_name_in_owner = true
