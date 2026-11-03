@@ -54,18 +54,16 @@ enum Race {
 @export var avatar: Texture2D
 ## 形象立绘（可选，竖版全身图）。战斗外的人物面板优先用它，没有则退回 icon。
 @export var portrait: Texture2D
+## 2D 骨骼场景路径（可选）。填了就用「骨骼角色」代替静态立绘。
+## 骨骼角色是 Skeleton2D + Bone2D + 烘焙好的 AnimationPlayer（idle/walk/attack/cast）。
+## 优先级：rig_scene > anim_dir > icon。
+@export var rig_scene: String = ""
 ## 动作帧目录（可选）。填了就用这套 8 方位帧动画代替静态 icon：
 ## 目录下应有 idle_<方位>.png / run_<方位>.png / attack_<方位>.png / cast_<方位>.png，
 ## 每张是横向序列帧条带（帧宽 384、高 576）。方位共 8 个：
 ## down / down_right / right / up_right / up / up_left / left / down_left。
 ## 留空 = 继续用静态 icon（敌人和还没做动画的角色都是这样）。
 @export var anim_dir: String = ""
-## 2D 骨骼场景路径（可选）。填了就用「骨骼角色」代替静态立绘：
-##   res://scenes/characters/rig_<角色名>.tscn
-## 骨骼角色自带 idle / walk / attack / cast 四条动画（由 rig_player.gd 在运行时生成）。
-## 优先级：rig_scene > anim_dir > icon。
-@export var rig_scene: String = ""
-
 ## 战斗副本的武器外观快照，由 GameRoot 从原角色装备栏写入。
 ## duplicate() 后 resource_path 为空，不能拿副本重新查原角色的装备。
 var weapon_visual: ItemEquipment = null

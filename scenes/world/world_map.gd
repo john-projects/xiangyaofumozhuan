@@ -1,4 +1,4 @@
-# WorldMap —— 可探索的世界地图屏幕：一张地图 = 一个"关卡外景"（scenes/world/world_map.tscn 的根脚本）。
+﻿# WorldMap —— 可探索的世界地图屏幕：一张地图 = 一个"关卡外景"（scenes/world/world_map.tscn 的根脚本）。
 # 职责：按 MapData 摆出地图/玩家/NPC；每帧驱动走动与最近 NPC 判定；NPC 对话面板与传送/招募/拜师按钮；
 #       把界面动作翻译成 signal 交给 GameRoot。
 # 约定：本节点是 Node2D 不是 Control，UI 全在子 CanvasLayer(UI) 下；setup() 先于 add_child，只存数据，
@@ -331,18 +331,26 @@ func _ready() -> void:
 	# 没有（敌人、还没做动画的角色）则完全走原来的静态贴图逻辑。
 	var stats := _leader_stats()
 	_player_anim = null
-	_player_rig = null
-	# 优先级：2D 骨骼角色（剪纸动画） > 8 方位帧动画 > 静态立绘
+	# 2D 骨骼角色（Skeleton2D + 烘焙动画）
 	if stats != null and not stats.rig_scene.is_empty():
 		var rig_ps := load(stats.rig_scene) as PackedScene
 		if rig_ps != null:
 			var rig_node := rig_ps.instantiate() as Node2D
 			rig_node.name = "Rig"
 			player.add_child(rig_node)
-			# 骨骼场景高 670（脚底原点），归一到地图角色高度
-			rig_node.scale = Vector2.ONE * (_unit_height() / 670.0)
+			# 用 rig 自己量出来的高度归一，换角色/换拆件都不用改这里
+			rig_node.call("reset_to_origin")
+			var h: float = rig_node.call("design_height")
+			rig_node.scale = Vector2.ONE * (_unit_height() / h)
+			rig_node.call("play", "idle")
 			_player_rig = rig_node
 			player_sprite.visible = false
+			# 换地图会重建整张 WorldMap，这里必须重新挂一次当前武器
+			# （_refresh_weapon_visuals 只在背包换装备时被调用，重建时不会触发）
+			var eq_weapon: ItemEquipment = null
+			if stats != null:
+				eq_weapon = GameRoot.equipment_in(stats, ItemBase.EquipType.WEAPON)
+			rig_node.call("set_from_equipment", eq_weapon)
 	if _player_rig == null and stats != null and not stats.anim_dir.is_empty():
 		var anim := CharAnim2D.new()
 		anim.name = "CharAnim"
@@ -353,7 +361,7 @@ func _ready() -> void:
 		else:
 			anim.queue_free()
 	var icon := _player_icon()
-	if _player_anim == null and _player_rig == null:
+	if _player_anim == null:
 		player_sprite.texture = icon
 	# 分辨率归一：显示高度恒等于 MAP_UNIT_HEIGHT，与贴图分辨率无关。
 	# 动画模式下取的是条带图高度（480），region 高度一致，所以同一套公式照样成立。
@@ -363,7 +371,7 @@ func _ready() -> void:
 		if denom > 0.0:
 			player_sprite.scale = Vector2.ONE * (_unit_height() / denom)
 		_anchor_sprite_feet(player_sprite)     # 脚底落到原点（阴影就在脚下）
-	player_fallback.visible = icon == null and _player_anim == null and _player_rig == null
+	player_fallback.visible = icon == null and _player_anim == null
 	player.position = _world_pos(_spawn_normalized())
 	_style_party_shadow(player.get_node("Shadow") as Polygon2D)
 	_leader_key = GameRoot.character_key(_leader_stats())
@@ -728,6 +736,8 @@ func _move_player(delta: float) -> void:
 	var dir := _read_move_input()
 	_is_moving = dir != Vector2.ZERO
 	if dir == Vector2.ZERO:
+		if _player_rig != null:
+			_player_rig.call("play", "idle")
 		if _player_anim != null:
 			_player_anim.play("idle")
 		return
@@ -746,6 +756,8 @@ func _move_player(delta: float) -> void:
 			player.position.y = target.y
 	player.position.x = clampf(player.position.x, EDGE_MARGIN, maxf(EDGE_MARGIN, _map_size.x - EDGE_MARGIN))
 	player.position.y = clampf(player.position.y, EDGE_MARGIN, maxf(EDGE_MARGIN, _map_size.y - EDGE_MARGIN))
+	if _player_rig != null:
+		_player_rig.call("play", "walk")
 	if _player_anim != null:
 		_player_anim.set_facing(_player_anim.facing_from_vector(face_dir))
 		_player_anim.play("run")
@@ -818,17 +830,26 @@ func _refresh_player_avatar() -> void:
 	player_sprite.visible = true
 
 	var stats := _leader_stats()
-	# 优先级：2D 骨骼角色（剪纸动画） > 8 方位帧动画 > 静态立绘
+	# 2D 骨骼角色（Skeleton2D + 烘焙动画）
 	if stats != null and not stats.rig_scene.is_empty():
 		var rig_ps := load(stats.rig_scene) as PackedScene
 		if rig_ps != null:
 			var rig_node := rig_ps.instantiate() as Node2D
 			rig_node.name = "Rig"
 			player.add_child(rig_node)
-			# 骨骼场景高 670（脚底原点），归一到地图角色高度
-			rig_node.scale = Vector2.ONE * (_unit_height() / 670.0)
+			# 用 rig 自己量出来的高度归一，换角色/换拆件都不用改这里
+			rig_node.call("reset_to_origin")
+			var h: float = rig_node.call("design_height")
+			rig_node.scale = Vector2.ONE * (_unit_height() / h)
+			rig_node.call("play", "idle")
 			_player_rig = rig_node
 			player_sprite.visible = false
+			# 换地图会重建整张 WorldMap，这里必须重新挂一次当前武器
+			# （_refresh_weapon_visuals 只在背包换装备时被调用，重建时不会触发）
+			var eq_weapon: ItemEquipment = null
+			if stats != null:
+				eq_weapon = GameRoot.equipment_in(stats, ItemBase.EquipType.WEAPON)
+			rig_node.call("set_from_equipment", eq_weapon)
 	if _player_rig == null and stats != null and not stats.anim_dir.is_empty():
 		var anim := CharAnim2D.new()
 		anim.name = "CharAnim"
@@ -840,7 +861,7 @@ func _refresh_player_avatar() -> void:
 			anim.queue_free()
 
 	var icon := _player_icon()
-	if _player_anim == null and _player_rig == null:
+	if _player_anim == null:
 		player_sprite.texture = icon
 		var tex := player_sprite.texture
 		if tex != null:
@@ -848,7 +869,7 @@ func _refresh_player_avatar() -> void:
 			if denom > 0.0:
 				player_sprite.scale = Vector2.ONE * (_unit_height() / denom)
 			_anchor_sprite_feet(player_sprite)
-	player_fallback.visible = icon == null and _player_anim == null and _player_rig == null
+	player_fallback.visible = icon == null and _player_anim == null
 	_update_leader_name()
 
 
@@ -1514,7 +1535,13 @@ func notify_bag_changed(message := "") -> void:
 
 ## 装备/卸下后就地更新外观，不重建角色，不打断跑步或改变站位。
 func _refresh_weapon_visuals() -> void:
-	pass
+	# 骨骼角色：把当前装备的武器贴图挂到手上（空手时隐藏）
+	if _player_rig != null and is_instance_valid(_player_rig):
+		var leader := _leader_stats()
+		var weapon: ItemEquipment = null
+		if leader != null:
+			weapon = GameRoot.equipment_in(leader, ItemBase.EquipType.WEAPON)
+		_player_rig.call("set_from_equipment", weapon)
 
 
 ## 延迟同步背包焦点环（理由同上）；属性面板也开着时用合并环，否则「＋」会从 W/S 候选里消失。

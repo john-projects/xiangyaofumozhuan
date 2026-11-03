@@ -145,8 +145,7 @@ var _base_scale := Vector2.ONE
 var body_center_offset := 0.0
 ## 8 方位帧动画控制器。只有 UnitStats.anim_dir 非空的角色才有，否则为 null（走静态贴图）。
 var _anim: CharAnim2D = null
-## 2D 骨骼角色（剪纸动画）。只有 UnitStats.rig_scene 非空的角色才有；
-## 优先级低于 3D 模型、高于 8 方位帧动画和静态立绘。
+## 2D 骨骼角色（Skeleton2D + 烘焙动画）
 var _rig: Node2D = null
 
 # ── 节点引用（%Xxx = unique_name_in_owner，改层级也不失效）──
@@ -289,9 +288,13 @@ func _setup_anim() -> void:
 	_anim.play("idle", BATTLE_FACING_PLAYER if is_player else BATTLE_FACING_ENEMY)
 
 
+## 帧动画换帧钩子：以前用来同步"描边"的 region；高亮改成脚下光环后不再需要，
+## 保留空实现只因为 AnimationPlayer/帧动画那边可能连着它（删掉连线会静默断）。
+func _on_anim_frame() -> void:
+	pass
+
+
 ## 2D 骨骼角色：实例化 rig 场景，按战斗显示高度缩放，静态立绘让位。
-## rig 场景的原点在脚底、总高 670，所以缩放 = UNIT_DISPLAY_HEIGHT / 670。
-## 动画由 rig 自带的 AnimationPlayer 播（idle/walk/attack/cast）。
 func _setup_rig() -> void:
 	if stats == null or stats.rig_scene.is_empty():
 		return
@@ -303,19 +306,15 @@ func _setup_rig() -> void:
 		return
 	node.name = "Rig"
 	add_child(node)
-	node.scale = Vector2.ONE * (UNIT_DISPLAY_HEIGHT / 670.0)
-	# 我方朝右、敌方朝左（和 2D 立绘的翻转规则保持一致）
+	node.call("reset_to_origin")
+	# 出场就带上当前装备的武器（敌方不显示武器）
+	node.call("set_from_equipment", stats.weapon_visual if is_player else null)
+	var h: float = node.call("design_height")
+	node.scale = Vector2.ONE * (UNIT_DISPLAY_HEIGHT / h)
 	node.scale.x *= 1.0 if is_player else -1.0
-	if not is_player:
-		node.position.x = 0.0
+	node.call("play", "idle")
 	_rig = node
 	sprite.visible = false
-
-
-## 帧动画换帧钩子：以前用来同步"描边"的 region；高亮改成脚下光环后不再需要，
-## 保留空实现只因为 AnimationPlayer/帧动画那边可能连着它（删掉连线会静默断）。
-func _on_anim_frame() -> void:
-	pass
 
 
 func _refresh_visuals() -> void:
@@ -329,7 +328,12 @@ func _refresh_visuals() -> void:
 	# 脚锚定：Sprite2D 居中绘制贴图，offset 上移半个高度后底边正好落在 y=0
 	var tex_h := 0.0
 	var head := 0.0
-	if sprite.texture != null:
+	if _rig != null:
+		# 骨骼角色：贴图是隐藏的 Sprite2D，按固定显示高度算头顶，
+		# 否则 tex_h 会是 0，血条/名字就贴在脚下了。
+		tex_h = UNIT_DISPLAY_HEIGHT
+		head = -tex_h
+	elif sprite.texture != null:
 		tex_h = float(sprite.texture.get_height())
 		# 按贴图高度反推缩放：不管立绘是 150px（老的蛋形头像）还是 320px（新立绘），
 		# 显示出来都是 UNIT_DISPLAY_HEIGHT 这么高。这样提高素材分辨率只会更清晰，
@@ -355,9 +359,9 @@ func _refresh_visuals() -> void:
 	health_bar.offset_bottom = hp_bottom
 	name_label.offset_top = name_top
 	name_label.offset_bottom = name_bottom
-	# 静态立绘（没有 8 方位帧动画、也没有骨骼角色）才补程序化空闲动作。
+	# 静态立绘（没有 8 方位帧动画）才补程序化空闲动作。
 	# 有帧动画的单位自带 idle，再叠一层会打架。
-	if _anim == null and _rig == null:
+	if _anim == null:
 		_start_idle_motion()
 	# 名字紧贴血条顶边（标签框比文字高，居中的话会空出一截，看着像"名字飘太高"）。
 	name_label.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
@@ -868,6 +872,15 @@ func attack_approach(target: BattleUnit) -> void:
 
 ## 普攻第二段：出招（播 attack 动作并等它播完）。近战门派技能不需要它 —— 那些有自己的特效。
 func attack_swing(on_impact: Callable = Callable()) -> void:
+	# 骨骼角色：播 attack，按动画时长分配"命中"时刻
+	if _rig != null:
+		_rig.call("play", "attack")
+		var dur := 0.55
+		await get_tree().create_timer(dur * 0.45).timeout
+		if on_impact.is_valid():
+			on_impact.call()
+		await get_tree().create_timer(dur * 0.55).timeout
+		return
 	if on_impact.is_valid():
 		on_impact.call()
 	if _anim != null:
@@ -881,6 +894,12 @@ func attack_swing(on_impact: Callable = Callable()) -> void:
 		return
 	# 没有帧动画（怪物 = 静态立绘）：用缩放 + 倾斜演一套"蓄力→突刺→回正"。
 	await _procedural_swing()
+
+
+## 骨骼角色切动作（静止/移动）。其他显示模式下什么都不做。
+func _rig_play(anim_name: String) -> void:
+	if _rig != null:
+		_rig.call("play", anim_name)
 
 
 ## 程序化反馈作用于当前可见的形象。
@@ -965,7 +984,9 @@ func play_cast() -> void:
 	var rest_scale := _base_scale
 	body.modulate = Color.WHITE
 	# 帧动画：播放施法动作（一次性）。涨大/染色 tween 与它并行，不冲突。
-	if _anim != null:
+	if _rig != null:
+		_rig.call("play", "cast")
+	elif _anim != null:
 		_anim.play_once("cast")
 	var tween := create_tween()
 	tween.tween_property(body, "scale", rest_scale * 1.14, 0.14)
