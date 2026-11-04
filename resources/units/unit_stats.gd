@@ -54,10 +54,6 @@ enum Race {
 @export var avatar: Texture2D
 ## 形象立绘（可选，竖版全身图）。战斗外的人物面板优先用它，没有则退回 icon。
 @export var portrait: Texture2D
-## 2D 骨骼场景路径（可选）。填了就用「骨骼角色」代替静态立绘。
-## 骨骼角色是 Skeleton2D + Bone2D + 烘焙好的 AnimationPlayer（idle/walk/attack/cast）。
-## 优先级：rig_scene > anim_dir > icon。
-@export var rig_scene: String = ""
 ## 动作帧目录（可选）。填了就用这套 8 方位帧动画代替静态 icon：
 ## 目录下应有 idle_<方位>.png / run_<方位>.png / attack_<方位>.png / cast_<方位>.png，
 ## 每张是横向序列帧条带（帧宽 384、高 576）。方位共 8 个：

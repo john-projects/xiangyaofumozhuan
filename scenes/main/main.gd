@@ -66,7 +66,7 @@ const DEBUG_BENCHED := "燕如意"
 var _battles_since_elite := 0
 var _elite_next_in := 6
 
-@export var starting_coins := 10000
+@export var starting_coins := 1_000_000
 
 # ── 等级与经验（每个角色各自，满级 100）──
 ## 满级；到顶后经验不再增长（打赢只给金币）。

@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://du3d62ddlyann"
-path="res://.godot/imported/forearm.png-8789c9b8d733bb5e2cc1ea44af0ae5f6.ctex"
+uid="uid://blrgte30k6acn"
+path="res://.godot/imported/spark.png-945799ccf37087af4cfd390037bbf9c3.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/sprites/units/players/parts_v4/陆孤鸣/forearm.png"
-dest_files=["res://.godot/imported/forearm.png-8789c9b8d733bb5e2cc1ea44af0ae5f6.ctex"]
+source_file="res://assets/sprites/effects/spark.png"
+dest_files=["res://.godot/imported/spark.png-945799ccf37087af4cfd390037bbf9c3.ctex"]
 
 [params]
 

@@ -11,6 +11,5 @@ name = "陆孤鸣"
 icon = ExtResource("2_portrait")
 avatar = ExtResource("1_avatar")
 portrait = ExtResource("2_portrait")
-rig_scene = "res://scenes/characters/rig_陆孤鸣_v4.tscn"
 speed = 350.0
 metadata/_custom_type_script = "uid://j6ibt5vlkg3t"

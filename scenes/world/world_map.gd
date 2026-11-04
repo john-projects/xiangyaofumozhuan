@@ -6,8 +6,10 @@
 # 坐标：MapSprite.centered = false，原点在图片左上角，world = normalized * _map_size（图片尺寸 × map_scale）。
 # 坑：运行时 add_child 的 NPC/按钮 owner 为 null，只能自己 queue_free；对话面板按钮每次打开都新建。
 
-extends Node2D
 class_name WorldMap
+extends Node2D
+
+const HeldWeaponFx := preload("res://scenes/characters/held_weapon_fx.gd")
 
 ## 可探索的地图：底图等比放大成世界，玩家自由走动、相机跟随，与 NPC 对话后传送。
 ## 传送双向：哪张图能去哪张由各图 NPC 的 destinations 决定；从 A 到 B 会优先出现在 B 里"指回 A"的 NPC 旁。
@@ -256,7 +258,6 @@ var _stats_panel: StatsPanel
 @onready var player_fallback: Polygon2D = %PlayerFallback
 ## 队长的 8 方位帧动画控制器（只有配了 UnitStats.anim_dir 的角色才有，否则为 null）。
 var _player_anim: CharAnim2D = null
-var _player_rig: Node2D = null
 ## 当前队长的角色键（换队长时用它判断要不要重建地图立绘）。
 var _leader_key := ""
 ## 相机。它是 Player 的**子节点**，所以只要玩家移动，相机天然跟随（省掉每帧同步）。
@@ -331,27 +332,7 @@ func _ready() -> void:
 	# 没有（敌人、还没做动画的角色）则完全走原来的静态贴图逻辑。
 	var stats := _leader_stats()
 	_player_anim = null
-	# 2D 骨骼角色（Skeleton2D + 烘焙动画）
-	if stats != null and not stats.rig_scene.is_empty():
-		var rig_ps := load(stats.rig_scene) as PackedScene
-		if rig_ps != null:
-			var rig_node := rig_ps.instantiate() as Node2D
-			rig_node.name = "Rig"
-			player.add_child(rig_node)
-			# 用 rig 自己量出来的高度归一，换角色/换拆件都不用改这里
-			rig_node.call("reset_to_origin")
-			var h: float = rig_node.call("design_height")
-			rig_node.scale = Vector2.ONE * (_unit_height() / h)
-			rig_node.call("play", "idle")
-			_player_rig = rig_node
-			player_sprite.visible = false
-			# 换地图会重建整张 WorldMap，这里必须重新挂一次当前武器
-			# （_refresh_weapon_visuals 只在背包换装备时被调用，重建时不会触发）
-			var eq_weapon: ItemEquipment = null
-			if stats != null:
-				eq_weapon = GameRoot.equipment_in(stats, ItemBase.EquipType.WEAPON)
-			rig_node.call("set_from_equipment", eq_weapon)
-	if _player_rig == null and stats != null and not stats.anim_dir.is_empty():
+	if stats != null and not stats.anim_dir.is_empty():
 		var anim := CharAnim2D.new()
 		anim.name = "CharAnim"
 		player.add_child(anim)
@@ -371,6 +352,7 @@ func _ready() -> void:
 		if denom > 0.0:
 			player_sprite.scale = Vector2.ONE * (_unit_height() / denom)
 		_anchor_sprite_feet(player_sprite)     # 脚底落到原点（阴影就在脚下）
+	_refresh_weapon_visuals()
 	player_fallback.visible = icon == null and _player_anim == null
 	player.position = _world_pos(_spawn_normalized())
 	_style_party_shadow(player.get_node("Shadow") as Polygon2D)
@@ -736,8 +718,6 @@ func _move_player(delta: float) -> void:
 	var dir := _read_move_input()
 	_is_moving = dir != Vector2.ZERO
 	if dir == Vector2.ZERO:
-		if _player_rig != null:
-			_player_rig.call("play", "idle")
 		if _player_anim != null:
 			_player_anim.play("idle")
 		return
@@ -756,8 +736,6 @@ func _move_player(delta: float) -> void:
 			player.position.y = target.y
 	player.position.x = clampf(player.position.x, EDGE_MARGIN, maxf(EDGE_MARGIN, _map_size.x - EDGE_MARGIN))
 	player.position.y = clampf(player.position.y, EDGE_MARGIN, maxf(EDGE_MARGIN, _map_size.y - EDGE_MARGIN))
-	if _player_rig != null:
-		_player_rig.call("play", "walk")
 	if _player_anim != null:
 		_player_anim.set_facing(_player_anim.facing_from_vector(face_dir))
 		_player_anim.play("run")
@@ -830,27 +808,7 @@ func _refresh_player_avatar() -> void:
 	player_sprite.visible = true
 
 	var stats := _leader_stats()
-	# 2D 骨骼角色（Skeleton2D + 烘焙动画）
-	if stats != null and not stats.rig_scene.is_empty():
-		var rig_ps := load(stats.rig_scene) as PackedScene
-		if rig_ps != null:
-			var rig_node := rig_ps.instantiate() as Node2D
-			rig_node.name = "Rig"
-			player.add_child(rig_node)
-			# 用 rig 自己量出来的高度归一，换角色/换拆件都不用改这里
-			rig_node.call("reset_to_origin")
-			var h: float = rig_node.call("design_height")
-			rig_node.scale = Vector2.ONE * (_unit_height() / h)
-			rig_node.call("play", "idle")
-			_player_rig = rig_node
-			player_sprite.visible = false
-			# 换地图会重建整张 WorldMap，这里必须重新挂一次当前武器
-			# （_refresh_weapon_visuals 只在背包换装备时被调用，重建时不会触发）
-			var eq_weapon: ItemEquipment = null
-			if stats != null:
-				eq_weapon = GameRoot.equipment_in(stats, ItemBase.EquipType.WEAPON)
-			rig_node.call("set_from_equipment", eq_weapon)
-	if _player_rig == null and stats != null and not stats.anim_dir.is_empty():
+	if stats != null and not stats.anim_dir.is_empty():
 		var anim := CharAnim2D.new()
 		anim.name = "CharAnim"
 		player.add_child(anim)
@@ -923,6 +881,40 @@ func _rebuild_companions() -> void:
 		_companions.append(node)
 
 
+## 给某个立绘精灵挂上「手持武器」+ 光效。
+## 队长（PlayerSprite）和队友（Companion/Sprite）共用这一个入口。
+func _attach_held_weapon(body: Sprite2D, stats: UnitStats) -> void:
+	if body == null or stats == null:
+		return
+	# 先清掉旧的，这样重复调用不会叠出一堆武器
+	for c in body.get_children():
+		if c.name == "WeaponPivot":
+			c.queue_free()
+
+	var item = GameRoot.equipment_in(stats, ItemBase.EquipType.WEAPON)
+	if item == null or item.item_icon == null:
+		return
+
+	var pivot := Node2D.new()
+	pivot.name = "WeaponPivot"
+	pivot.position = weapon_hand_offset
+	pivot.rotation = deg_to_rad(weapon_angle_deg)
+	body.add_child(pivot)
+
+	var spr := Sprite2D.new()
+	spr.name = "Weapon"
+	spr.centered = false
+	spr.z_index = 1
+	spr.texture = item.item_icon
+	var k := weapon_scale
+	spr.scale = Vector2(k, k)
+	spr.position = Vector2(-item.item_icon.get_width() * k * 0.5,
+			-item.item_icon.get_height() * k)
+	pivot.add_child(spr)
+
+	HeldWeaponFx.apply(spr, int(item.item_tier))
+
+
 ## 造一个跟随小人：影子 + 立绘 + 名字（结构同 Player，只是不带相机）。
 func _make_companion(stats: UnitStats) -> Node2D:
 	var node := Node2D.new()
@@ -942,6 +934,7 @@ func _make_companion(stats: UnitStats) -> Node2D:
 		sprite.scale = Vector2.ONE * (_unit_height() / float(stats.icon.get_height()))
 	_anchor_sprite_feet(sprite)            # 和玩家一样脚底锚定，否则阴影在腰上
 	node.add_child(sprite)
+	_attach_held_weapon(sprite, stats)     # 队友也拿武器
 	var label := _make_name_plate(node, 16, NAME_COLOR_ALLY, stats)
 	label.text = stats.name
 	return node
@@ -1534,14 +1527,60 @@ func notify_bag_changed(message := "") -> void:
 
 
 ## 装备/卸下后就地更新外观，不重建角色，不打断跑步或改变站位。
+## 手持武器：挂在立绘 Sprite2D 下，坐标用**立绘本地像素**，
+## 所以立绘整体缩放时武器自动跟着走，位置不会跑。
+var _weapon_spr: Sprite2D = null
+var _weapon_pivot: Node2D = null
+## 手持武器在立绘上的位置（相对贴图中心，像素）。
+## 立绘 403x670，手心在贴图像素 (352, 330) → 相对中心 (150, -5)。
+@export var weapon_hand_offset := Vector2(150, -5)
+## 武器倾斜角度（度，正数往右倒）
+@export var weapon_angle_deg := 20.0
+## 武器缩放（256 图标 × 这个值）
+@export var weapon_scale := 2.5
+
+
 func _refresh_weapon_visuals() -> void:
-	# 骨骼角色：把当前装备的武器贴图挂到手上（空手时隐藏）
-	if _player_rig != null and is_instance_valid(_player_rig):
-		var leader := _leader_stats()
-		var weapon: ItemEquipment = null
-		if leader != null:
-			weapon = GameRoot.equipment_in(leader, ItemBase.EquipType.WEAPON)
-		_player_rig.call("set_from_equipment", weapon)
+	var leader := _leader_stats()
+	var item = null
+	if leader != null:
+		item = GameRoot.equipment_in(leader, ItemBase.EquipType.WEAPON)
+	if item == null or item.item_icon == null:
+		if _weapon_spr != null:
+			_weapon_spr.visible = false
+		return
+	# 枢轴放在手心：转枢轴 = 绕握把转，握把永远在手上
+	if _weapon_pivot == null:
+		_weapon_pivot = Node2D.new()
+		_weapon_pivot.name = "WeaponPivot"
+		# 手心在贴图像素 (352, 330)，贴图 403x670 → 相对中心 (150, -5)
+		_weapon_pivot.position = weapon_hand_offset
+		_weapon_pivot.rotation = deg_to_rad(weapon_angle_deg)
+		player_sprite.add_child(_weapon_pivot)
+	if _weapon_spr == null:
+		_weapon_spr = Sprite2D.new()
+		_weapon_spr.name = "Weapon"
+		_weapon_spr.centered = false
+		_weapon_spr.z_index = 1
+		_weapon_pivot.add_child(_weapon_spr)
+	_weapon_spr.texture = item.item_icon
+	# 图标整体上移半个高度 → 握把（底边中点）落在枢轴原点
+	var k := weapon_scale
+	_weapon_spr.scale = Vector2(k, k)
+	_weapon_spr.position = Vector2(-item.item_icon.get_width() * k * 0.5,
+			-item.item_icon.get_height() * k)
+	_weapon_spr.visible = true
+	# 按品质套光效（外发光 + 5 帧光环 + 粒子）
+	HeldWeaponFx.apply(_weapon_spr, int(item.item_tier))
+
+	# 队友的武器也一起刷新（地图上跟着走的那几个小人）
+	for companion in _companions:
+		if not is_instance_valid(companion):
+			continue
+		var body := companion.get_node_or_null("Sprite") as Sprite2D
+		var cs: UnitStats = companion.get_meta("character") if companion.has_meta("character") else null
+		if body != null and cs != null:
+			_attach_held_weapon(body, cs)
 
 
 ## 延迟同步背包焦点环（理由同上）；属性面板也开着时用合并环，否则「＋」会从 W/S 候选里消失。

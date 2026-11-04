@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://sx0qqg8ts133"
-path="res://.godot/imported/body.png-0c0a6d62606238277b83ec1535788cd3.ctex"
+uid="uid://bvnj4o1x5nn1c"
+path="res://.godot/imported/spark_star.png-ed6a87c32c920881800fc20998ece284.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/sprites/units/players/parts_v4/陆孤鸣/body.png"
-dest_files=["res://.godot/imported/body.png-0c0a6d62606238277b83ec1535788cd3.ctex"]
+source_file="res://assets/sprites/effects/spark_star.png"
+dest_files=["res://.godot/imported/spark_star.png-ed6a87c32c920881800fc20998ece284.ctex"]
 
 [params]
 

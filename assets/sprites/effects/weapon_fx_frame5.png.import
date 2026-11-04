@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://dbk751cydqwmo"
-path="res://.godot/imported/upperarm.png-0de19b158d6b1fc553f784a340f8cce4.ctex"
+uid="uid://ywf6nxipopnh"
+path="res://.godot/imported/weapon_fx_frame5.png-2f36a3a5ca108c983c772d4806e7d0f7.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/sprites/units/players/parts_v4/陆孤鸣/upperarm.png"
-dest_files=["res://.godot/imported/upperarm.png-0de19b158d6b1fc553f784a340f8cce4.ctex"]
+source_file="res://assets/sprites/effects/weapon_fx_frame5.png"
+dest_files=["res://.godot/imported/weapon_fx_frame5.png-2f36a3a5ca108c983c772d4806e7d0f7.ctex"]
 
 [params]
 

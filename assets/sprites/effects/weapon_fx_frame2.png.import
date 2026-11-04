@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://cynjtdjqlsef4"
-path="res://.godot/imported/hand.png-fe9bb3af8e125d30cfeb316619a569e3.ctex"
+uid="uid://b2annfjxijl51"
+path="res://.godot/imported/weapon_fx_frame2.png-dd646a2f9c9fe76588000cbb646c62fb.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/sprites/units/players/parts_v4/陆孤鸣/hand.png"
-dest_files=["res://.godot/imported/hand.png-fe9bb3af8e125d30cfeb316619a569e3.ctex"]
+source_file="res://assets/sprites/effects/weapon_fx_frame2.png"
+dest_files=["res://.godot/imported/weapon_fx_frame2.png-dd646a2f9c9fe76588000cbb646c62fb.ctex"]
 
 [params]
 
