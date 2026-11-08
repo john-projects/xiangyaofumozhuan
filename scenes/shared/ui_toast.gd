@@ -39,19 +39,22 @@ static func make_style() -> StyleBoxFlat:
 	return style
 
 
-## 按统一规格配好的文字标签（靠左、自动换行、金色描边字）。
+## 按统一规格配好的文字（靠左、自动换行、支持 [绿色]xxx[/绿色] 多段染色）。
 ## 靠左而不是居中：条宽固定，长短不一的提示居中对齐会参差不齐。
-static func make_label(text: String) -> Label:
-	var label := Label.new()
-	label.text = text
+static func make_label(text: String) -> RichTextLabel:
+	var label := RichTextLabel.new()
+	label.bbcode_enabled = true
+	label.fit_content = true
+	label.scroll_active = false
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	label.add_theme_font_size_override("font_size", FONT_SIZE)
-	label.add_theme_color_override("font_color", TEXT_COLOR)
+	label.custom_minimum_size = Vector2(WIDTH - 24.0, 0)
+	label.add_theme_font_size_override("normal_font_size", FONT_SIZE)
+	label.add_theme_color_override("default_color", TEXT_COLOR)
 	label.add_theme_color_override("font_outline_color", OUTLINE_COLOR)
 	label.add_theme_constant_override("outline_size", OUTLINE_SIZE)
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	label.text = to_bbcode(text)
 	return label
 
 
@@ -83,3 +86,32 @@ static func apply_label_style(label: Label) -> void:
 	label.add_theme_color_override("font_outline_color", OUTLINE_COLOR)
 	label.add_theme_constant_override("outline_size", OUTLINE_SIZE)
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+## 中文颜色标签 → BBCode（和 msg_log.gd 同一套色值）。
+const CN_COLORS := {
+	"绿色": "#6bffc2",
+	"青色": "#8cf2ff",
+	"金色": "#ffdb66",
+	"黄色": "#ffe082",
+	"蓝色": "#6bb8ff",
+	"紫色": "#c285ff",
+	"粉色": "#ff94e0",
+	"橙色": "#ffb852",
+	"红色": "#ff7a6b",
+	"白色": "#e6e8e2",
+	"灰色": "#9aa09a",
+}
+
+
+## 有中文标签就转 BBCode，没有就整条套默认金色。
+static func to_bbcode(text: String) -> String:
+	var out := text
+	var tagged := false
+	for cn in CN_COLORS.keys():
+		if out.contains("[%s]" % cn):
+			tagged = true
+			out = out.replace("[%s]" % cn, "[color=%s]" % CN_COLORS[cn])
+		out = out.replace("[/%s]" % cn, "[/color]")
+	if tagged:
+		return out
+	return "[color=#%s]%s[/color]" % [TEXT_COLOR.to_html(false), text]

@@ -1,4 +1,4 @@
-﻿# WorldMap —— 可探索的世界地图屏幕：一张地图 = 一个"关卡外景"（scenes/world/world_map.tscn 的根脚本）。
+# WorldMap —— 可探索的世界地图屏幕：一张地图 = 一个"关卡外景"（scenes/world/world_map.tscn 的根脚本）。
 # 职责：按 MapData 摆出地图/玩家/NPC；每帧驱动走动与最近 NPC 判定；NPC 对话面板与传送/招募/拜师按钮；
 #       把界面动作翻译成 signal 交给 GameRoot。
 # 约定：本节点是 Node2D 不是 Control，UI 全在子 CanvasLayer(UI) 下；setup() 先于 add_child，只存数据，
@@ -17,16 +17,37 @@ const HeldWeaponFx := preload("res://scenes/characters/held_weapon_fx.gd")
 ##   面板加商店/任务/选项分支。
 
 # ── 对外信号（本文件唯一的输出口，全部由 GameRoot 订阅）──
-## 玩家点「进入战斗」。GameRoot 收到后调 enter_battle()，打哪张图由 current_map_id 决定。
-signal battle_requested
+## 请求进入战斗，并标记本次是否由自动巡逻移动触发。
+signal battle_requested(from_patrol: bool)
 ## 暗雷遭遇：走**动**累计这么多秒后掷一次骰子（每次触发后重新掷一个 interval ± jitter 的值）。
-@export var encounter_interval := 5.0
-## 间隔抖动（秒）。5 ± 2 → 每次 3~7 秒之间随机。
-@export var encounter_jitter := 2.0
+## 调小 = 更频繁；现在是 2.2 秒。
+@export var encounter_interval := 2.2
+## 间隔抖动（秒）。2.2 ± 1.0 → 每次 1.2~3.2 秒之间随机。
+@export var encounter_jitter := 1.0
 ## 掷骰命中率（0~1）。命中即进入战斗，命中后计时清零。
-@export var encounter_chance := 0.7
+## 0.85 = 走几秒基本必打。
+@export var encounter_chance := 0.85
 ## 进图后这么多秒内不判定，防止一落地就被打。
-@export var encounter_grace := 2.0
+@export var encounter_grace := 1.2
+## 停下多少秒内**保留**遇怪进度；超过才开始清空。
+const STOP_KEEP := 3.0
+
+## 自动巡逻：G 键开关。开启后队伍自己在野外乱走，靠现有的暗雷遇怪触发战斗。
+## 左下角消息栏最多保留几条（可以往上滚）。
+@export var msg_log_max := 300
+## 每条消息在消息栏里停留多少秒（0 = 永不消失）。
+@export var msg_log_hold := 12.0
+
+@export var patrol_enabled_by_default := false
+## 巡逻时每隔这么多秒换一次方向（再叠加 ±0.6 抖动）。
+## 巡逻半径（像素）：以出生点为中心，超出就往回走，不会满地图乱跑。
+@export var patrol_radius := 260.0
+## 巡逻时每隔这么多秒换一次方向（再叠加 ±0.6 抖动）。
+@export var patrol_turn_min := 1.0
+@export var patrol_turn_max := 2.6
+## 巡逻提示条的颜色（顶部那个渐变框）。
+@export var patrol_banner_color := Color(0.25, 0.85, 0.75, 0.30)
+
 
 ## 玩家在 NPC 面板里选了目的地。参数是目标地图 id（MapData.id）。
 signal travel_requested(map_id: String)
@@ -75,6 +96,8 @@ const NPC_SCENE := preload("res://scenes/world/world_npc.tscn")
 const PORTAL_SCRIPT := preload("res://scenes/world/world_portal.gd")
 ## 操作菜单（Esc 唤出）。见 scenes/ui/pause_menu/。
 const PAUSE_MENU_SCENE := preload("res://scenes/ui/pause_menu/pause_menu.tscn")
+const AUTO_CAST_PANEL := preload("res://scenes/ui/pause_menu/auto_cast_panel.tscn")
+const MSG_LOG_SCRIPT := preload("res://scenes/shared/msg_log.gd")
 ## 队伍管理二级页（操作菜单 →「队伍管理」）。见 scenes/ui/party_panel/。
 const PARTY_PANEL_SCENE := preload("res://scenes/ui/party_panel/party_panel.tscn")
 ## 商人面板（NPC 交互类型 SELL_WEAPONS，按 E 直接打开）。见 scenes/ui/merchant_panel/。
@@ -166,6 +189,7 @@ var _party: Array[UnitStats] = []
 ## 上阵名单（最多 5 人），GameRoot 在 add_child 之前用 `world.deployed = ...` 注入（引用语义，就地增删可见）。
 ## 本文件只读它来画「上阵/下阵」按钮的状态，从不修改。
 var deployed: Array[UnitStats] = []
+var auto_cast_plan: Dictionary = {}
 
 # ── 队伍立绘：队长名字 + 上阵队友跟随（见 _setup_party_visuals / _rebuild_companions）──
 ## 队长头顶的名字 Label（运行时加到 Player 下面，跟着一起走）。
@@ -201,12 +225,39 @@ var _portals: Array[WorldPortal] = []
 ## 刚抵达后的冷却（秒）：防止一落地就被脚下的光圈弹走。
 var _portal_cooldown := 0.0
 ## 暗雷计时（秒，仅在走动时累加）与宽限期剩余。
+# ── 自动巡逻状态 ──
+## 是否处于自动巡逻中。
+var _patrol_on := false
+## 当前巡逻方向（单位向量）；ZERO = 本帧不走。
+var _patrol_dir := Vector2.ZERO
+## 距离下次换方向还有几秒。
+var _patrol_turn_left := 0.0
+## 巡逻中心（开启巡逻那一刻的位置）。
+var _patrol_anchor := Vector2.ZERO
+## 锚点是否已经记录（开启巡逻后延迟一帧记）。
+var _patrol_anchor_valid := false
+## 连续走不动的累计时间（超过阈值就换方向脱困）。
+var _patrol_stuck := 0.0
+## 巡逻提示条（运行时创建，挂在 UI 层最上面）。
+var _patrol_banner: Control = null
+var _patrol_banner_label: Label = null
+var _patrol_tween: Tween = null
+## 右上角的「开始巡逻 / 停止巡逻」小按钮。
+var _patrol_toggle: Button = null
+
+## 左下角常驻消息栏（共用组件）。
+var _msg_log: MsgLog = null
+
+
+## 已经站住不动多少秒（> STOP_KEEP 才开始清空遇怪进度）。
+var _stop_idle := 0.0
 var _encounter_timer := 0.0
 ## 本轮要累计到多少秒（每次触发后重新掷）。
 var _encounter_target := 5.0
 var _encounter_grace_left := 0.0
 ## 本帧玩家是否在移动（_move_player 里写，_update_encounter 里读）。
 var _is_moving := false
+var _moving_by_patrol := false
 ## 当前高亮的 NPC（离玩家最近且进入 interact_radius 的那个），没有则为 null。
 var _nearest: WorldNPC = null
 ## 对话/传送面板是否打开。为 true 时 _process 不处理走动，避免"一边看对话一边飘走"。
@@ -241,6 +292,7 @@ var _focus_ring: Array[Control] = []
 
 ## 五个 UI 浮层节点（运行时实例化，见 _setup_overlays）。
 var _pause_menu: PauseMenu
+var _auto_cast_panel
 var _party_panel: PartyPanel
 var _merchant_panel: MerchantPanel
 var _bag_panel: BagPanel
@@ -318,6 +370,15 @@ func _ready() -> void:
 	if not _from_map_id.is_empty():
 		_portal_cooldown = 0.8
 	# 暗雷宽限：进图后几秒内不判定遭遇
+	# 恢复上次的巡逻状态（打完战斗回来会重建整张地图）
+	_patrol_on = Global.patrol_on
+	call_deferred("_ensure_patrol_toggle")
+	if _patrol_on:
+		_patrol_anchor_valid = false       # 下一帧由 _update_patrol 记录真正的中心
+		_patrol_dir = _random_patrol_dir()
+		_patrol_turn_left = randf_range(patrol_turn_min, patrol_turn_max)
+		call_deferred("_update_patrol_banner")
+
 	_encounter_grace_left = encounter_grace
 	_encounter_target = maxf(0.5, encounter_interval + randf_range(-encounter_jitter, encounter_jitter))
 
@@ -354,7 +415,7 @@ func _ready() -> void:
 		_anchor_sprite_feet(player_sprite)     # 脚底落到原点（阴影就在脚下）
 	_refresh_weapon_visuals()
 	player_fallback.visible = icon == null and _player_anim == null
-	player.position = _world_pos(_spawn_normalized())
+	player.position = _safe_spawn_position(_world_pos(_spawn_normalized()))
 	_style_party_shadow(player.get_node("Shadow") as Polygon2D)
 	_leader_key = GameRoot.character_key(_leader_stats())
 
@@ -416,6 +477,7 @@ func show_toast(message: String, seconds := TOAST_TIME) -> void:
 		if text.is_empty():
 			continue
 		_add_toast_line(text, seconds)
+		_push_msg_log(text)          # 同时留一条在左下角消息栏
 
 
 ## 加一条弹窗，seconds 秒后淡出移除。
@@ -508,6 +570,53 @@ func _is_walkable(world_pos: Vector2) -> bool:
 	if px.x < 0 or px.y < 0 or px.x >= _walk_image.get_width() or px.y >= _walk_image.get_height():
 		return false
 	return _walk_image.get_pixelv(px).r > 0.5
+
+
+
+## Keep old saved positions and portal arrivals from placing the player on a blocked pixel.
+func _safe_spawn_position(desired: Vector2) -> Vector2:
+	if _walk_image == null or _is_walkable(desired):
+		return desired
+	const SEARCH_STEP := 8.0
+	for ring in range(1, 25):
+		var distance := ring * SEARCH_STEP
+		var samples := ceili(TAU * distance / SEARCH_STEP)
+		for i in range(samples):
+			var candidate := _clamp_to_map(desired + Vector2.from_angle(i * TAU / samples) * distance)
+			if not _is_walkable(candidate):
+				continue
+			var at_portal := false
+			for portal in _map.portals:
+				if portal != null and candidate.distance_to(_world_pos(portal.position)) <= portal.radius + SEARCH_STEP:
+					at_portal = true
+					break
+			if not at_portal:
+				return candidate
+	return _world_pos(_map.spawn_point)
+
+
+func _clamp_to_map(pos: Vector2) -> Vector2:
+	var margin := Vector2.ONE * EDGE_MARGIN
+	return pos.clamp(margin, (_map_size - margin).max(margin))
+
+
+## Check intermediate pixels too, so a long frame or dash cannot skip a narrow barrier.
+func _walk_destination(start: Vector2, motion: Vector2) -> Vector2:
+	if _walk_image == null:
+		return _clamp_to_map(start + motion)
+	var steps := maxi(1, ceili(motion.length() / maxf(_map.map_scale, 0.001)))
+	var step := motion / steps
+	var pos := start
+	for i in range(steps):
+		var target := _clamp_to_map(pos + step)
+		if _is_walkable(target):
+			pos = target
+		else:
+			if _is_walkable(Vector2(target.x, pos.y)):
+				pos.x = target.x
+			if _is_walkable(Vector2(pos.x, target.y)):
+				pos.y = target.y
+	return pos
 
 
 ## 出生点（归一化），优先级：
@@ -658,16 +767,19 @@ func _update_encounter(delta: float) -> void:
 		_encounter_grace_left -= delta
 		return
 	if not _is_moving:
-		# 站着不动：计时慢慢回落（不是立刻清零，免得走一步停一下永远不遇敌）
-		_encounter_timer = maxf(0.0, _encounter_timer - delta * 2.0)
+		# 站着不动：先宽限 STOP_KEEP 秒（保留进度），超过之后才开始快速清空
+		_stop_idle += delta
+		if _stop_idle > STOP_KEEP:
+			_encounter_timer = maxf(0.0, _encounter_timer - delta * 2.5)
 		return
+	_stop_idle = 0.0
 	_encounter_timer += delta
 	if _encounter_timer < _encounter_target:
 		return
 	_encounter_timer = 0.0
 	_encounter_target = maxf(0.5, encounter_interval + randf_range(-encounter_jitter, encounter_jitter))
 	if randf() <= encounter_chance:
-		battle_requested.emit()
+		battle_requested.emit(_moving_by_patrol)
 
 
 ## 每帧找"最近且在 interact_radius 内"的 NPC，维护高亮与底部提示。
@@ -708,6 +820,7 @@ func _process(delta: float) -> void:
 	_update_companions(delta)
 	_update_nearest()
 	_check_portals(delta)
+	_update_patrol(delta)
 	_update_encounter(delta)
 
 
@@ -715,7 +828,11 @@ func _process(delta: float) -> void:
 ## 上界写 maxf(EDGE_MARGIN, size - EDGE_MARGIN)：地图比两倍留白还小时，否则会把玩家拉到图外。
 ## 配了帧动画时改用 8 方位朝向（不再靠 flip_h 镜像），并把动作切成 run / idle。
 func _move_player(delta: float) -> void:
+	# 巡逻中：用巡逻方向顶替玩家输入（没有输入时才算）
 	var dir := _read_move_input()
+	_moving_by_patrol = dir == Vector2.ZERO and _patrol_on
+	if _moving_by_patrol:
+		dir = _patrol_dir
 	_is_moving = dir != Vector2.ZERO
 	if dir == Vector2.ZERO:
 		if _player_anim != null:
@@ -724,18 +841,17 @@ func _move_player(delta: float) -> void:
 	# 贴图朝向：移动仍是 8 向，但只取 4 个斜向（见 FACE_ONLY_DIAGONAL）。
 	var face_dir := _facing_dir(dir)
 	var speed := move_speed * (dash_multiplier if Input.is_action_pressed("dash") else 1.0)
-	# 有 walk_mask 时按掩膜走：整步走不了就分别试 x / y（贴墙滑动，不会整个人卡住）
-	var step := dir * speed * delta
-	var target := player.position + step
-	if _is_walkable(target):
-		player.position = target
-	else:
-		if _is_walkable(Vector2(target.x, player.position.y)):
-			player.position.x = target.x
-		if _is_walkable(Vector2(player.position.x, target.y)):
-			player.position.y = target.y
-	player.position.x = clampf(player.position.x, EDGE_MARGIN, maxf(EDGE_MARGIN, _map_size.x - EDGE_MARGIN))
-	player.position.y = clampf(player.position.y, EDGE_MARGIN, maxf(EDGE_MARGIN, _map_size.y - EDGE_MARGIN))
+	var start := player.position
+	player.position = _walk_destination(start, dir * speed * delta)
+	_is_moving = not player.position.is_equal_approx(start)
+	if _patrol_on:
+		if _is_moving:
+			_patrol_stuck = 0.0
+		else:
+			_patrol_stuck += delta
+			if _patrol_stuck > 0.35:
+				_patrol_bump()      # 撞墙了，换个方向
+				_patrol_stuck = 0.0
 	if _player_anim != null:
 		_player_anim.set_facing(_player_anim.facing_from_vector(face_dir))
 		_player_anim.play("run")
@@ -889,6 +1005,7 @@ func _attach_held_weapon(body: Sprite2D, stats: UnitStats) -> void:
 	# 先清掉旧的，这样重复调用不会叠出一堆武器
 	for c in body.get_children():
 		if c.name == "WeaponPivot":
+			body.remove_child(c)
 			c.queue_free()
 
 	var item = GameRoot.equipment_in(stats, ItemBase.EquipType.WEAPON)
@@ -897,22 +1014,27 @@ func _attach_held_weapon(body: Sprite2D, stats: UnitStats) -> void:
 
 	var pivot := Node2D.new()
 	pivot.name = "WeaponPivot"
-	pivot.position = weapon_hand_offset
-	pivot.rotation = deg_to_rad(weapon_angle_deg)
+	pivot.show_behind_parent = true
+	pivot.position = HeldWeaponFx.weapon_hand_position(body, weapon_hand_offset)
+	pivot.rotation = deg_to_rad(_weapon_angle_for(item))
 	body.add_child(pivot)
 
 	var spr := Sprite2D.new()
 	spr.name = "Weapon"
 	spr.centered = false
-	spr.z_index = 1
-	spr.texture = item.item_icon
-	var k := weapon_scale
+	spr.z_index = 0
+	var tex := HeldWeaponFx.held_texture(item)
+	spr.texture = tex
+	# 长度按「角色立绘高度 × 比例」算（立绘本地像素，不受整体缩放影响）
+	var body_h := float(body.texture.get_height()) if body.texture != null else 670.0
+	var target_h := body_h * HeldWeaponFx.held_ratio(item)
+	var k := target_h / maxf(1.0, float(tex.get_height()))
+	spr.set_meta("target_h", target_h)
 	spr.scale = Vector2(k, k)
-	spr.position = Vector2(-item.item_icon.get_width() * k * 0.5,
-			-item.item_icon.get_height() * k)
+	spr.position = -HeldWeaponFx.HELD_GRIP * k
 	pivot.add_child(spr)
 
-	HeldWeaponFx.apply(spr, int(item.item_tier))
+	HeldWeaponFx.apply(spr, int(item.item_tier), item)
 
 
 ## 造一个跟随小人：影子 + 立绘 + 名字（结构同 Player，只是不带相机）。
@@ -1053,6 +1175,13 @@ func _unhandled_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 		return
 
+	# G：自动巡逻开关（只在地图上、没开面板时有效）
+	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_G:
+		if not _ui_open():
+			toggle_patrol()
+			get_viewport().set_input_as_handled()
+			return
+
 	if _shop_open:
 		# 交易窗口：方格货架的 WASD 交给 MerchantPanel（Global.grid_nav），这里只接 Esc / B / E。
 		# Esc = 先关确认框、再关整个交易；B = 收摊（顺手的背包一起收）；E = 按下焦点那一格。
@@ -1096,6 +1225,15 @@ func _unhandled_input(event: InputEvent) -> void:
 		elif _overlay_nav(event):
 			get_viewport().set_input_as_handled()
 		return
+
+	if _auto_cast_panel != null and _auto_cast_panel.visible:
+		if event.is_action_pressed("ui_cancel"):
+			_back_from_auto_cast_panel()
+			get_viewport().set_input_as_handled()
+		elif _overlay_nav(event):
+			get_viewport().set_input_as_handled()
+		return
+
 
 	if _menu_open:
 		if event.is_action_pressed("ui_cancel"):
@@ -1155,7 +1293,8 @@ func _is_interact_event(event: InputEvent) -> bool:
 
 ## 有没有任何挡住走动的 UI 开着（对话面板 / 菜单 / 队伍 / 商人 / 背包 / 属性）。
 func _ui_open() -> bool:
-	return _panel_open or _menu_open or _party_open or _shop_open or _bag_open or _stats_open
+	return (_panel_open or _menu_open or _party_open or _shop_open or _bag_open or _stats_open
+			or (_auto_cast_panel != null and _auto_cast_panel.visible))
 
 
 ## 实例化五个 UI 浮层并接好信号（_ready 调一次）。挂 UI(CanvasLayer) 下：不随相机、不参与 y_sort。
@@ -1171,6 +1310,11 @@ func _setup_overlays() -> void:
 	_pause_menu.stats_requested.connect(_on_menu_stats_requested)
 	_pause_menu.battle_requested.connect(_on_battle_pressed)
 	_pause_menu.title_requested.connect(_on_back_pressed)
+	_pause_menu.auto_cast_requested.connect(_open_auto_cast_panel)
+	_auto_cast_panel = AUTO_CAST_PANEL.instantiate()
+	ui_layer.add_child(_auto_cast_panel)
+	_auto_cast_panel.back_requested.connect(_back_from_auto_cast_panel)
+	_auto_cast_panel.focusables_changed.connect(func(): _set_focus_ring(_auto_cast_panel.focus_ring(), false))
 
 	_party_panel = PARTY_PANEL_SCENE.instantiate() as PartyPanel
 	ui_layer.add_child(_party_panel)
@@ -1348,6 +1492,18 @@ func _close_pause_menu() -> void:
 	_menu_open = false
 	_pause_menu.hide()
 	_focus_ring.clear()
+
+
+func _open_auto_cast_panel() -> void:
+	_close_pause_menu()
+	_auto_cast_panel.open(deployed, auto_cast_plan)
+	_set_focus_ring(_auto_cast_panel.focus_ring())
+
+
+func _back_from_auto_cast_panel() -> void:
+	_auto_cast_panel.hide()
+	_open_pause_menu()
+
 
 
 ## 打开队伍管理二级页：把操作菜单藏起来（避免两层都亮着），按 _party 与 deployed 重建列表。
@@ -1531,56 +1687,63 @@ func notify_bag_changed(message := "") -> void:
 ## 所以立绘整体缩放时武器自动跟着走，位置不会跑。
 var _weapon_spr: Sprite2D = null
 var _weapon_pivot: Node2D = null
-## 手持武器在立绘上的位置（相对贴图中心，像素）。
-## 立绘 403x670，手心在贴图像素 (352, 330) → 相对中心 (150, -5)。
+## 手持武器在立绘上的位置（立绘本地像素，原点 = 贴图中心）。
+## 立绘 403x670，右手心在贴图像素 (352, 330) → 相对中心 (150, -5)。
+## ⚠ 手持图已经把「握把」对齐到枢轴，所以这里只要填手心位置，不要再加偏移。
 @export var weapon_hand_offset := Vector2(150, -5)
-## 武器倾斜角度（度，正数往右倒）
-@export var weapon_angle_deg := 20.0
+## 武器倾斜角度（度）。正数=向右倒，负数=向左倒。
+## 武器绕**握把**旋转，所以负角度会把刀尖甩到角色左边，看起来像武器在左边。
+@export var weapon_angle_deg := -30.0
 ## 武器缩放（256 图标 × 这个值）
 @export var weapon_scale := 2.5
 
 
 func _refresh_weapon_visuals() -> void:
+	# 地图上的队友独立刷新，不受队长是否有武器影响。
+	for companion in _companions:
+		if not is_instance_valid(companion):
+			continue
+		var companion_body := companion.get_node_or_null("Sprite") as Sprite2D
+		var cs: UnitStats = companion.get_meta("character") if companion.has_meta("character") else null
+		if companion_body != null and cs != null:
+			_attach_held_weapon(companion_body, cs)
 	var leader := _leader_stats()
 	var item = null
 	if leader != null:
 		item = GameRoot.equipment_in(leader, ItemBase.EquipType.WEAPON)
 	if item == null or item.item_icon == null:
-		if _weapon_spr != null:
-			_weapon_spr.visible = false
+		HeldWeaponFx.hide_weapon(_weapon_spr)
 		return
 	# 枢轴放在手心：转枢轴 = 绕握把转，握把永远在手上
 	if _weapon_pivot == null:
 		_weapon_pivot = Node2D.new()
 		_weapon_pivot.name = "WeaponPivot"
 		# 手心在贴图像素 (352, 330)，贴图 403x670 → 相对中心 (150, -5)
-		_weapon_pivot.position = weapon_hand_offset
-		_weapon_pivot.rotation = deg_to_rad(weapon_angle_deg)
 		player_sprite.add_child(_weapon_pivot)
 	if _weapon_spr == null:
 		_weapon_spr = Sprite2D.new()
 		_weapon_spr.name = "Weapon"
 		_weapon_spr.centered = false
-		_weapon_spr.z_index = 1
+		_weapon_spr.z_index = 0
 		_weapon_pivot.add_child(_weapon_spr)
-	_weapon_spr.texture = item.item_icon
-	# 图标整体上移半个高度 → 握把（底边中点）落在枢轴原点
-	var k := weapon_scale
-	_weapon_spr.scale = Vector2(k, k)
-	_weapon_spr.position = Vector2(-item.item_icon.get_width() * k * 0.5,
-			-item.item_icon.get_height() * k)
+	# ⚠ 每次刷新都要重设：枢轴节点是复用的，只在创建时设的话改参数不生效
+	_weapon_pivot.show_behind_parent = true
+	_weapon_pivot.position = HeldWeaponFx.weapon_hand_position(player_sprite, weapon_hand_offset)
+	_weapon_pivot.rotation = deg_to_rad(_weapon_angle_for(item))
+
+	var tex2 := HeldWeaponFx.held_texture(item)
+	_weapon_spr.texture = tex2
+	# 按「手持图的握把点」对位 + 长度 = 立绘高 × 类型比例
+	var body_h2 := float(player_sprite.texture.get_height()) if player_sprite.texture != null else 670.0
+	var th := body_h2 * HeldWeaponFx.held_ratio(item)
+	var kk := th / maxf(1.0, float(tex2.get_height()))
+	_weapon_spr.set_meta("target_h", th)
+	_weapon_spr.scale = Vector2(kk, kk)
+	_weapon_spr.position = -HeldWeaponFx.HELD_GRIP * kk
 	_weapon_spr.visible = true
 	# 按品质套光效（外发光 + 5 帧光环 + 粒子）
-	HeldWeaponFx.apply(_weapon_spr, int(item.item_tier))
+	HeldWeaponFx.apply(_weapon_spr, int(item.item_tier), item)
 
-	# 队友的武器也一起刷新（地图上跟着走的那几个小人）
-	for companion in _companions:
-		if not is_instance_valid(companion):
-			continue
-		var body := companion.get_node_or_null("Sprite") as Sprite2D
-		var cs: UnitStats = companion.get_meta("character") if companion.has_meta("character") else null
-		if body != null and cs != null:
-			_attach_held_weapon(body, cs)
 
 
 ## 延迟同步背包焦点环（理由同上）；属性面板也开着时用合并环，否则「＋」会从 W/S 候选里消失。
@@ -2009,7 +2172,7 @@ func _on_destination_pressed(map_id: String) -> void:
 ## 「进入战斗」：播 UI 音效 + emit battle_requested。
 func _on_battle_pressed() -> void:
 	SoundManager.play_sound(SoundManager.Sound.UI)
-	battle_requested.emit()
+	battle_requested.emit(false)
 
 
 ## 「返回主菜单」：播 UI 音效 + emit back_to_title_requested。
@@ -2025,3 +2188,246 @@ func _debug_print_normalized() -> void:
 		return
 	var normalized := get_global_mouse_position() / _map_size
 	print("[WorldMap] %s 鼠标归一化坐标: Vector2(%.3f, %.3f)" % [_map.display_name, normalized.x, normalized.y])
+
+
+## 按武器类型决定装备时的旋转角。
+## 爪（6）和扇（3）的图标本身就是最终朝向，转了反而歪，所以保持 0°。
+func _weapon_angle_for(item) -> float:
+	if item == null:
+		return weapon_angle_deg
+	var wt := int(item.weapon_type)
+	if wt == 3 or wt == 6:
+		return 0.0
+	return weapon_angle_deg
+
+
+## 按武器类型决定显示倍率。枪更长，单独放大。
+func _weapon_scale_for(item) -> float:
+	if item == null:
+		return weapon_scale
+	if int(item.weapon_type) == 4:      # 枪
+		return weapon_scale * 1.25
+	return weapon_scale
+
+
+# ── 自动巡逻 ──
+
+## G 键：开关巡逻。关掉时清掉方向，角色立刻停下。
+func toggle_patrol() -> void:
+	_patrol_on = not _patrol_on
+	Global.patrol_on = _patrol_on      # 存到全局：换图/打完战斗重建也不丢
+	# 开/关都弹一条 + 记进消息栏
+	if _patrol_on:
+		show_toast("开始自动巡逻")
+	else:
+		show_toast("停止自动巡逻")
+	if _patrol_on:
+		_patrol_dir = _random_patrol_dir()
+		_patrol_turn_left = randf_range(patrol_turn_min, patrol_turn_max)
+	else:
+		_patrol_dir = Vector2.ZERO
+	_update_patrol_banner()
+
+
+func is_patrolling() -> bool:
+	return _patrol_on
+
+
+func _random_patrol_dir() -> Vector2:
+	var choices := [
+		Vector2.RIGHT, Vector2.LEFT, Vector2.UP, Vector2.DOWN,
+		Vector2(1, 1).normalized(), Vector2(-1, 1).normalized(),
+		Vector2(1, -1).normalized(), Vector2(-1, -1).normalized(),
+	]
+	return choices[randi() % choices.size()]
+
+
+## 每帧驱动：换方向 + 把方向交给现有的移动逻辑。
+func _update_patrol(delta: float) -> void:
+	if not _patrol_on:
+		return
+	# 锚点迟到一帧记录：toggle 那一刻 player 可能还没摆好
+	if not _patrol_anchor_valid:
+		if player != null:
+			_patrol_anchor = player.position
+			_patrol_anchor_valid = true
+			_patrol_stuck = 0.0
+	# 打开任何面板就自动退出，避免和面板抢输入
+	if _ui_open():
+		_patrol_on = false
+		_patrol_dir = Vector2.ZERO
+		_update_patrol_banner()
+		return
+	_patrol_turn_left -= delta
+
+	if player != null:
+		var off := player.position - _patrol_anchor
+		# 超出半径：**平滑**朝中心走（用 lerp 而不是每帧直接覆盖），避免方向抖动
+		if off.length() > patrol_radius and _patrol_stuck < 0.4:
+			_patrol_dir = _patrol_dir.lerp((-off).normalized(), 0.15).normalized()
+			_patrol_turn_left = maxf(_patrol_turn_left, 0.4)
+			return
+		# 已经在半径外、又顶着墙走不动 → 随机换个方向脱困
+		if off.length() > patrol_radius:
+			_patrol_dir = _random_patrol_dir()
+			_patrol_turn_left = randf_range(patrol_turn_min, patrol_turn_max)
+			_patrol_stuck = 0.0
+			return
+
+	if _patrol_turn_left <= 0.0:
+		_patrol_dir = _random_patrol_dir()
+		_patrol_turn_left = randf_range(patrol_turn_min, patrol_turn_max)
+		_patrol_stuck = 0.0
+
+
+## 巡逻时想让角色往哪走（ZERO = 交给玩家输入）。_move_player 开头读它。
+func _patrol_input() -> Vector2:
+	return _patrol_dir if _patrol_on else Vector2.ZERO
+
+
+## 撞墙检测：位置几乎没变就立刻换方向。
+func _patrol_bump() -> void:
+	if _patrol_on:
+		_patrol_dir = _random_patrol_dir()
+		_patrol_turn_left = randf_range(patrol_turn_min, patrol_turn_max)
+
+
+# ── 顶部提示条 ──
+
+func _ensure_patrol_banner() -> void:
+	if _patrol_banner != null:
+		return
+	# 顶部中央的小胶囊（不是通栏渐变），样式贴近战斗的出手顺序条
+	var panel := Panel.new()
+	panel.name = "PatrolBanner"
+	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	panel.anchor_left = 0.5
+	panel.anchor_right = 0.5
+	panel.anchor_top = 0.0
+	panel.anchor_bottom = 0.0
+	panel.offset_left = -118.0
+	panel.offset_right = 118.0
+	panel.offset_top = 14.0
+	panel.offset_bottom = 56.0
+
+	var box := StyleBoxFlat.new()
+	box.bg_color = Color(0.05, 0.16, 0.15, 0.85)
+	box.border_color = Color(0.45, 0.95, 0.80, 0.85)
+	box.set_border_width_all(1)
+	box.set_corner_radius_all(20)
+	box.content_margin_left = 14
+	box.content_margin_right = 14
+	box.content_margin_top = 4
+	box.content_margin_bottom = 4
+	panel.add_theme_stylebox_override("panel", box)
+
+	var row := HBoxContainer.new()
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.set_anchors_preset(Control.PRESET_FULL_RECT)
+	row.add_theme_constant_override("separation", 8)
+	panel.add_child(row)
+
+	# 左边一个小圆点（呼吸闪烁，表示"正在跑"）
+	var dot := Panel.new()
+	dot.custom_minimum_size = Vector2(10, 10)
+	dot.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	dot.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var dot_box := StyleBoxFlat.new()
+	dot_box.bg_color = Color(0.55, 1.00, 0.85)
+	dot_box.set_corner_radius_all(5)
+	dot.add_theme_stylebox_override("panel", dot_box)
+	row.add_child(dot)
+
+	_patrol_banner_label = Label.new()
+	_patrol_banner_label.text = "自动巡逻中"
+	_patrol_banner_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_patrol_banner_label.add_theme_font_size_override("font_size", 19)
+	_patrol_banner_label.add_theme_color_override("font_color", Color(0.85, 1.0, 0.95))
+	_patrol_banner_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(_patrol_banner_label)
+
+	panel.modulate = Color(1, 1, 1, 0)
+	ui_layer.add_child(panel)
+	_patrol_banner = panel
+
+
+func _update_patrol_banner() -> void:
+	_ensure_patrol_banner()
+	_ensure_patrol_toggle()
+	_refresh_patrol_toggle()
+	if _patrol_banner == null:
+		return
+	if _patrol_tween != null and _patrol_tween.is_valid():
+		_patrol_tween.kill()
+	_patrol_tween = create_tween()
+	_patrol_tween.tween_property(_patrol_banner, "modulate:a", 1.0 if _patrol_on else 0.0, 0.18)
+
+func _ensure_patrol_toggle() -> void:
+	if _patrol_toggle != null:
+		return
+	var btn := Button.new()
+	btn.name = "PatrolToggle"
+	btn.text = "开始巡逻  G"
+	btn.focus_mode = Control.FOCUS_NONE
+	btn.mouse_filter = Control.MOUSE_FILTER_STOP
+	# 右上角
+	btn.anchor_left = 1.0
+	btn.anchor_right = 1.0
+	btn.anchor_top = 0.0
+	btn.anchor_bottom = 0.0
+	btn.offset_left = -180.0
+	btn.offset_right = -20.0
+	btn.offset_top = 18.0
+	btn.offset_bottom = 58.0
+
+	var normal := StyleBoxFlat.new()
+	normal.bg_color = Color(0.06, 0.09, 0.12, 0.72)
+	normal.border_color = Color(0.75, 0.68, 0.50, 0.55)
+	normal.set_border_width_all(1)
+	normal.set_corner_radius_all(6)
+	normal.content_margin_left = 10
+	normal.content_margin_right = 10
+
+	var active := normal.duplicate() as StyleBoxFlat
+	active.bg_color = Color(0.10, 0.42, 0.36, 0.88)
+	active.border_color = Color(0.55, 1.00, 0.85, 0.95)
+
+	btn.add_theme_stylebox_override("normal", normal)
+	btn.add_theme_stylebox_override("hover", normal)
+	btn.add_theme_stylebox_override("pressed", active)
+	btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	btn.add_theme_color_override("font_color", Color(0.92, 0.90, 0.82))
+	btn.add_theme_color_override("font_hover_color", Color(1, 0.95, 0.72))
+	btn.add_theme_font_size_override("font_size", 18)
+	btn.pressed.connect(_on_patrol_toggle_pressed)
+
+	ui_layer.add_child(btn)
+	_patrol_toggle = btn
+	_refresh_patrol_toggle()
+
+
+## 按当前状态刷新右上角按钮的文字和底色。
+func _refresh_patrol_toggle() -> void:
+	if _patrol_toggle == null:
+		return
+	_patrol_toggle.text = "停止巡逻  G" if _patrol_on else "开始巡逻  G"
+	var normal := _patrol_toggle.get_theme_stylebox("normal") as StyleBoxFlat
+	if normal != null:
+		if _patrol_on:
+			normal.bg_color = Color(0.10, 0.42, 0.36, 0.88)
+			normal.border_color = Color(0.55, 1.00, 0.85, 0.95)
+		else:
+			normal.bg_color = Color(0.06, 0.09, 0.12, 0.72)
+			normal.border_color = Color(0.75, 0.68, 0.50, 0.55)
+
+
+func _on_patrol_toggle_pressed() -> void:
+	toggle_patrol()
+
+
+
+
+## 往左下角消息栏推一条（全局唯一一份，挂在 Global 上）。
+func _push_msg_log(text: String) -> void:
+	Global.push_log(text)

@@ -193,6 +193,9 @@ const SECT_SKILL_MAX_LEVEL := 100
 ## ── 运行时状态（跨场景存活，新档需手动清空）──
 var coins: int = 1000                                  # 金币（单位：枚，整数）。默认 500 与 GameRoot.starting_coins 一致；开新档时会被 start_new_game() 重置回那个值
 
+## 自动巡逻开关（跨场景保留：打完一场回来还在巡逻）。
+var patrol_on := false
+
 ## 每个角色各自的等级（键 = GameRoot.character_key()，缺键 = 1 级）。经验按人发，板凳不涨。
 ## 唯一写入点：GameRoot.add_exp() 与 start_new_game()。
 var level_by_character: Dictionary = {}
@@ -556,3 +559,51 @@ func get_tier_style(tier: UpgradeTier) -> StyleBoxFlat:
 			return MYTHIC_STYLE
 		_:
 			return LEGENDARY_STYLE
+
+
+# ── 全局消息栏（左下角，地图 / 战斗共用一份）──
+
+## 挂在 autoload 上，所以切场景不会被销毁。
+var msg_log: Control = null
+## 最多保留多少行。
+var msg_log_max := 300
+
+const MSG_LOG_LAYER := 90
+
+
+func _ready() -> void:
+	_ensure_msg_log()
+
+
+func _ensure_msg_log() -> void:
+	# 先清掉同名旧层，保证全局只有一份（防止热重载/重复调用堆出两层）
+	var stale := get_node_or_null("GlobalMsgLog")
+	if stale != null and stale != (msg_log.get_parent() if msg_log != null else null):
+		stale.queue_free()
+		stale = null
+	if msg_log != null and is_instance_valid(msg_log):
+		return
+	var layer := CanvasLayer.new()
+	layer.name = "GlobalMsgLog"
+	layer.layer = MSG_LOG_LAYER
+	add_child(layer)
+	msg_log = load("res://scenes/shared/msg_log.gd").new()
+	msg_log.name = "MsgLog"
+	layer.add_child(msg_log)
+	msg_log.setup(msg_log_max)
+	print("[GlobalMsgLog] 创建消息栏 layer=%d" % MSG_LOG_LAYER)
+
+
+## 往全局消息栏推一条。任何场景都可以直接调 Global.push_log("...").
+func push_log(text: String) -> void:
+	if String(text).strip_edges().is_empty():
+		return
+	_ensure_msg_log()
+	if msg_log != null:
+		msg_log.push(text)
+
+
+## 清空（开新档时调）。
+func clear_log() -> void:
+	if msg_log != null:
+		msg_log.clear()

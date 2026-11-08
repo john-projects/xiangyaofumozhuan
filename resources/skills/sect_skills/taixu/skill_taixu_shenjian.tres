@@ -19,6 +19,6 @@ hit_particles = 40
 hit_effect_scene = ExtResource("9_seq")
 hit_effect_on_ground = true
 hit_effect_per_hit = true
-hit_interval = 0.1
+hit_interval = 0.35
 burst_scale = 2.2
 melee = true

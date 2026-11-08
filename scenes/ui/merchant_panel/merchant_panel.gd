@@ -87,6 +87,9 @@ var _coins := 0
 ## 当前页签的部位（EquipType 值）；-1 = 还没定。
 var _active_type := -1
 var _tab_buttons: Array[Button] = []
+## 弹确认框之前，焦点在哪个货架格子上（取消/关闭后要还回去，否则焦点会消失）。
+var _focus_before_confirm: Control = null
+
 ## 正在等确认的那件道具（null = 没有确认框在开）。
 var _pending: ItemBase = null
 ## 待确认的是"卖"（true）还是"买"（false）。确认框付款时按它分流。
@@ -371,6 +374,8 @@ func _show_confirm(item: ItemBase, is_sell: bool) -> void:
 	# 买卖共用同一个确认框，按钮上的动词得跟着换：卖东西时还写着"确定购买"很容易点错。
 	if confirm_buy_button != null:
 		confirm_buy_button.text = "确定卖出" if is_sell else "确定%s" % buy_label
+	# 记下弹框前的焦点（取消后要还回去）
+	_focus_before_confirm = get_viewport().gui_get_focus_owner() as Control
 	_set_shelf_focus_enabled(false)
 	if confirm_buy_button != null:
 		confirm_buy_button.grab_focus()
@@ -402,6 +407,15 @@ func _hide_confirm() -> void:
 	if confirm_box != null:
 		confirm_box.hide()
 	_set_shelf_focus_enabled(true)
+	# ⚠ 焦点原本在「确定」按钮上，confirm_box.hide() 会把焦点一起清掉 ——
+	#    必须显式还回货架，否则取消之后方向键就没反应了。
+	var back := _focus_before_confirm
+	_focus_before_confirm = null
+	if back != null and is_instance_valid(back) and back.is_visible_in_tree() \
+			and back.focus_mode != Control.FOCUS_NONE:
+		back.grab_focus()
+	elif not _slots.is_empty():
+		(_slots[0] as Control).grab_focus()
 	confirm_changed.emit(false)
 
 

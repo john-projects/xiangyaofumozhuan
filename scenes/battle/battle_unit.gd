@@ -615,6 +615,22 @@ func add_status(stat: String, value: float, turns: int, per_turn := 0.0) -> void
 			s["turns"] = maxi(int(s["turns"]), turns)
 			return
 	statuses.append({"stat": stat, "value": value, "turns": turns, "per_turn": per_turn})
+	if stat == "seal" or stat == "silence":
+		_show_control_effect(stat)
+
+
+func _show_control_effect(stat: String) -> void:
+	var effect_name := "SealStatusFx" if stat == "seal" else "SilenceStatusFx"
+	if get_node_or_null(NodePath(effect_name)) != null:
+		return
+	var effect := preload("res://scenes/battle/control_status_fx.gd").new()
+	effect.name = effect_name
+	effect.is_seal = stat == "seal"
+	effect.body_height = UNIT_DISPLAY_HEIGHT
+	effect.status_active = has_status.bind(stat)
+	effect.unit_alive = func() -> bool: return alive
+	add_child(effect)
+	move_child(effect, sprite.get_index())
 
 
 ## 某种状态的数值合计（没有就 0）。只读，不碰回合数。
@@ -949,6 +965,8 @@ func play_cast() -> void:
 	tween.tween_property(body, "scale", rest_scale, 0.16)
 	tween.parallel().tween_property(body, "modulate", DEFEND_TINT if defending else Color.WHITE, 0.16)
 	await tween.finished
+	if is_instance_valid(_anim) and _anim.is_playing_once():
+		await _anim.action_finished
 
 
 ## 受击表现：朝**远离攻击者**的方向后仰，然后**保持这个姿势**直到攻击/技能动画播完，
@@ -1035,11 +1053,13 @@ func _on_mouse_exited() -> void:
 ## 手持武器（静态立绘）
 var _weapon_spr: Sprite2D = null
 var _weapon_pivot: Node2D = null
-## 手持武器在立绘上的位置（相对贴图中心，像素）。
-## 立绘 403x670，手心在贴图像素 (352, 330) → 相对中心 (150, -5)。
+## 手持武器在立绘上的位置（立绘本地像素，原点 = 贴图中心）。
+## 立绘 403x670，右手心在贴图像素 (352, 330) → 相对中心 (150, -5)。
+## ⚠ 手持图已经把「握把」对齐到枢轴，所以这里只要填手心位置，不要再加偏移。
 @export var weapon_hand_offset := Vector2(150, -5)
-## 武器倾斜角度（度，正数往右倒）
-@export var weapon_angle_deg := 20.0
+## 武器倾斜角度（度）。正数=向右倒，负数=向左倒。
+## 武器绕**握把**旋转，所以负角度会把刀尖甩到角色左边，看起来像武器在左边。
+@export var weapon_angle_deg := -30.0
 ## 武器缩放（256 图标 × 这个值）
 @export var weapon_scale := 2.5
 
@@ -1047,28 +1067,53 @@ var _weapon_pivot: Node2D = null
 func _refresh_weapon_visual() -> void:
 	var item = stats.weapon_visual if is_player else null
 	if item == null or item.item_icon == null:
-		if _weapon_spr != null:
-			_weapon_spr.visible = false
+		HeldWeaponFx.hide_weapon(_weapon_spr)
 		return
 	# 枢轴放在手心：转枢轴 = 绕握把转，握把永远在手上
 	if _weapon_pivot == null:
 		_weapon_pivot = Node2D.new()
 		_weapon_pivot.name = "WeaponPivot"
 		# 手心在贴图像素 (352, 330)，贴图 403x670 → 相对中心 (150, -5)
-		_weapon_pivot.position = weapon_hand_offset
-		_weapon_pivot.rotation = deg_to_rad(weapon_angle_deg)
 		sprite.add_child(_weapon_pivot)
 	if _weapon_spr == null:
 		_weapon_spr = Sprite2D.new()
 		_weapon_spr.name = "Weapon"
 		_weapon_spr.centered = false
-		_weapon_spr.z_index = 1
+		_weapon_spr.z_index = 0
 		_weapon_pivot.add_child(_weapon_spr)
-	_weapon_spr.texture = item.item_icon
-	# 图标整体上移半个高度 → 握把（底边中点）落在枢轴原点
-	var k := weapon_scale
+	# ⚠ 每次刷新都要重设：枢轴节点是复用的，只在创建时设的话改参数不生效
+	_weapon_pivot.show_behind_parent = false
+	_weapon_pivot.position = HeldWeaponFx.weapon_hand_position(sprite, weapon_hand_offset)
+	_weapon_pivot.rotation = deg_to_rad(_weapon_angle_for(item))
+
+	var tex := HeldWeaponFx.held_texture(item)
+	_weapon_spr.texture = tex
+	# 按「手持图的握把点」对位 + 长度 = 立绘高 × 类型比例
+	var body_h := float(sprite.texture.get_height()) if sprite.texture != null else 670.0
+	var target_h := body_h * HeldWeaponFx.held_ratio(item)
+	var k := target_h / maxf(1.0, float(tex.get_height()))
+	_weapon_spr.set_meta("target_h", target_h)
 	_weapon_spr.scale = Vector2(k, k)
-	_weapon_spr.position = Vector2(-item.item_icon.get_width() * k * 0.5,
-			-item.item_icon.get_height() * k)
+	_weapon_spr.position = -HeldWeaponFx.HELD_GRIP * k
 	_weapon_spr.visible = true
-	HeldWeaponFx.apply(_weapon_spr, int(item.item_tier))
+	HeldWeaponFx.apply(_weapon_spr, int(item.item_tier), item)
+
+
+## 按武器类型决定装备时的旋转角。
+## 爪（6）和扇（3）的图标本身就是最终朝向，转了反而歪，所以保持 0°。
+func _weapon_angle_for(item) -> float:
+	if item == null:
+		return weapon_angle_deg
+	var wt := int(item.weapon_type)
+	if wt == 3 or wt == 6:
+		return 0.0
+	return weapon_angle_deg
+
+
+## 按武器类型决定显示倍率。枪更长，单独放大。
+func _weapon_scale_for(item) -> float:
+	if item == null:
+		return weapon_scale
+	if int(item.weapon_type) == 4:      # 枪
+		return weapon_scale * 1.25
+	return weapon_scale

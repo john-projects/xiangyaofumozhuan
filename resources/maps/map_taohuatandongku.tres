@@ -2,6 +2,7 @@
 
 [ext_resource type="Script" path="res://resources/maps/map_data.gd" id="1_mapdata"]
 [ext_resource type="Texture2D" path="res://assets/map/桃花滩洞窟.png" id="2_texture"]
+[ext_resource type="Texture2D" path="res://assets/map/taohuatandongku_walk_mask.png" id="walk_mask"]
 [ext_resource type="Script" path="res://resources/maps/map_portal.gd" id="p_portal"]
 [ext_resource type="Script" path="res://resources/units/unit_stats.gd" id="1_stats"]
 [ext_resource type="Resource" path="res://resources/units/enemies/虾精.tres" id="e1"]
@@ -21,8 +22,9 @@ script = ExtResource("1_mapdata")
 id = "taohuatandongku"
 display_name = "桃花滩洞窟"
 texture = ExtResource("2_texture")
+walk_mask = ExtResource("walk_mask")
 map_scale = 1.0
 unit_height = 195.0
-spawn_point = Vector2(0.5, 0.78)
+spawn_point = Vector2(0.569, 0.805)
 portals = Array[ExtResource("p_portal")]([SubResource("Resource_portal_back")])
 enemy_pool = Array[ExtResource("1_stats")]([ExtResource("e1"), ExtResource("e2"), ExtResource("e3")])

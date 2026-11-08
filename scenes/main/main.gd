@@ -38,6 +38,9 @@ const DEFAULT_LEADER := preload("res://resources/units/players/陆孤鸣.tres")
 ## true = 开局直接把 6 个角色全拉进团队、按表配好门派（燕如意只入团队不上阵）。
 ## 调试完改成 false 就恢复"只有队长一个人"的正常开局。
 ## ⚠ 正式版请连同 DEBUG_TEAM / DEBUG_BENCHED / _apply_debug_loadout() 一起删掉。
+## 品质 → 消息栏用的中文颜色标签名。
+const TIER_CN := ["白色", "蓝色", "紫色", "粉色", "橙色"]
+
 const DEBUG_LOADOUT := true
 
 ## 调试阵容：[显示名, 资源路径, 门派 id]。数组顺序 = 上阵顺序（第 1 个是队长）。
@@ -52,6 +55,18 @@ const DEBUG_TEAM := [
 ]
 ## 只入团队、不上阵的那个人（上阵位只有 MAX_DEPLOYED 个，正好空一位出来）。
 const DEBUG_BENCHED := "燕如意"
+
+## 调试开局装备：角色名 → 武器类型；全队共享随机等级，各自独立随机品质。
+## 开局自动买下并装上，省得每次手动去商人那儿点。
+const DEBUG_STARTER_WEAPON := {
+	"陆孤鸣": "sword",
+	"行修": "spear",
+	"厉狂澜": "blade",
+	"夜魑": "claw",
+	"霓裳": "fan",
+	"燕如意": "staff",
+}
+
 
 
 # ── 配置（main.tscn 检查器里填；改这些等于改关卡结构与难度曲线）──
@@ -85,6 +100,11 @@ const EXP_QUAD := 0.42
 const LEVEL_GROWTH_PER_LEVEL := 0.0
 ## 每场胜利经验 = exp_reward_per_map × 难度 + exp_per_enemy × 敌人数（默认 120/20）。
 @export var exp_reward_per_map := 120
+## 每场胜利掉落装备的概率（0~1）。
+@export var drop_chance := 0.35
+## 品质权重：下标就是 item_tier（0 白 / 1 蓝 / 2 紫 / 3 粉 / 4 橙）。
+## 越大越容易出，品质越高权重越小。
+@export var drop_tier_weights: Array[int] = [50, 25, 15, 7, 3]
 @export var exp_per_enemy := 20
 
 # ── 基础属性（五项；升级自动 +1，另给自由点）──
@@ -183,6 +203,7 @@ var party: Array[UnitStats] = []
 ## 上阵名单（≤ MAX_DEPLOYED）：必须是 party 子集；战斗前逐个 duplicate()，掉血不污染 .tres。
 ## ⚠ 同 party 是引用语义交给 WorldMap，也别整个重新赋值。
 var deployed: Array[UnitStats] = []
+var auto_cast_plan: Dictionary = {}
 ## 是否在战斗中（enter_battle 置 true / _on_battle_ended 置 false）。⚠ 目前无人读，预留。
 var in_battle := false
 
@@ -549,6 +570,7 @@ func show_title() -> void:
 ## 清 party/deployed/_map_positions/_last_result、current_map_id、Global.coins=starting_coins、
 ## 等级/经验/装备/门派/属性点/main_player_selected；最后 start_game_with_defaults()。
 func start_new_game() -> void:
+	auto_cast_plan.clear()
 	party.clear()
 	deployed.clear()
 	_map_positions.clear()
@@ -585,6 +607,8 @@ func _begin_new_run() -> void:
 	if Global.main_player_selected == null:
 		push_warning("GameRoot: 还没选角色")
 		return
+	# 开新局先清消息栏（必须在 _apply_debug_loadout 之前，否则会把开局消息一起清掉）
+	Global.clear_log()
 	# 用 clear()+append() 而非重新赋值：数组按引用交给 WorldMap（见 party 字段）。
 	party.clear()
 	party.append(Global.main_player_selected)
@@ -603,6 +627,10 @@ func _begin_new_run() -> void:
 	if DEBUG_LOADOUT:
 		_apply_debug_loadout()
 	map_changed.emit(current_map_id)
+	# 开局欢迎语：写进左下角消息栏
+	Global.push_log("欢迎来到降妖伏魔传！")
+	Global.push_log("当前队长：%s　按 G 或右上角按钮可自动巡逻" % (
+			Global.main_player_selected.name if Global.main_player_selected != null else "无名"))
 	show_map()
 
 
@@ -627,6 +655,51 @@ func _apply_debug_loadout() -> void:
 	# 队长 = 上阵第一个人（世界地图上的主控角色）
 	if not deployed.is_empty():
 		Global.main_player_selected = deployed[0]
+		var names: Array[String] = []
+		for st in deployed:
+			if st != null:
+				names.append(st.name)
+		print("[开局阵容] 上阵：%s" % ", ".join(names))
+		Global.push_log("【开局】上阵：%s" % ", ".join(names))
+
+	# 0, 10, ... 150: choose one shared set for all six characters.
+	var weapon_set := randi_range(1, 16)
+	print("[开局装备] 本次随机等级：%d" % ((weapon_set - 1) * 10))
+	Global.push_log("【开局】装备等级 %d" % ((weapon_set - 1) * 10))
+	# 开局配武器：买下 + 装上（钱不够就先加钱，反正是调试档）
+	for row in DEBUG_TEAM:
+		var nm := String(row[0])
+		if not DEBUG_STARTER_WEAPON.has(nm):
+			continue
+		# Each weapon independently rolls one of the five qualities uniformly.
+		var q := randi_range(0, 4)
+		var weapon_kind := String(DEBUG_STARTER_WEAPON[nm])
+		var wpath := "res://resources/items/equipment/%s/item_%02d_%s_q%d.tres" % [weapon_kind, weapon_set, weapon_kind, q]
+		var w := load(wpath) as ItemBase
+		if w == null:
+			push_warning("调试装备：加载失败 %s" % wpath)
+			continue
+		print("[开局装备] %s → %s（%s）" % [nm, w.item_name, ItemEquipment.TIER_NAMES[q]])
+		Global.push_log("【开局】%s 装备 %s（%s）" % [
+				nm, w.item_name, ItemEquipment.TIER_NAMES[q]])
+		if Global.coins < w.item_cost:
+			Global.coins += w.item_cost
+		if not buy_item(w):
+			push_warning("调试装备：%s 买不下 %s" % [nm, w.item_name])
+			continue
+		# 刚买的那件（roll 过的副本）在背包最后一个
+		var bought: ItemBase = Global.equipped_weapons[Global.equipped_weapons.size() - 1]
+		var st: UnitStats = null
+		for s in party:
+			if s != null and s.name == nm:
+				st = s
+				break
+		if st == null:
+			continue
+		var why2 := equip_item(st, bought)
+		if not why2.is_empty():
+			push_warning("调试装备：%s 装不上 %s —— %s" % [nm, w.item_name, why2])
+
 
 
 ## 显示世界地图（换图/战斗归来/开局都走这里）：实例化场景、注入状态、连信号，再 await _swap(world, world_root)。
@@ -644,6 +717,7 @@ func show_map(result_text := "", from_map_id := "", restore_position := false) -
 	var world := packed.instantiate() as WorldMap
 	if restore_position and _map_positions.has(map.id):
 		world.spawn_override = _map_positions[map.id]     # 打完战斗回到原地
+	world.auto_cast_plan = auto_cast_plan
 	world.deployed = deployed      # 上阵名单（引用语义；队伍管理面板要按它显示"上阵/下阵"）
 	world.setup(map, party, result_text, _map_names(), from_map_id)
 	world.battle_requested.connect(enter_battle)
@@ -705,7 +779,7 @@ func _remember_position() -> void:
 ## 进入战斗：记位置 → **拍一张当前地图当背景** → 生成敌人 → 实例化 Battle，await _swap 后 start_battle（不 await 战斗本身）。
 ## ⚠ auto_start_demo=false 和 connect 都必须在 add_child 之前；start_battle 必须在淡入之后，否则黑屏中开打。
 ## 上阵为空或敌人池为空时警告返回；_last_enemy_count 在这里记下。
-func enter_battle() -> void:
+func enter_battle(from_patrol := false) -> void:
 	if deployed.is_empty():
 		push_warning("GameRoot: 没有上阵的队员（去队伍管理里上阵，或先招募队友）")
 		show_map()
@@ -727,7 +801,8 @@ func enter_battle() -> void:
 	battle.set_backdrop(backdrop)           # 也必须早于 add_child（_ready 里就要用）
 	in_battle = true
 	await _swap(battle, world_root)
-	battle.start_battle(_make_player_team(), enemies)
+	# 自动施法只看全局开关：巡逻中就带施法计划（from_patrol 也兼容）
+	battle.start_battle(_make_player_team(from_patrol or Global.patrol_on), enemies)
 
 
 ## 战斗背景截图的宽度上限（像素）。背景不需要高清：缩到这个宽度再由 TextureRect 拉伸，
@@ -765,23 +840,34 @@ func _on_battle_ended(player_won: bool) -> void:
 		# 经验：和金币同一条公式思路（难度越高越多），另加"按敌人数量"的份（见 exp_reward）
 		var exp_gain := exp_reward(_last_enemy_count)
 		# 只发给**这一场上阵**的人：每个队员各自独立升级（等级/经验按角色存，板凳不涨）
-		var lines: Array[String] = ["%s：战斗胜利！" % map_name]
+		# 标题「战斗胜利！」由 Battle._finish_battle 发过一次，这里不再重复
+		var lines: Array[String] = []
 		var gained_lines: Array[String] = []
 		for member in deployed:
 			if member == null:
 				continue
 			var gained := add_exp(member, exp_gain)
 			if gained > 0:
-				gained_lines.append("%s 升到 Lv.%d（获得 %d 点自由属性）" % [
+				gained_lines.append("[青色]%s[/青色] 升到 [绿色]Lv.%d[/绿色]（获得 [金色]%d 点自由属性[/金色]）" % [
 						member.name, level_of(member), gained * ATTR_FREE_PER_LEVEL])
-		if exp_gain <= 0:
-			lines.append("获得 %d 金币" % reward)
-		else:
-			lines.append("获得 %d 金币 · 上阵每人经验 +%d" % [reward, exp_gain])
+		lines.append("获得 [金色]%d 金币[/金色]" % reward)
+		# 经验拆到每个人头上，一眼能看到谁涨了多少
+		if exp_gain > 0:
+			for member in deployed:
+				if member != null:
+					lines.append("[绿色]%s[/绿色] 获得 [金色]经验 +%d[/金色]" % [member.name, exp_gain])
 		lines.append_array(gained_lines)
+		# 掉落：按地图难度出对应等级的装备
+		var drop := roll_drop_equipment(map_difficulty())
+		if drop != null:
+			Global.equipped_weapons.append(drop)
+			lines.append("掉落装备：[%s]%s[/%s]（%s）" % [
+					TIER_CN[int(drop.item_tier)], drop.item_name,
+					TIER_CN[int(drop.item_tier)], ItemEquipment.TIER_NAMES[int(drop.item_tier)]])
 		_last_result = "\n".join(lines)
 	else:
-		_last_result = "%s：战斗失败…（可以再挑战一次）" % map_name
+		# 失败文案统一由 Battle._finish_battle 发过一条，这里不再重复（原来会多出一条带地图名的）
+		_last_result = ""
 	show_map(_last_result, "", true)         # 回到地图上原来的位置
 
 
@@ -1516,7 +1602,7 @@ func _on_join_sect_requested(character: UnitStats, sect_id: String) -> void:
 ## 把 deployed 转成可随便改的我方队伍交给 Battle（返回新数组）。
 ## ⚠ 用 deployed 而非 party；逐个 duplicate() 避免战斗改坏 .tres，派生属性覆盖到副本上。
 ## ⚠ duplicate() 默认浅拷贝：数组字段（如 skills）与原件共享，别就地 append。
-func _make_player_team() -> Array[UnitStats]:
+func _make_player_team(use_auto_cast := false) -> Array[UnitStats]:
 	var out: Array[UnitStats] = []
 	for stats in deployed:
 		if stats == null:
@@ -1546,28 +1632,35 @@ func _make_player_team() -> Array[UnitStats]:
 		# 门派被动（太虚剑典 +伤害、剑心通明 +暴击 …）按门派技能等级叠上去
 		_apply_sect_passives(copy, stats)
 		# 门派**主动**技能：按角色当前等级烤一份副本塞进战斗副本的 skills（材料在 resources/skills/sect_skills/）
-		_attach_sect_skills(copy, stats)
+		copy.skills = player_skills(stats)
+		if use_auto_cast:
+			var rounds: Dictionary = auto_cast_plan.get(character_key(stats), {})
+			# 没配计划时兜底：**普通攻击**（和面板里"攻击"选项一致）。
+			# 原来兜底是第一技能，玩家选了"攻击"却还在放技能，很迷惑。
+			if rounds.is_empty():
+				rounds = {0: "@cycle"}
+				for r in range(1, 6):
+					rounds[r] = "@attack"
+			if not rounds.is_empty():
+				copy.set_meta("auto_cast_rounds", rounds.duplicate())
 		out.append(copy)
 	return out
 
 
-## 把角色本门的 3 个主动技能塞进战斗副本。
-## 参数 copy：战斗副本；source：原始 UnitStats（查门派与技能等级）。
-## 副作用：给 copy.skills **赋一个新数组** —— duplicate() 出来的 skills 和原资源共享同一个 Array，
-##   就地 append 会污染 .tres，所以必须 `copy.skills = 新数组`。
-## 等级处理：目标数这类"按等级变"的参数在这里烤进**技能副本**（`SkillData.duplicate()`），
-##   .tres 本身永远只存 1 级基线；没学会（等级 0）或资源缺失的技能直接跳过。
-static func _attach_sect_skills(copy: UnitStats, source: UnitStats) -> void:
+## Build the same learned skill list for the plan editor and battle copies.
+static func player_skills(source: UnitStats) -> Array[SkillData]:
+	if source == null:
+		return []
 	var sect_id := sect_of(source)
 	if sect_id.is_empty():
-		return
+		return source.skills
 	var merged: Array[SkillData] = []
-	merged.assign(copy.skills)
+	merged.assign(source.skills)
 	for entry in Global.sect_actives(sect_id):
 		var baked := _bake_sect_skill(entry, sect_skill_level(source, String(entry["id"])))
 		if baked != null:
 			merged.append(baked)
-	copy.skills = merged
+	return merged
 
 
 ## 按技能等级烤一份门派主动技能副本（.tres 只存 1 级基线）。
@@ -1728,3 +1821,52 @@ func _make_enemy_team() -> Array[UnitStats]:
 			attach_enemy_sect_skills(scaled, sect_id, skill_level)
 		out.append(scaled)
 	return out
+
+
+# ── 掉落 ──
+
+## 装备类型目录（按 weapon_type 1~6）。
+const DROP_TYPE_DIRS := {
+	1: "sword",
+	2: "blade",
+	3: "fan",
+	4: "spear",
+	5: "staff",
+	6: "claw",
+}
+
+
+## 掷一次装备掉落。没中返回 null；中了返回掷过属性的装备副本。
+## 参数 难度：地图序号（1=第一张图），用来决定出哪一套（req_level = (难度-1)*10 …）。
+func roll_drop_equipment(map_level: int) -> ItemEquipment:
+	if randf() > drop_chance:
+		return null
+	var tier := _roll_drop_tier()
+	# 套装序号在难度 ±1 之间浮动，避免整局只掉同一套
+	var set_index := clampi(map_level + randi_range(-1, 1), 1, 16)
+	var weapon_type := DROP_TYPE_DIRS.keys()[randi() % DROP_TYPE_DIRS.size()] as int
+	var dir: String = DROP_TYPE_DIRS[weapon_type]
+	var path := "res://resources/items/equipment/%s/item_%02d_%s_q%d.tres" % [
+			dir, set_index, dir, tier]
+	if not ResourceLoader.exists(path):
+		return null
+	var tpl := load(path) as ItemEquipment
+	if tpl == null:
+		return null
+	return roll_equipment(tpl)
+
+
+## 按权重抽品质。
+func _roll_drop_tier() -> int:
+	var total := 0
+	for w in drop_tier_weights:
+		total += maxi(0, w)
+	if total <= 0:
+		return 0
+	var pick := randi() % total
+	var acc := 0
+	for i in range(drop_tier_weights.size()):
+		acc += maxi(0, drop_tier_weights[i])
+		if pick < acc:
+			return i
+	return 0

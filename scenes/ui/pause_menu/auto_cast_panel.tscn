@@ -1,0 +1,79 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scenes/ui/pause_menu/auto_cast_panel.gd" id="1_panel"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_panel"]
+content_margin_left = 32.0
+content_margin_top = 25.0
+content_margin_right = 32.0
+content_margin_bottom = 25.0
+bg_color = Color(0.075, 0.068, 0.083, 0.98)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.70, 0.55, 0.33, 1)
+corner_radius_top_left = 14
+corner_radius_top_right = 14
+corner_radius_bottom_left = 14
+corner_radius_bottom_right = 14
+
+[node name="AutoCastPanel" type="Control"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_panel")
+
+[node name="Dim" type="ColorRect" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+color = Color(0.015, 0.017, 0.027, 0.70)
+
+[node name="Center" type="CenterContainer" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 2
+
+[node name="Panel" type="PanelContainer" parent="Center"]
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
+
+[node name="Content" type="VBoxContainer" parent="Center/Panel"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="Title" type="Label" parent="Center/Panel/Content"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.88, 0.61, 1)
+theme_override_font_sizes/font_size = 34
+text = "自动"
+horizontal_alignment = 1
+
+[node name="PlanGrid" type="GridContainer" parent="Center/Panel/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+columns = 6
+theme_override_constants/h_separation = 12
+theme_override_constants/v_separation = 10
+
+[node name="Footer" type="HBoxContainer" parent="Center/Panel/Content"]
+layout_mode = 2
+theme_override_constants/separation = 24
+
+[node name="Hint" type="Label" parent="Center/Panel/Content/Footer"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.76, 0.71, 0.64, 1)
+theme_override_font_sizes/font_size = 17
+text = "自动开关打开时生效。选「回合循环」可逐回合安排，其他选项从第 1 回合起重复。"
+
+[node name="BackButton" type="Button" parent="Center/Panel/Content/Footer"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(126, 44)
+layout_mode = 2
+theme_override_font_sizes/font_size = 20
+text = "返回"
