@@ -568,7 +568,7 @@ func show_title() -> void:
 
 ## 新游戏：重置主要局内状态后用默认队长开局。⚠ Global 跨屏存活，新档必须逐项手动清。
 ## 清 party/deployed/_map_positions/_last_result、current_map_id、Global.coins=starting_coins、
-## 等级/经验/装备/门派/属性点/main_player_selected；最后 start_game_with_defaults()。
+## 等级/经验/装备/门派/属性点/伤害统计/main_player_selected；最后 start_game_with_defaults()。
 func start_new_game() -> void:
 	auto_cast_plan.clear()
 	party.clear()
@@ -584,6 +584,7 @@ func start_new_game() -> void:
 	Global.sect_by_character.clear()
 	Global.sect_skill_levels_by_character.clear()
 	Global.attr_alloc_by_character.clear()
+	Global.clear_battle_stats()
 	Global.main_player_selected = null
 	_battles_since_elite = 0
 	_elite_next_in = randi_range(elite_every_min, elite_every_max)
@@ -832,7 +833,6 @@ func _capture_battle_backdrop() -> Texture2D:
 func _on_battle_ended(player_won: bool) -> void:
 	in_battle = false
 	var map := get_map(current_map_id)
-	var map_name := map.display_name if map != null else current_map_id
 
 	if player_won:
 		var reward := coin_reward_per_map * map_difficulty()
@@ -855,15 +855,14 @@ func _on_battle_ended(player_won: bool) -> void:
 		if exp_gain > 0:
 			for member in deployed:
 				if member != null:
-					lines.append("[绿色]%s[/绿色] 获得 [金色]经验 +%d[/金色]" % [member.name, exp_gain])
+					lines.append("[绿色]%s[/绿色] 获得 [金色]经验 %d[/金色]" % [member.name, exp_gain])
 		lines.append_array(gained_lines)
-		# 掉落：按地图难度出对应等级的装备
-		var drop := roll_drop_equipment(map_difficulty())
+		# 掉落档位由战斗所在地图的等级决定。
+		var drop := roll_drop_equipment(map.map_level) if map != null and map.battle_enabled else null
 		if drop != null:
 			Global.equipped_weapons.append(drop)
-			lines.append("掉落装备：[%s]%s[/%s]（%s）" % [
-					TIER_CN[int(drop.item_tier)], drop.item_name,
-					TIER_CN[int(drop.item_tier)], ItemEquipment.TIER_NAMES[int(drop.item_tier)]])
+			var tier_color: String = TIER_CN[int(drop.item_tier)]
+			lines.append("获得装备 [%s]%s[/%s]" % [tier_color, drop.item_name, tier_color])
 		_last_result = "\n".join(lines)
 	else:
 		# 失败文案统一由 Battle._finish_battle 发过一条，这里不再重复（原来会多出一条带地图名的）
@@ -1610,6 +1609,9 @@ func _make_player_team(use_auto_cast := false) -> Array[UnitStats]:
 		# duplicate：战斗改的是副本，不污染 .tres（以后做"战斗结束回写血量"也方便）
 		var copy := stats.duplicate() as UnitStats
 		copy.weapon_visual = equipment_in(stats, ItemBase.EquipType.WEAPON) as ItemEquipment
+		# 等级也烤进副本：战斗里（BattleUnit/Battle）拿不到 resource_path，查不到 Global 的等级表，
+		# 而 dot 的第一跳伤害要用"角色等级"（见 Battle._apply_skill_statuses）。
+		copy.set_meta("level", level_of(stats))
 		# 等级+基础属性 → 派生属性覆盖到副本；防御/躲避/法伤及二级属性只带进去（战斗暂未用）。
 		# 不再乘旧的"每级 ×1.5%"倍率，成长全由属性点承担。
 		var d := derived_stats(stats)
@@ -1674,6 +1676,9 @@ static func _bake_sect_skill(entry: Dictionary, level: int) -> SkillData:
 	if resource == null:
 		return null
 	var baked := resource.duplicate() as SkillData
+	# 技能等级也烤进副本：战斗里算 dot 第一跳要用（"等级 + 技能等级 + 伤害/4"）。
+	# 普通 .tres（没走这个函数的）没有这个 meta，Battle 那边按 1 级兜底。
+	baked.set_meta("level", level)
 	# 目标数阈值（30/60/25/50/75 级那些）在 Global 表里；-1 = "全体"（由 target_mode=ENEMY_ALL 表达）
 	var targets := Global.sect_skill_targets(entry, level)
 	baked.max_targets = targets if targets > 0 else 1
@@ -1793,6 +1798,8 @@ func _make_enemy_team() -> Array[UnitStats]:
 		if base == null:
 			continue
 		var scaled := base.duplicate() as UnitStats
+		# 敌人没有等级表，用"地图难度"当等级写进副本（dot 第一跳要用；1 级图 = 1 级）。
+		scaled.set_meta("level", maxi(1, int(round(difficulty))))
 		# 敌人也走同一套"基础属性 → 派生值"：.tres 里配 attributes，这里算成实际数值。
 		# 地图难度缩放作用在派生结果上（难度越高，敌人整体越强）。
 		var d := derived_stats(scaled)
@@ -1825,35 +1832,29 @@ func _make_enemy_team() -> Array[UnitStats]:
 
 # ── 掉落 ──
 
-## 装备类型目录（按 weapon_type 1~6）。
-const DROP_TYPE_DIRS := {
-	1: "sword",
-	2: "blade",
-	3: "fan",
-	4: "spear",
-	5: "staff",
-	6: "claw",
-}
+## 命中后在当前等级与品质的 13 种装备类型中等概率抽取。
+const DROP_TYPE_DIRS := [
+	"sword", "blade", "fan", "spear", "staff", "claw",
+	"helmet", "armor", "belt", "shoes", "necklace", "ring", "earring",
+]
 
 
-## 掷一次装备掉落。没中返回 null；中了返回掷过属性的装备副本。
-## 参数 难度：地图序号（1=第一张图），用来决定出哪一套（req_level = (难度-1)*10 …）。
+## 每场胜利掷一次。地图等级向下取到最近的 10 级装备档位。
 func roll_drop_equipment(map_level: int) -> ItemEquipment:
-	if randf() > drop_chance:
+	if drop_chance <= 0.0 or randf() > drop_chance:
 		return null
 	var tier := _roll_drop_tier()
-	# 套装序号在难度 ±1 之间浮动，避免整局只掉同一套
-	var set_index := clampi(map_level + randi_range(-1, 1), 1, 16)
-	var weapon_type := DROP_TYPE_DIRS.keys()[randi() % DROP_TYPE_DIRS.size()] as int
-	var dir: String = DROP_TYPE_DIRS[weapon_type]
-	var path := "res://resources/items/equipment/%s/item_%02d_%s_q%d.tres" % [
-			dir, set_index, dir, tier]
+	var equipment_level := map_level - posmod(map_level, 10)
+	@warning_ignore("integer_division")
+	var set_index := equipment_level / 10 + 1
+	var dir: String = DROP_TYPE_DIRS.pick_random()
+	var path := Global.EQUIPMENT_DIR + "%s/item_%02d_%s_q%d.tres" % [dir, set_index, dir, tier]
 	if not ResourceLoader.exists(path):
 		return null
 	var tpl := load(path) as ItemEquipment
-	if tpl == null:
+	if tpl == null or tpl.req_level != equipment_level:
 		return null
-	return roll_equipment(tpl)
+	return roll_equipment(tpl) as ItemEquipment
 
 
 ## 按权重抽品质。

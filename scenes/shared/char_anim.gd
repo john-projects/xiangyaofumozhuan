@@ -154,6 +154,14 @@ func is_playing_once() -> bool:
 	return _once
 
 
+## 当前一次性动作的时长。缺少动作帧时返回 0，让调用方走程序化动画。
+func once_duration() -> float:
+	if not _once or String(_resolve(_action, _dir)[0]) != _action:
+		return 0.0
+	var count := _frame_count()
+	return float(count) / float(FPS.get(_action, 8.0)) if count > 1 else 0.0
+
+
 func _process(delta: float) -> void:
 	if sprite == null or not sprite.is_visible_in_tree():
 		return

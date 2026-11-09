@@ -73,6 +73,18 @@ enum DamageType { PHYSICAL, MAGIC }
 ## 持续回血：回合数 + 每回合回复（healing × hot_power）。
 @export var hot_turns := 0
 @export var hot_power := 0.0
+## 持续伤害（dot）：回合数 + 每回合掉「目标气血上限 × dot_percent」。
+## 结算点在 BattleUnit.end_turn()（**每回合结束时**掉血，不是回合开始），走 take_direct_damage()
+## 直接扣血（不吃攻防差/格挡，因为它是按气血上限百分比算的），统计里单独归到「持续伤害」。
+@export var dot_turns := 0
+@export_range(0.0, 1.0) var dot_percent := 0.0
+## dot 的**第一跳**额外公式（只有挂上的第一次结算用，之后都按 dot_percent 掉）：
+##   第一跳 = 施法者等级 × dot_first_level + 技能等级 × dot_first_skill
+##            + 施法者伤害 × dot_first_damage
+## 默认 1 / 1 / 0.25 就是「等级 + 技能等级 + 伤害的 1/4」；想换成纯百分比就把三个都填 0。
+@export var dot_first_level := 1.0
+@export var dot_first_skill := 1.0
+@export var dot_first_damage := 0.25
 ## 施加状态（buff）：stat 见 BattleUnit 的 BUFF_STATS（crit_rate / spell_damage /
 ## crit_damage_bonus / damage_spell / defense / seal_hit），buff_per_level 按技能等级叠。
 @export var buff_stat: String = ""

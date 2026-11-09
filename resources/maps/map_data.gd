@@ -59,6 +59,8 @@ class_name MapData
 @export_group("战斗")
 ## 本图是否允许进入战斗（WorldMap 的「进入战斗」按钮据此启用/隐藏）；关掉就能做纯剧情/城镇图。
 @export var battle_enabled := true
+## 地图推荐等级上限，用来确定装备掉落档位（每 10 级一档，向下取整）。
+@export_range(1, 150, 1) var map_level := 1
 ## 本图专用的敌人图鉴（元素是 UnitStats）。留空 = 用 GameRoot.enemy_pool 这个全局池。
 ## ⚠ GameRoot._make_enemy_team() 是 duplicate() 出去再按地图序号加成；Spawner.enemy_collection 那条路径是
 ##   就地修改共享 Resource 的，两边语义不同，别混着理解。

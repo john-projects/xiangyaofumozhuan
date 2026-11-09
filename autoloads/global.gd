@@ -222,6 +222,167 @@ var sect_skill_levels_by_character: Dictionary = {}
 ## 每个角色手动分配的五项属性点（Array[int]，顺序同 GameRoot.ATTR_KEYS）；自动成长按等级现算。
 var attr_alloc_by_character: Dictionary = {}
 
+# ── 战斗伤害统计（战斗里右上角的面板，地图上是同一块面板）──
+# 数据放 Global 而不是面板自己身上：面板是场景的一部分，打完仗跟着场景一起销毁，
+# 而「总计」要跨战斗、「上场战斗」回到地图上还要能看，所以两份数据都必须活过场景切换。
+#
+# 两个维度共用一份记录格式：键 = 角色**显示名**（UnitStats.name），
+# 值 = {"damage": float, "healing": float, "taken": float}。
+# 为什么用名字当键：战斗里跑的是 GameRoot._make_player_team() duplicate() 出来的副本，
+# resource_path 为空，只有名字能跨场对上（Global 里用名字当键的选人表是同一个理由）。
+#
+# 写入：Battle 从 BattleUnit 的 damaged/healed 信号转发到这里的 record_battle_*()；
+# 清零：reset_battle_stats()（每场开打）/ clear_battle_stats()（开新档）。全部在内存里，不落盘。
+
+## 任意一笔统计变化都会发（开新战斗、一次伤害、一次治疗）。战斗内和地图上的面板都靠它刷新。
+signal battle_stats_changed
+
+## 参战名单（显示名，按上场顺序）。面板按这个顺序排序（同数值时不来回跳）。
+var battle_stats_roster: Array[String] = []
+## 「上场战斗」：战斗中实时刷新，打完之后保留下来当作"上一场"给地图上的面板看。
+var battle_stats_last: Dictionary = {}
+## 「总计」：所有战斗的累计。
+var battle_stats_total: Dictionary = {}
+
+## 三个统计字段名（同时是上面两个字典里的键）。
+const STAT_DAMAGE := "damage"
+const STAT_HEALING := "healing"
+const STAT_TAKEN := "taken"
+
+## 构成字段名：面板悬停时弹出的明细表读这三份（和 STAT_* 一一对应）。
+const PARTS_DAMAGE := "damage_parts"
+const PARTS_HEALING := "healing_parts"
+const PARTS_TAKEN := "taken_parts"
+
+## 伤害/治疗的来源大类。明细的第一层是它，第二层是具体名字（技能名 / dot 名）。
+## 普攻和"其他"没有第二层（名字就是大类名），技能/dot/持续回血才有。
+const SOURCE_ATTACK := "attack"     # 普通攻击
+const SOURCE_SKILL := "skill"       # 主动技能（含法术）
+const SOURCE_DOT := "dot"           # 持续伤害（回合开始结算的掉血）
+const SOURCE_HOT := "hot"           # 持续回血（回合开始结算的回血）
+const SOURCE_OTHER := "other"       # 来源不明（道具、反伤、脚本直调…）
+
+
+## 一条零值记录（字典是引用类型，各角色各存一份，不能共享同一个对象）。
+## 构成结构：
+##   damage_parts  = { 来源大类: { 名字: 数值 } }
+##   healing_parts = { 来源大类: { 名字: 数值 } }
+##   taken_parts   = { 造成者名字: 数值 }   ← 承伤没有二级，直接按"谁打的"分
+func _empty_stat_row() -> Dictionary:
+	return {
+		STAT_DAMAGE: 0.0, STAT_HEALING: 0.0, STAT_TAKEN: 0.0,
+		PARTS_DAMAGE: {}, PARTS_HEALING: {}, PARTS_TAKEN: {},
+	}
+
+
+## 取某个角色的**跨场累计**统计（没有就现建一条零值记录）。
+## 返回的是存进 battle_stats_total 的字典本体（引用），调用方可以直接改字段。
+## 空名字返回一条临时记录 —— 调用方不会把空名字写进总计。
+func battle_stat_of(character_name: String) -> Dictionary:
+	if character_name.is_empty():
+		return _empty_stat_row()
+	if not battle_stats_total.has(character_name):
+		battle_stats_total[character_name] = _empty_stat_row()
+	return battle_stats_total[character_name]
+
+
+## 开一场新战斗：清空「上场战斗」并记下参战名单（没出手的人也留在榜上显示 0）。
+## 参数 names：我方角色显示名（可以重复/含空串，这里会去重去空）。
+## 副作用：重写 roster/last、给总计补零值记录，最后 emit battle_stats_changed。
+func reset_battle_stats(names: Array) -> void:
+	battle_stats_roster.clear()
+	battle_stats_last.clear()
+	for entry in names:
+		var who := String(entry)
+		if who.is_empty() or battle_stats_roster.has(who):
+			continue
+		battle_stats_roster.append(who)
+		battle_stats_last[who] = _empty_stat_row()
+		battle_stat_of(who)
+	battle_stats_changed.emit()
+
+
+## 开新档：三份统计全清（面板回到「暂无统计」）。
+func clear_battle_stats() -> void:
+	battle_stats_roster.clear()
+	battle_stats_last.clear()
+	battle_stats_total.clear()
+	battle_stats_changed.emit()
+
+
+## 记一笔伤害：source_name 造成、target_name 承受，两边各记一笔（同一份数据里）。
+## 参数 kind / label：来源大类（SOURCE_*）与具体名字（技能名；普攻传"普通攻击"）。
+## 名字不在参战名单里（敌方）的那一笔自动丢掉；amount 是**实际扣血量**。
+func record_battle_damage(source_name: String, target_name: String, amount: float,
+		kind := SOURCE_OTHER, label := "") -> void:
+	if amount <= 0.0:
+		return
+	var changed := false
+	if _add_battle_stat(source_name, STAT_DAMAGE, amount):
+		_add_source_part(source_name, PARTS_DAMAGE, kind, label, amount)
+		changed = true
+	if _add_battle_stat(target_name, STAT_TAKEN, amount):
+		_add_taken_part(target_name, source_name, amount)
+		changed = true
+	if changed:
+		battle_stats_changed.emit()
+
+
+## 记一笔治疗：只记**施法者**（治疗量记在"谁奶的"头上，不看被治疗者）。
+## kind 用 SOURCE_SKILL（直接治疗）/ SOURCE_HOT（持续回血）。
+func record_battle_heal(source_name: String, amount: float,
+		kind := SOURCE_OTHER, label := "") -> void:
+	if amount <= 0.0:
+		return
+	if _add_battle_stat(source_name, STAT_HEALING, amount):
+		_add_source_part(source_name, PARTS_HEALING, kind, label, amount)
+		battle_stats_changed.emit()
+
+
+## 本场 + 总计各加一笔；名字不在参战名单里返回 false（敌方不记账）。
+func _add_battle_stat(who: String, field: String, amount: float) -> bool:
+	if amount <= 0.0 or who.is_empty() or not battle_stats_last.has(who):
+		return false
+	var row: Dictionary = battle_stats_last[who]
+	row[field] = float(row.get(field, 0.0)) + amount
+	# battle_stat_of() 返回的是存起来的字典本体，直接改就是改总计。
+	var total := battle_stat_of(who)
+	total[field] = float(total.get(field, 0.0)) + amount
+	return true
+
+
+## 「本场 + 总计」两条记录（面板明细要同时写这两份）。
+func _stat_rows(who: String) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	if battle_stats_last.has(who):
+		out.append(battle_stats_last[who])
+	if battle_stats_total.has(who):
+		out.append(battle_stats_total[who])
+	return out
+
+
+## 给伤害/治疗构成加一笔：parts[大类][名字] += amount（本场和总计同时加）。
+## 名字为空时退回用大类名，免得明细里出现空键。
+func _add_source_part(who: String, parts_key: String, kind: String, label: String,
+		amount: float) -> void:
+	var text := label if not label.is_empty() else kind
+	for row in _stat_rows(who):
+		var parts: Dictionary = row.get(parts_key, {})
+		var group: Dictionary = parts.get(kind, {})
+		group[text] = float(group.get(text, 0.0)) + amount
+		parts[kind] = group
+		row[parts_key] = parts
+
+
+## 给承伤构成加一笔：taken_parts[造成者名字] += amount（本场和总计同时加）。
+func _add_taken_part(who: String, attacker_name: String, amount: float) -> void:
+	var text := attacker_name if not attacker_name.is_empty() else "未知来源"
+	for row in _stat_rows(who):
+		var parts: Dictionary = row.get(PARTS_TAKEN, {})
+		parts[text] = float(parts.get(text, 0.0)) + amount
+		row[PARTS_TAKEN] = parts
+
+
 ## 以 chance（0~1，不是百分数）返回是否成功；>=1 必成，0 必败。
 ## 副作用：推进全局 RNG 状态，会影响后续随机序列（不是 bug）。
 func get_chance_success(chance: float) -> bool:

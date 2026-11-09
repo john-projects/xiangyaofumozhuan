@@ -37,6 +37,7 @@ const GHOST_FLAME_SCENE := preload("res://scenes/effects/ghost_flame/ghost_flame
 ## 默认命中爆炸（程序化四层）；群体技能给每个敌人补的小爆炸也用它。
 const DEFAULT_BURST_EFFECT_SCENE := preload("res://scenes/effects/burst_effect.tscn")
 const CRITICAL_IMPACT_SCRIPT := preload("res://scenes/battle/critical_impact.gd")
+const DEFAULT_IMPACT_DURATION := 0.35
 ## 群体技能里每人补的小爆炸相对 skill.burst_scale 的比例。
 const AOE_TARGET_BURST_RATIO := 0.55
 ## 敌方每回合放门派技能的概率（其余回合普攻）。
@@ -82,8 +83,6 @@ enum State { IDLE, INTRO, TURN_START, COMMAND, TARGET_SELECT, EXECUTE, TURN_END,
 @export var auto_start_demo := true      # 直接运行本场景时自动开打（编辑器里设的队伍优先）
 ## 每个动作之间的停顿（秒），只影响演出节奏，不影响数值（伤害在停顿前已算完）。经验范围 0.1~0.8。
 @export var action_delay := 0.35         # 每个动作之间的停顿（秒）
-## 群体技能逐个目标结算的间隔（秒），只在 _cast_aoe() 用；比 action_delay 小得多才有"同时被炸"的观感。
-@export var aoe_step_delay := 0.06       # 群体技能里每个目标结算的间隔（秒）
 
 # ── 视觉：飘字配色 ──
 # 只用于 create_floating_text() 的 modulate，与 SkillData.tint（飞行体/爆炸染色）无关。
@@ -96,6 +95,8 @@ enum State { IDLE, INTRO, TURN_START, COMMAND, TARGET_SELECT, EXECUTE, TURN_END,
 @export var block_color := Color(1.0, 0.55, 0.35)
 ## 治疗数字：绿色（治疗技能未实现，先备着）。
 @export var heal_color := Color(0.40, 0.90, 0.55)
+## 持续伤害（dot）：紫色，和回血绿、普通伤害红都区分得开。
+@export var dot_color := Color(0.78, 0.55, 0.98)
 
 # ── 节点引用 ──
 # @onready 在 _ready() 体之前赋值：_init/成员初始化里访问是 null；节点 free 后跨 await 用前要 is_instance_valid()。
@@ -255,6 +256,9 @@ func start_battle(players: Array[UnitStats], enemies: Array[UnitStats]) -> void:
 	for unit in _all_units():
 		unit.roll_turn_speed()
 	turn_order.update_order(_alive(_all_units()))
+	# 伤害统计：本场清零并记下参战名单。数据在 Global 上（地图上的同一块面板也要能看），
+	# 面板自己监听 Global.battle_stats_changed 刷新，这里不用碰 UI。
+	Global.reset_battle_stats(_player_names())
 	# 开场停顿；计时器由 SceneTree 持有并自行回收，只等 timeout 即可。
 	await get_tree().create_timer(0.6).timeout
 	_next_round()
@@ -296,6 +300,10 @@ func _spawn_team(stats_list: Array[UnitStats], slots_root: Node2D, is_player: bo
 		# 悬停用来同步键盘光标。
 		unit.hovered.connect(_on_unit_hovered)
 		unit.died.connect(_on_unit_died)
+		# 伤害统计：所有扣血/回血最终都从 BattleUnit 的这两个信号出来，
+		# 这里接住转给 Global（地图上的面板读的是同一份），Battle 的结算点就不用各自记账了。
+		unit.damaged.connect(_on_unit_damaged)
+		unit.healed.connect(_on_unit_healed)
 		result.append(unit)
 	return result
 
@@ -308,7 +316,9 @@ func _clear_units() -> void:
 		if is_instance_valid(fx):
 			fx.queue_free()
 	_action_fx.clear()
-	_critical_pause_pending = false
+	for fx in fx_root.get_children():
+		if _is_damage_feedback(fx):
+			fx.queue_free()
 	for unit in _all_units():
 		# 防御性检查：节点可能已被别处释放。
 		if is_instance_valid(unit):
@@ -348,18 +358,31 @@ func _next_round() -> void:
 ## 出手顺序条要显示的是**轮转队列**：当前出手者排最前，已经出过手的都排到队尾
 ## （即"出完手回到队末尾"）。这里只做纯旋转，不动 turn_queue 本身的排序和游标。
 ## 阵亡/已释放的单位直接从条上剔除（死了就不该再排位）。
-func _turn_display() -> Array:
+## 返回 {"units": 轮转后的数组, "next_round_first": 从谁开始算下一轮（null = 整条都是本轮）}。
+## 分界的算法：队列下标 i..n-1 是**本轮还轮得到的人**，绕回 0..i-1 就是下一轮。
+func _turn_display() -> Dictionary:
+	var units: Array = []
 	if turn_queue.is_empty():
-		return []
+		return {"units": units, "next_round_first": null}
 	var n := turn_queue.size()
 	var i := clampi(turn_index, 0, n - 1)
-	var out: Array = []
+	var this_round_last := n - 1 - i        # 相对 i 的偏移：超过它就是下一轮
+	var next_round_first: BattleUnit = null
 	for k in n:
 		var u: BattleUnit = turn_queue[(i + k) % n]
 		if u == null or not is_instance_valid(u) or not u.alive:
 			continue
-		out.append(u)
-	return out
+		units.append(u)
+		if k > this_round_last and next_round_first == null:
+			next_round_first = u
+	return {"units": units, "next_round_first": next_round_first}
+
+
+## 刷新出手顺序条（本项目所有"刷顺序条"的地方都走这里，保证「下轮」分隔不会漏）。
+## 参数 current：当前出手者，可为 null（只清高亮，比如战斗结束）。
+func _refresh_turn_order(current: BattleUnit) -> void:
+	var display := _turn_display()
+	turn_order.update_turn(display["units"], current, display["next_round_first"])
 
 
 ## 进入 turn_queue[turn_index] 的回合；敌方顺带跑完 AI。整个流程主要停在这里等输入。
@@ -382,13 +405,20 @@ func _begin_turn() -> void:
 		_begin_turn()
 		return
 
-	# 自己的回合开始：取消上次的防御姿态、结算状态（持续回血 / 状态回合递减）。
+	# 自己的回合开始：取消上次的防御姿态、结算状态（持续回血 / 持续伤害 / 状态回合递减）。
 	# 返回值 true = 被封印：跳过一次行动（直接把游标推到下一个人）。
 	var sealed := actor.begin_turn()
+	# 状态结算万一把人弄死（dot 已经挪到回合结束结算，这里只是兜底）：跳过这次行动，先判胜负。
+	if not actor.alive:
+		_refresh_turn_order(actor)
+		if not _check_battle_end():
+			turn_index += 1
+			_begin_turn()
+		return
 	if sealed:
 		actor.set_selected(true)
 		state = State.TURN_START
-		turn_order.update_turn(_turn_display(), actor)
+		_refresh_turn_order(actor)
 		await get_tree().create_timer(0.45).timeout
 		actor.set_selected(false)
 		turn_index += 1
@@ -398,7 +428,7 @@ func _begin_turn() -> void:
 	# 点亮行动者轮廓：我方青 / 敌方橙红（见 BattleUnit.OUTLINE_*）。
 	actor.set_selected(true)
 	state = State.TURN_START
-	turn_order.update_turn(_turn_display(), actor)
+	_refresh_turn_order(actor)
 	turn_started.emit(actor)
 	# 不再播报"某某的回合"：当前出手者已在顺序条第一格高亮，信息栏留给伤害/状态播报。
 	info_label.text = ""
@@ -493,6 +523,10 @@ func _scheduled_targets(unit: BattleUnit, skill: SkillData) -> Array[BattleUnit]
 ## 坑：turn_index 只在这里推进，任何分支漏调都会导致战斗卡死。
 func _finish_turn() -> void:
 	state = State.TURN_END
+	# 回合**结束**结算持续伤害（dot）：每回合结束时掉气血上限的 x%（skill.dot_percent）。
+	# 可能把人打死 —— _die() 会 emit died（顺序条随之刷新），接着 _begin_turn() 开头会先判胜负。
+	if actor != null and is_instance_valid(actor) and actor.alive:
+		actor.end_turn()
 	# 熄灭轮廓要在 actor 置 null 之前做，否则找不到它。
 	if actor != null and is_instance_valid(actor):
 		actor.set_selected(false)
@@ -569,7 +603,7 @@ func _on_command_selected(command: StringName) -> void:
 
 		&"flee":
 			# TODO: 做成有成功率的逃跑（速度/等级差决定概率）；现在无条件判负。
-			_finish_battle(false, "撤退")
+			_finish_battle(false, "撤退", false)
 
 		&"skill":
 			# 法术走 CommandMenu 的二级菜单（skill_selected），不会进到这里。
@@ -751,7 +785,7 @@ func _perform_attack(attacker: BattleUnit, target: BattleUnit) -> void:
 
 
 ## 挥击关键点：扣血、数字和受击在同一刻触发。
-func _apply_basic_attack_hit(attacker: BattleUnit, target: BattleUnit) -> void:
+func _apply_basic_attack_hit(duration: float, attacker: BattleUnit, target: BattleUnit) -> void:
 	if not is_instance_valid(target) or not target.alive:
 		return
 
@@ -759,12 +793,13 @@ func _apply_basic_attack_hit(attacker: BattleUnit, target: BattleUnit) -> void:
 	var is_crit := attacker.roll_crit()
 	if is_crit:
 		damage = ceilf(damage * attacker.crit_multiplier())
-	var dealt := target.take_damage(damage)
+	var dealt := target.take_damage(damage, false, _unit_display_name(attacker),
+			Global.SOURCE_ATTACK, ATTACK_SOURCE_LABEL)
 	# 飘字只显示整数部分（伤害是 float），避免出现 "12.000000"。
 	_show_damage_feedback(target, dealt, is_crit)
 	# 受击后仰与出招**并行**：它俩时长一样，串着等会把一次普攻拖成两倍。
 	if target.alive:
-		target.play_hit(attacker.global_position)
+		target.play_hit(attacker.global_position, duration)
 
 
 # ── 技能 ──
@@ -805,8 +840,7 @@ static func _skill_deals_damage(skill: SkillData) -> bool:
 
 
 ## 伤害技能：起手 → 飞行 → 命中结算 → 收尾（协程）。扣蓝/进冷却在起手一次扣完（目标死了不退）。
-## 顺序：先扣蓝进冷却再播演出；单体逐目标串行、群体交 _cast_aoe()；fly_to() 返回才结算，
-##   burst() 放在结算之后。坑：victims 是循环前快照，循环内每个目标重判 alive，跳过而非 break。
+## 弹体到达后开播命中特效，在动画最后几帧扣血和跳字。
 ## 辅助类技能（SELF / ALLY_SINGLE）走 _perform_support()。
 func _perform_skill(caster: BattleUnit, skill: SkillData, targets: Array[BattleUnit]) -> void:
 	if not is_instance_valid(caster) or skill == null:
@@ -836,35 +870,24 @@ func _perform_skill(caster: BattleUnit, skill: SkillData, targets: Array[BattleU
 	caster.spend_mana(skill.mana_cost)
 	caster.start_cooldown(skill)
 	_play_sfx(skill.cast_sfx)
-	# 本技能的一整段动画时长：受击后仰要保持这么久（三尺青锋 1.4 秒、五雷正法 1.5 秒…）
-	var anim_time := _skill_anim_time(skill)
 	# 近战门派技能（太虚神剑 / 星罗魔爪）：先走到目标面前再放。
 	# home 必须在走之前记下来 —— 走完 caster.position 已经不是站位了。
 	var home := caster.position
 	var approaching := skill.melee and victims.size() == 1
 	if approaching:
 		await caster.attack_approach(victims[0])
-	# 把"被打的那一组"传下去：敌方施法时动画要盖在我方身上，不能按技能类型猜。
-	_spawn_screen_effect(skill, Vector2.INF, victims)
-	# 有**全屏动画**的技能（三尺青锋 / 群星陨落 …）：受击后仰从动画起点就开始，
-	# 和动画同进同出。放在这里而不是 _cast_aoe 的结算循环里 ——
-	# 那条路要先等弹体飞完（0.5~1 秒），后仰会晚到动画快结束才出现。
-	if skill.screen_effect_scene != null:
-		for t in victims:
-			if is_instance_valid(t):
-				t.play_hit(caster.global_position, anim_time)
 	await caster.play_cast()
 
 	# 多目标（max_targets > 1）或全体技能：走**群体演出**——
 	# 只生成一颗弹体、只播一次大特效，然后所有目标同时结算（雷动九天就是这条路径）。
 	# 之前 max_targets 走单体循环，会变成"每个敌人各播一遍"，观感像连放 3 次技能。
 	if skill.target_mode == SkillData.TargetMode.ENEMY_ALL:
-		await _cast_aoe(caster, skill, victims, anim_time)
+		await _cast_aoe(caster, skill, victims)
 		if not _check_battle_end():
 			_finish_turn()
 		return
 	if skill.target_mode == SkillData.TargetMode.ENEMY_SINGLE and skill.max_targets > 1:
-		await _cast_aoe(caster, skill, victims, anim_time)
+		await _cast_aoe(caster, skill, victims)
 		if not _check_battle_end():
 			_finish_turn()
 		return
@@ -882,11 +905,15 @@ func _perform_skill(caster: BattleUnit, skill: SkillData, targets: Array[BattleU
 			fx_root.add_child(projectile)
 			# 起点/落点都用 body_center()（脚在原点，往上抬半个身高）——敌我可能挂在不同的父节点下。
 			projectile.setup(skill, caster.body_center())
-			# await 到飞体抵达目标坐标那一刻再结算。
+			# 飞体抵达目标后开播命中特效。
 			await projectile.fly_to(target.body_center())
+			if not is_instance_valid(target) or not target.alive:
+				projectile.queue_free()
+				continue
 
-		# Start the arrival effects before resolving damage. Per-hit skills
-		# supply their own animation below and only retire the projectile here.
+		# 命中时开播特效；连击的独立动画在每一段开播。
+		var first_fx := _action_fx.size()
+		_spawn_screen_effect(skill, Vector2.INF, victims)
 		var impact_pos: Vector2 = target.global_position if skill.hit_effect_on_ground else target.body_center()
 		if projectile != null:
 			projectile.global_position = impact_pos
@@ -899,35 +926,36 @@ func _perform_skill(caster: BattleUnit, skill: SkillData, targets: Array[BattleU
 		if skill.screen_shake > 0.0:
 			_shake_camera(skill.screen_shake)
 
-		# Each segment runs before its own damage popup and critical flash.
 		var times := maxi(1, skill.hits)
+		var hit_interval := maxf(0.02, skill.hit_interval)
+		var shared_duration := _impact_duration(first_fx)
+		var shared_tail := BattleUnit.impact_tail_duration(shared_duration)
+		var impact_delay := 0.0
+		if not skill.hit_effect_per_hit:
+			# 多次伤害共用一段动画时，各击都排在这段动画的尾部。
+			hit_interval = minf(hit_interval, shared_tail / times)
+			impact_delay = shared_duration - shared_tail
+			await get_tree().create_timer(impact_delay, false).timeout
 		for hit in times:
 			if not is_instance_valid(target) or not target.alive:
 				break
-			var seg_fx: Node = null
+			var segment_fx := _action_fx.size()
+			var tail_duration := shared_tail - hit * hit_interval
 			if skill.hit_effect_per_hit:
-				seg_fx = _spawn_per_hit_effect(skill, target, hit, caster.global_position)
-			var hold := anim_time
-			if seg_fx != null and seg_fx.has_method("duration"):
-				hold = float(seg_fx.call("duration"))
-			target.play_hit(caster.global_position, hold)
-			await _wait_action_fx(true)
-			if not is_instance_valid(target) or not target.alive:
-				break
-			if _skill_deals_damage(skill):
-				var damage := caster.skill_damage(skill, hit)
-				var is_crit := caster.skill_crit(skill)
-				if is_crit:
-					damage = ceilf(damage * caster.crit_multiplier())
-				var dealt := target.take_damage(damage, skill.damage_type == SkillData.DamageType.MAGIC)
-				_show_damage_feedback(target, dealt, is_crit)
-			_apply_skill_statuses(caster, skill, target)
+				_spawn_per_hit_effect(skill, target, hit, caster.global_position)
+				var duration := _impact_duration(segment_fx)
+				tail_duration = BattleUnit.impact_tail_duration(duration)
+				impact_delay = duration - tail_duration
+				await get_tree().create_timer(impact_delay, false).timeout
+				if not is_instance_valid(target) or not target.alive:
+					break
+			target.play_hit(caster.global_position, tail_duration)
+			_apply_skill_hit(caster, skill, target, hit)
 			if hit < times - 1 and target.alive:
-				await get_tree().create_timer(maxf(0.02, skill.hit_interval)).timeout
-
-
-		# 每个目标之间也留一个 action_delay，并且等这一段的特效播完。
-		await _wait_action_end()
+				if skill.hit_effect_per_hit:
+					await _wait_action_fx(segment_fx)
+				await get_tree().create_timer(hit_interval).timeout
+		await _wait_action_end(impact_delay)
 
 	# 近战技能：打完退回原位（不播 attack 动作，招式本身的特效已经演完了）
 	if approaching:
@@ -939,11 +967,8 @@ func _perform_skill(caster: BattleUnit, skill: SkillData, targets: Array[BattleU
 
 
 ## 群体演出（ENEMY_ALL，或多目标技能 ENEMY_SINGLE + max_targets > 1）：
-## 一颗飞行体飞目标阵型中心 → **只播一次**大特效 → 按 aoe_step_delay 逐个结算（间隔极短 = 同时受击）。
-## 蓝/冷却不在这里扣（_perform_skill 起手已扣）；hit_sfx 与镜头抖动只做一次；命中者再补一朵小爆炸，
-## 中心爆炸先于伤害结算。坑：循环内重判有效/存活（不要 break）；play_hit() 故意不 await，要同时闪红。
-func _cast_aoe(caster: BattleUnit, skill: SkillData, victims: Array[BattleUnit],
-		hold := 0.35) -> void:
+## 弹体到达阵型中心后开播命中特效，所有目标在动画尾段同帧结算。
+func _cast_aoe(caster: BattleUnit, skill: SkillData, victims: Array[BattleUnit]) -> void:
 	var center := _group_center(victims)
 
 	# ① 飞行体（instant_hit 的技能跳过这一步）
@@ -956,6 +981,8 @@ func _cast_aoe(caster: BattleUnit, skill: SkillData, victims: Array[BattleUnit],
 		projectile.setup(skill, caster.body_center())
 		await projectile.fly_to(center)
 
+	var first_fx := _action_fx.size()
+	_spawn_screen_effect(skill, Vector2.INF, victims)
 	# ② 中心大爆炸：burst() 内部读 skill.hit_effect_scene / burst_scale，并自毁
 	# 贴地类特效（雷动九天）把落点压到敌人脚下的地面线，否则地面法阵会浮在半空。
 	# hit_effect_center = false 时中心不炸（群星陨落只在每个目标脚下各落一颗陨星）。
@@ -972,37 +999,39 @@ func _cast_aoe(caster: BattleUnit, skill: SkillData, victims: Array[BattleUnit],
 	if skill.screen_shake > 0.0:
 		_shake_camera(skill.screen_shake)
 
-	# Start all target animations together, then resolve damage after the
-	# last authored impact (including any screen-wide effect) has finished.
-	if _skill_deals_damage(skill):
+	var deals_damage := _skill_deals_damage(skill)
+	if deals_damage:
 		for target in _alive(victims):
 			if skill.hit_effect_per_target or skill.target_effect_scene != null:
 				var burst_pos := target.global_position if skill.hit_effect_on_ground else target.body_center()
 				var ratio := 1.0 if skill.target_effect_scene != null else AOE_TARGET_BURST_RATIO
 				_spawn_hit_burst(skill, burst_pos, ratio, caster.body_center())
-			if skill.screen_effect_scene == null:
-				target.play_hit(caster.global_position, hold)
-	await _wait_action_fx(true)
 
-	for target in victims:
-		if not is_instance_valid(target) or not target.alive:
-			continue
-		if _skill_deals_damage(skill):
-			var damage := caster.skill_damage(skill)
-			var is_crit := caster.skill_crit(skill)
-			if is_crit:
-				damage = ceilf(damage * caster.crit_multiplier())
-			var dealt := target.take_damage(damage, skill.damage_type == SkillData.DamageType.MAGIC)
-			_show_damage_feedback(target, dealt, is_crit)
-		_apply_skill_statuses(caster, skill, target)
-		await get_tree().create_timer(aoe_step_delay).timeout
+	var duration := _impact_duration(first_fx)
+	var tail_duration := BattleUnit.impact_tail_duration(duration)
+	var impact_delay := duration - tail_duration
+	await get_tree().create_timer(impact_delay, false).timeout
+	for target in _alive(victims):
+		if deals_damage:
+			target.play_hit(caster.global_position, tail_duration)
+		_apply_skill_hit(caster, skill, target)
+	await _wait_action_end(impact_delay)
 
 
-	await _wait_action_end()
+func _apply_skill_hit(caster: BattleUnit, skill: SkillData, target: BattleUnit, hit := 0) -> void:
+	if _skill_deals_damage(skill):
+		var damage := caster.skill_damage(skill, hit)
+		var is_crit := caster.skill_crit(skill)
+		if is_crit:
+			damage = ceilf(damage * caster.crit_multiplier())
+		var dealt := target.take_damage(damage, skill.damage_type == SkillData.DamageType.MAGIC,
+				_unit_display_name(caster), Global.SOURCE_SKILL, skill.display_name)
+		_show_damage_feedback(target, dealt, is_crit)
+	_apply_skill_statuses(caster, skill, target)
 
 
-## 技能附带的状态：封印（下回合跳过）/ 封法术（N 回合不能放技能）。
-## 参数 caster/target 都是 BattleUnit；概率在 SkillData 里（0~1）。
+## 技能附带的状态：封印（下回合跳过）/ 封法术（N 回合不能放技能）/ 持续伤害（dot）。
+## 参数 caster/target 都是 BattleUnit；概率与数值在 SkillData 里。
 ## 只在目标还活着时判定；不再显示状态文字飘字。
 func _apply_skill_statuses(caster: BattleUnit, skill: SkillData, target: BattleUnit) -> void:
 	if not is_instance_valid(target) or not target.alive:
@@ -1011,6 +1040,20 @@ func _apply_skill_statuses(caster: BattleUnit, skill: SkillData, target: BattleU
 		target.add_status("seal", 0.0, 1)
 	if skill.silence_chance > 0.0 and Global.get_chance_success(skill.silence_chance):
 		target.add_status("silence", 0.0, maxi(1, skill.silence_turns))
+	# 持续伤害（dot）：每回合**结束时**在 BattleUnit.end_turn() 结算。
+	# 第一跳 = 等级 + 技能等级 + 伤害/4（系数在 SkillData.dot_first_* 里，可调），
+	# 之后每跳 = 目标气血上限 × dot_percent。记上施法者名字 + 技能名，统计面板按「持续伤害」分组。
+	var has_first := skill.dot_first_level > 0.0 or skill.dot_first_skill > 0.0 \
+			or skill.dot_first_damage > 0.0
+	if skill.dot_turns > 0 and (skill.dot_percent > 0.0 or has_first):
+		var caster_damage := 0.0
+		if caster.stats != null:
+			caster_damage = caster.stats.damage
+		var first := skill.dot_first_level * float(_unit_level(caster)) \
+				+ skill.dot_first_skill * float(_skill_level(skill)) \
+				+ skill.dot_first_damage * caster_damage
+		target.add_dot(first, skill.dot_percent, skill.dot_turns,
+				_unit_display_name(caster), skill.display_name)
 
 
 ## 辅助技能（SELF / ALLY_SINGLE）：治疗 + 持续回血 + 增益状态。
@@ -1077,11 +1120,16 @@ func _apply_support_to(caster: BattleUnit, skill: SkillData, target: BattleUnit)
 	# 治疗：回复量 = 施法者 healing × heal_power
 	if skill.heal_power > 0.0:
 		var amount := maxf(1.0, caster.stats.healing * skill.heal_power)
-		target.heal(amount)
+		# 后面两个参数是"谁奶的、用什么奶的"，给统计面板的「治疗构成」认账
+		# （实际回复量由 heal() 自己夹上限）。
+		target.heal(amount, _unit_display_name(caster), Global.SOURCE_SKILL, skill.display_name)
 		create_floating_text(target, "+%d" % int(roundf(amount)), heal_color)
 	# 持续回血：每回合回 healing × hot_power，持续 hot_turns 回合
+	# （最后两个参数是施加者名字 + 技能名 —— 每回合结算 hot 时要把治疗量记到他头上）
 	if skill.hot_turns > 0 and skill.hot_power > 0.0:
-		target.add_status("hot", 0.0, skill.hot_turns, maxf(1.0, caster.stats.healing * skill.hot_power))
+		target.add_status("hot", 0.0, skill.hot_turns,
+				maxf(1.0, caster.stats.healing * skill.hot_power),
+				_unit_display_name(caster), skill.display_name)
 	# 增益状态：数值 = buff_value（已在 _attach_sect_skills 里按等级烤好）
 	if not skill.buff_stat.is_empty() and skill.buff_value > 0.0:
 		target.add_status(skill.buff_stat, skill.buff_value, maxi(1, skill.buff_turns))
@@ -1236,24 +1284,14 @@ func _set_round(n: int) -> void:
 	turn_order.set_round(n)
 
 
-## 这个技能的一整段动画有多长（秒）—— 受击后仰要保持这么久。
-## 顺序：全屏特效（三尺青锋/群星陨落这类走这条）→ 命中特效 → 都没有就 0.35 兜底。
-## 实现是"实例化一次问 duration() 再 free"：那些场景都很轻（根节点 + 一个 Sprite2D），
-## 而且只有施法瞬间调一次，开销可以忽略。程序化特效没有 duration()，返回 0 会被跳过。
-func _skill_anim_time(skill: SkillData) -> float:
-	if skill == null:
-		return 0.35
-	for scene in [skill.screen_effect_scene, skill.hit_effect_scene, skill.target_effect_scene]:
-		if scene == null:
-			continue
-		var inst = scene.instantiate()
-		var d := 0.0
-		if inst.has_method("duration"):
-			d = float(inst.call("duration"))
-		inst.free()
-		if d > 0.0:
-			return d
-	return 0.35
+## 本次命中可能同时有全屏和目标特效，反馈随最长的那一个收尾。
+func _impact_duration(first_fx: int) -> float:
+	var duration := 0.0
+	for i in range(first_fx, _action_fx.size()):
+		var fx := _action_fx[i]
+		if is_instance_valid(fx) and not fx.is_queued_for_deletion() and fx.has_method("duration"):
+			duration = maxf(duration, float(fx.call("duration")))
+	return duration if duration > 0.0 else DEFAULT_IMPACT_DURATION
 
 
 ## 这个技能是"打我方的"吗：给自己加 buff / 全体队友 / 选一个队友，都算。
@@ -1331,12 +1369,12 @@ func _spawn_instant_burst(skill: SkillData, pos: Vector2, from := Vector2.INF) -
 ## 约定：特效场景实现了 play_segment(index) 就播对应片段（太虚神剑三段动画），
 ##   否则退回 play(tint, count) —— 这样别的技能也能开这个开关而不报错。
 func _spawn_per_hit_effect(skill: SkillData, target: BattleUnit, hit: int,
-		source_position: Vector2 = Vector2.ZERO) -> Node:
+		source_position: Vector2 = Vector2.ZERO) -> void:
 	var scene: PackedScene = skill.hit_effect_scene
 	if scene == null:
 		scene = skill.target_effect_scene
 	if scene == null or not is_instance_valid(target):
-		return null
+		return
 	var boom = scene.instantiate()
 	fx_root.add_child(boom)
 	var pos: Vector2 = target.global_position if skill.hit_effect_on_ground else target.body_center()
@@ -1356,13 +1394,11 @@ func _spawn_per_hit_effect(skill: SkillData, target: BattleUnit, hit: int,
 	else:
 		SkillProjectile.play_sequence_once(boom)
 	_track_fx(boom)
-	return boom
 
 
 # One-shot effects free themselves after their last frame. Tracking live nodes
 # avoids finishing early when playback slows or an effect has no duration API.
 var _action_fx: Array[Node] = []
-var _critical_pause_pending := false
 
 
 func _track_fx(fx: Node) -> void:
@@ -1370,14 +1406,12 @@ func _track_fx(fx: Node) -> void:
 		_action_fx.append(fx)
 
 
-func _wait_action_fx(impact_only := false) -> void:
+func _wait_action_fx(first_fx := 0) -> void:
 	while true:
 		var playing := false
-		for fx in _action_fx:
+		for i in range(first_fx, _action_fx.size()):
+			var fx := _action_fx[i]
 			if not is_instance_valid(fx) or fx.is_queued_for_deletion() or not fx.is_inside_tree():
-				continue
-			# A prior hit's critical flash does not postpone this hit's damage.
-			if impact_only and fx.get_script() == CRITICAL_IMPACT_SCRIPT:
 				continue
 			playing = true
 			break
@@ -1386,13 +1420,12 @@ func _wait_action_fx(impact_only := false) -> void:
 		await get_tree().process_frame
 
 
-func _wait_action_end() -> void:
-	await get_tree().create_timer(action_delay).timeout
+func _wait_action_end(elapsed := 0.0) -> void:
+	var delay := action_delay - elapsed
+	if delay > 0.0:
+		await get_tree().create_timer(delay).timeout
 	await _wait_action_fx()
 	_action_fx.clear()
-	if _critical_pause_pending:
-		_critical_pause_pending = false
-		await get_tree().create_timer(0.25).timeout
 
 
 
@@ -1428,10 +1461,72 @@ func _shake_camera(amount: float) -> void:
 ## 死掉的那个会在 _begin_turn() 轮到时被跳过，所以本回合不会出现下标错位。
 func _on_unit_died(unit: BattleUnit) -> void:
 	# 用轮转后的队列刷新，否则顺序条会跳回"速度排序"，和玩家看到的"出完手到队尾"对不上。
-	turn_order.update_turn(_turn_display(), actor)
+	_refresh_turn_order(actor)
 	# 我方阵亡 → 原地化成一团幽火；怪物不倒、不生成任何东西，直接淡出。
 	if is_instance_valid(unit) and unit.is_player:
 		_spawn_ghost_flame(unit.global_position)
+
+
+# ── 伤害统计（右上角面板 / 地图上的同一块面板）──
+# 记账点只有一处：BattleUnit.take_damage() / heal() 里的 damaged / healed 信号。
+# 这样以后新增伤害来源（毒、反伤、道具）不用回来补统计，Battle 也不必在每个结算点各记一笔。
+# 数据写在 Global 上，面板只是观察者（战斗内那块和地图上那块读的是同一份）。
+# 来源大类（Global.SOURCE_*）跟着信号一路带下去，面板悬停时才能拆出"伤害构成"。
+
+## 普攻在统计里的名字。明细第一层的大类就叫「普通攻击」，名字保持一致就不会多出一层子项。
+const ATTACK_SOURCE_LABEL := "普通攻击"
+
+## 有单位掉血：把"谁打的 / 谁挨的 / 多少 / 什么来源"交给 Global 的统计。
+## 参数 amount 是 **实际扣血量**（BattleUnit 已经算完攻防差/格挡/防御姿态）。
+func _on_unit_damaged(unit: BattleUnit, amount: float, source_name: String,
+		source_kind: String, source_label: String) -> void:
+	# 敌方挨打也会走到这里：Global 只认参战名单里的名字，敌方那一条会被丢掉
+	# （承伤则照常记在我方身上，按"谁打的"归类）。
+	Global.record_battle_damage(source_name, _unit_display_name(unit), amount,
+			source_kind, source_label)
+	# 持续伤害没有出手动作，飘字只能在这里补（普攻/技能在各自结算点已经飘过了）。
+	if source_kind == Global.SOURCE_DOT and is_instance_valid(unit):
+		create_floating_text(unit, str(int(roundf(amount))), dot_color)
+
+
+## 有单位回血：统计的是"治疗者"，被治疗者不上榜（治疗量记在放技能的人头上）。
+func _on_unit_healed(_unit: BattleUnit, amount: float, source_name: String,
+		source_kind: String, source_label: String) -> void:
+	Global.record_battle_heal(source_name, amount, source_kind, source_label)
+
+
+## 我方参战角色名（按上场顺序，交给 Global 当统计键）。
+func _player_names() -> Array[String]:
+	var out: Array[String] = []
+	for unit in _players:
+		var who := _unit_display_name(unit)
+		if not who.is_empty():
+			out.append(who)
+	return out
+
+
+## 单位显示名（伤害统计的键）。stats 可能为空（编辑器里漏配），这时返回空串 ——
+## 统计侧对空名字一律不记，不会写出脏数据。
+static func _unit_display_name(unit: BattleUnit) -> String:
+	if unit == null or unit.stats == null:
+		return ""
+	return String(unit.stats.name)
+
+
+## 单位等级：战斗副本上由 GameRoot._make_player_team() 烤进 meta 的 "level"。
+## 为什么不能在战斗里现查：副本是 duplicate() 出来的，resource_path 为空，查不到 Global 的等级表。
+## 没有 meta 的（F6 演示、手搓的队伍、敌人）按 1 级算。
+static func _unit_level(unit: BattleUnit) -> int:
+	if unit == null or unit.stats == null:
+		return 1
+	return maxi(1, int(unit.stats.get_meta("level", 1)))
+
+
+## 技能等级：门派技能副本由 GameRoot._bake_sect_skill() 烤进 meta 的 "level"；普通 .tres 按 1 级算。
+static func _skill_level(skill: SkillData) -> int:
+	if skill == null:
+		return 1
+	return maxi(1, int(skill.get_meta("level", 1)))
 
 
 ## 在指定世界坐标点起一团幽火当"墓碑"。火焰自己循环燃烧、不自行销毁，
@@ -1464,8 +1559,8 @@ func _check_battle_end() -> bool:
 
 ## 战斗唯一收口：清干净进行中的状态后广播结果。player_won 胜负，reason 信息栏结束语。
 ## 顺序敏感：state=FINISHED 必须第一件事（让 await 续行在 _check_battle_end() 收敛），再清
-##   actor/_pending_skill、关菜单、清高亮与顺序条、写提示，最后 emit battle_ended；不释放单位、不切场景。
-func _finish_battle(player_won: bool, reason: String) -> void:
+##   actor/_pending_skill、关菜单、清高亮与顺序条、写提示。等最后一击的反馈播完再通知地图切换。
+func _finish_battle(player_won: bool, reason: String, wait_for_feedback := true) -> void:
 	if state == State.FINISHED:
 		return
 	state = State.FINISHED
@@ -1479,15 +1574,20 @@ func _finish_battle(player_won: bool, reason: String) -> void:
 			unit.set_selected(false)
 	turn_order.clear_current()
 	info_label.text = reason
-	battle_ended.emit(player_won)
+	if wait_for_feedback:
+		for fx in fx_root.get_children():
+			if is_instance_valid(fx) and not fx.is_queued_for_deletion() and _is_damage_feedback(fx):
+				await fx.tree_exited
+	if is_inside_tree() and state == State.FINISHED:
+		battle_ended.emit(player_won)
 	# TODO: 结算（经验 / 掉落 / 回地图）接在这里
 
 
 ## 在单位头顶生成飘字（伤害/Blocked!/防御），播完自毁。
 ## 坐标：立绘脚在原点，body_center() 是身体中心，再往上抬 30px 落到头顶附近；
-## x 随机 ±18 防止连炸时飘字叠成竖线。
+## 连击时为同一单位的伤害数字分配不同位置。
 ## 坑：必须先 add_child() 再 setup()——setup() 内部访问 @onready 的 value_label。
-func create_floating_text(unit: BattleUnit, text: String, color: Color, is_critical: bool = false) -> void:
+func create_floating_text(unit: BattleUnit, text: String, color: Color, is_critical := false) -> void:
 	var fx := Global.FLOATING_TEXT_SCENE.instantiate() as FloatingText
 	var offset := Vector2(0.0, -30.0)
 	if text.is_valid_int() and not text.begins_with("+"):
@@ -1566,8 +1666,11 @@ func _unhandled_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 
 
-## Normal and critical numbers appear at the same damage-resolution point.
-## Critical visuals still extend the action barrier, without delaying numbers.
+func _is_damage_feedback(fx: Node) -> bool:
+	return fx.has_meta("damage_target") or fx.get_script() == CRITICAL_IMPACT_SCRIPT
+
+
+## 跳字和暴击闪光各自播完，允许延续到动作结束后。
 func _show_damage_feedback(unit: BattleUnit, dealt: float, is_crit: bool) -> void:
 	create_floating_text(unit, str(int(roundf(dealt))), critical_color if is_crit else normal_color, is_crit)
 	if not is_crit or dealt <= 0.0:
@@ -1575,8 +1678,6 @@ func _show_damage_feedback(unit: BattleUnit, dealt: float, is_crit: bool) -> voi
 	var impact := CRITICAL_IMPACT_SCRIPT.new()
 	fx_root.add_child(impact)
 	impact.global_position = unit.body_center()
-	_track_fx(impact)
-	_critical_pause_pending = true
 
 
 # ── 顶部「自动施法中」提示 ──

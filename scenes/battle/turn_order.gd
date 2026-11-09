@@ -18,6 +18,8 @@ const ENEMY_BORDER := Color(0.95, 0.42, 0.42)
 const NEXT_ARROW := Color(1.0, 0.85, 0.3)
 ## 阵亡单位整体透明度（panel.modulate.a）。阵亡的已从队列剔除，这里只是兜底。
 const DEAD_ALPHA := 0.3
+## 「本轮 / 下一轮」分隔线的颜色：暗金，和回合数那排字同色系但更淡（不抢头像）。
+const DIVIDER_COLOR := Color(1.0, 0.85, 0.5, 0.6)
 
 # ── 节点引用与运行时状态 ──
 
@@ -35,12 +37,16 @@ const MIN_WIDTH := 96.0
 var _queue: Array = []
 ## 当前出手者（只用于高亮，不参与逻辑判断）。
 var _current: BattleUnit
+## 下一轮第一个出手的人（只用于在条上插"本轮 / 下一轮"分隔）。
+## null = 不分隔（比如队列刚排好、所有人都还没出手，整条都是本轮）。
+var _next_round_first: BattleUnit
 
 
 ## 更新整条顺序（每回合和有人阵亡时由 Battle 调）。units 已按速度排好，本组件不排序。
-## 副作用：_queue 换成传入数组的引用，并全量重建 %Icons。
+## 副作用：_queue 换成传入数组的引用，并全量重建 %Icons；分隔一并清掉（整条都是本轮）。
 func update_order(units: Array) -> void:
 	_queue = units
+	_next_round_first = null
 	_rebuild()
 
 
@@ -53,15 +59,18 @@ func set_current(unit: BattleUnit) -> void:
 
 ## 一次设好「轮转后的队列 + 当前出手者」，只重建一次（每回合每个人都会调）。
 ## units 必须已经是"当前出手者排最前"的顺序 —— 排序由 Battle 负责，这里不排。
-func update_turn(units: Array, current: BattleUnit) -> void:
+## 参数 next_round_first：从哪个人开始已经是下一轮了（不给 = 整条都是本轮，不插分隔）。
+func update_turn(units: Array, current: BattleUnit, next_round_first: BattleUnit = null) -> void:
 	_queue = units
 	_current = current
+	_next_round_first = next_round_first
 	_rebuild()
 
 
 ## 取消高亮（战斗结束）；_current 置 null 并重建。
 func clear_current() -> void:
 	_current = null
+	_next_round_first = null
 	_rebuild()
 
 
@@ -90,6 +99,9 @@ func _rebuild() -> void:
 		# 第一格和第二格之间插一个右向箭头，表示"他出完手 → 轮到下一个"。
 		if i == 1:
 			icons.add_child(_make_arrow())
+		# 从这个人开始已经是下一轮：在它前面插一条「下轮」分隔（环状顺序条不加标记看不出分界）。
+		if _next_round_first != null and ordered[i] == _next_round_first:
+			icons.add_child(_make_round_divider())
 		# `unit == _current` 是引用比较，判断"这个是不是当前出手的人"。
 		icons.add_child(_make_icon(ordered[i], ordered[i] == _current))
 	# 黑底宽度跟着头像数量走（右边缘固定贴屏幕，所以改左偏移）。
@@ -124,6 +136,32 @@ func _make_arrow() -> Control:
 	arrow.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	arrow.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	return arrow
+
+
+## 「本轮 / 下一轮」分隔：一条竖线 + 下面一行小字「下轮」。
+## 为什么要它：顺序条是个环——当前出手者排最前，出过手的会自动转到队尾等下一轮。
+## 不标一下，玩家分不清"队尾那几个人"是排在本轮后面还是下一轮开头。
+func _make_round_divider() -> Control:
+	var box := VBoxContainer.new()
+	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	box.add_theme_constant_override("separation", 2)
+
+	var line := ColorRect.new()
+	line.custom_minimum_size = Vector2(3, 38)
+	line.color = DIVIDER_COLOR
+	line.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	line.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	box.add_child(line)
+
+	var label := Label.new()
+	label.text = "下轮"
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.add_theme_font_size_override("font_size", 13)
+	label.add_theme_color_override("font_color", DIVIDER_COLOR)
+	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.add_child(label)
+	return box
 
 
 ## 生成一个单位图标（Panel + 铺满的贴图）。is_current 只影响尺寸 64/52 与边框粗细 3/2，

@@ -35,6 +35,22 @@ signal mp_changed(unit: BattleUnit)
 ## 谁接：Battle._on_unit_died()，只刷新顺序条，不从回合队列移除。本信号只发一次。
 signal died(unit: BattleUnit)
 
+## 掉血（take_damage() 里发，**伤害的唯一结算出口**，普攻和技能最后都走这里）。
+## amount = **实际**扣掉的血量（已经过攻防差/浮动/格挡/防御姿态），不是出手强度；
+## source_name = 造成这份伤害的人的名字（Battle 传进来的，没人认领时是空串）；
+## source_kind / source_label = 来源大类（Global.SOURCE_*）和具体名字（技能名 / "普通攻击" / dot 名），
+## 只给统计面板的"伤害构成"用，不参与任何战斗判定。
+## 谁接：Battle._on_unit_damaged()，喂 Global 的统计。
+signal damaged(unit: BattleUnit, amount: float, source_name: String,
+		source_kind: String, source_label: String)
+
+## 回血（heal() 里发）。amount = **实际**回复量（被气血上限夹过之后，满血时不会发信号）；
+## source_name = 治疗者名字（持续回血 hot 记的是当初施加它的那个人）。
+## source_kind / source_label：直接治疗是 SOURCE_SKILL，持续回血是 SOURCE_HOT。
+## 谁接：Battle._on_unit_healed()，同上只喂统计面板。
+signal healed(unit: BattleUnit, amount: float, source_name: String,
+		source_kind: String, source_label: String)
+
 # ── 视觉常量（选中/目标/悬停/受击/防御/施法配色）──
 # 写死不 @export：这是全局统一的战斗语言。颜色都带 alpha，铺在 %Selection 的半透明圈上。
 
@@ -426,8 +442,11 @@ const DAMAGE_CAP := 0.95
 ##                                          所以它对"高频低伤"特别有效，和梦幻一致）
 ##   ⑤ 防御姿态 final ×= 0.5
 ## 返回值：实际扣掉的血量（Battle 用它飘伤害数字，避免显示未减伤的值）。
-## 副作用：改 hp、_refresh_hp()；归零调 _die()。已死单位直接 return 0（防鞭尸/重复 _die()）。
-func take_damage(amount: float, magic := false) -> float:
+## 参数 source_name / source_kind / source_label：造成伤害的人、来源大类、具体名字，
+## **只用于伤害统计**（Battle 传进来），不影响任何数值。
+## 副作用：改 hp、_refresh_hp()、emit damaged；归零调 _die()。已死单位直接 return 0（防鞭尸/重复 _die()）。
+func take_damage(amount: float, magic := false, source_name := "",
+		source_kind := "other", source_label := "") -> float:
 	if not alive:
 		return 0.0
 	var guard := float(stats.spell_defense) if magic else float(stats.defense)
@@ -445,18 +464,44 @@ func take_damage(amount: float, magic := false) -> float:
 		final = maxf(1.0, final * 0.5)
 	hp = maxf(0.0, hp - final)
 	_refresh_hp()
+	# 先报账再判死：统计面板要记这一下（_die() 只改表现，不影响这份数据）。
+	damaged.emit(self, final, source_name, source_kind, source_label)
 	if hp <= 0.0:
 		_die()
 	return final
 
 
-## 回血（治疗技能未实现，目前无人调用）。用 minf(max_hp, ...) 夹上限；死人不能靠回血复活。
-## 注意传负数会变成扣血且不触发 _die()，别这么用。
-func heal(amount: float) -> void:
-	if not alive:
-		return
+## 直接扣血：**不吃攻防差 / 浮动 / 保底封顶 / 格挡 / 防御姿态**，按传入数值原样扣。
+## 用在"按气血上限百分比"的持续伤害上（dot 每回合掉气血上限的 x%，减完防御就不是那个数了）。
+## 和 take_damage() 的口径一致：都会 emit damaged、归零调 _die()、统计面板照常记账。
+## 返回值：实际扣掉的血量（不会超过剩余气血）。
+func take_direct_damage(amount: float, source_name := "",
+		source_kind := "other", source_label := "") -> float:
+	if not alive or amount <= 0.0:
+		return 0.0
+	var final := minf(hp, amount)
+	hp = maxf(0.0, hp - final)
+	_refresh_hp()
+	damaged.emit(self, final, source_name, source_kind, source_label)
+	if hp <= 0.0:
+		_die()
+	return final
+
+
+## 回血（持续回血 hot 与万药谷治疗技能都走这里）。用 minf(max_hp, ...) 夹上限；死人不能靠回血复活。
+## 返回值：**实际**回复量（满血时为 0），统计面板只认真实治疗量。
+## 参数 source_name / source_kind / source_label：治疗者、来源大类、技能名，只用于伤害统计。
+## 传 0 或负数直接返回 0（以前负数会被当成扣血且不触发 _die()，现在挡掉了）。
+func heal(amount: float, source_name := "", source_kind := "other", source_label := "") -> float:
+	if not alive or amount <= 0.0:
+		return 0.0
+	var before := hp
 	hp = minf(max_hp, hp + amount)
 	_refresh_hp()
+	var healed_amount := hp - before
+	if healed_amount > 0.0:
+		healed.emit(self, healed_amount, source_name, source_kind, source_label)
+	return healed_amount
 
 
 ## 刷新血条并广播 hp_changed。update_bar 第二个参数是**原始数值**（血条内部 str()），不是比例。
@@ -595,17 +640,22 @@ func crit_multiplier() -> float:
 	return 1.5 + status_value("crit_damage_bonus") / 100.0
 
 
-# ── 状态（buff / 封印 / 封法术 / 持续回血）──
-# 每条：{stat: String, value: float, turns: int, per_turn: float}
+# ── 状态（buff / 封印 / 封法术 / 持续回血 / 持续伤害）──
+# 每条：{stat: String, value: float, turns: int, per_turn: float, source: String, label: String}
 #   · 数值加成：damage_pct / damage_spell（百分比）、spell_damage（点数）、crit_rate（百分点）、
 #     crit_damage_bonus（百分点）；
 #   · 控制：seal（被封印，下次行动跳过并消耗）、silence（不能放技能）；
-#   · 持续回血：hot（per_turn 是每回合回复量）。
+#   · 持续回血：hot（per_turn 是每回合回复量）；
+#   · 持续伤害：dot（per_turn 是每回合伤害）；
+#     hot / dot 的 source + label 是"谁施加的、用的是什么"，回合开始结算时要记到统计面板上。
 var statuses: Array[Dictionary] = []
 
 
 ## 加一条状态（同种会合并：数值/每回合回复相加，回合取更长的那个）。
-func add_status(stat: String, value: float, turns: int, per_turn := 0.0) -> void:
+## 参数 source_name / label：施加者名字 + 具体名字（技能名）。只有持续回血（hot）和
+## 持续伤害（dot）真的用得上 —— 每回合结算时要把这份量记到当初施加它的人头上（人死了也能记，因为只存名字）。
+func add_status(stat: String, value: float, turns: int, per_turn := 0.0,
+		source_name := "", label := "") -> void:
 	if stat.is_empty() or turns <= 0:
 		return
 	for s in statuses:
@@ -613,10 +663,38 @@ func add_status(stat: String, value: float, turns: int, per_turn := 0.0) -> void
 			s["value"] = float(s["value"]) + value
 			s["per_turn"] = float(s["per_turn"]) + per_turn
 			s["turns"] = maxi(int(s["turns"]), turns)
+			# 空名字不覆盖旧来源（重复施加时施法者可能已经查不到了）
+			if not source_name.is_empty():
+				s["source"] = source_name
+			if not label.is_empty():
+				s["label"] = label
 			return
-	statuses.append({"stat": stat, "value": value, "turns": turns, "per_turn": per_turn})
+	statuses.append({"stat": stat, "value": value, "turns": turns, "per_turn": per_turn,
+			"source": source_name, "label": label})
 	if stat == "seal" or stat == "silence":
 		_show_control_effect(stat)
+
+
+## 挂一条持续伤害（dot）。和 add_status() 分开是因为 dot 有自己的两个数值：
+##   first  = 第一跳的固定伤害（等级 + 技能等级 + 伤害/4 那种算法，Battle 算好后传进来）
+##   percent= 之后每跳掉「气血上限 × percent」
+## 重复施放：回合数取更长、percent 取更大、first 取更大（已经结算过 first 的 dot 会被重置成新的 first）。
+## ⚠ dot 的回合数在 end_turn() 掉完那一跳才减，所以 turns=3 就是结结实实跳 3 次。
+func add_dot(first: float, percent: float, turns: int, source_name := "", label := "") -> void:
+	if turns <= 0 or (first <= 0.0 and percent <= 0.0):
+		return
+	for s in statuses:
+		if s["stat"] == "dot":
+			s["first"] = maxf(float(s.get("first", 0.0)), first)
+			s["percent"] = maxf(float(s.get("percent", 0.0)), percent)
+			s["turns"] = maxi(int(s["turns"]), turns)
+			if not source_name.is_empty():
+				s["source"] = source_name
+			if not label.is_empty():
+				s["label"] = label
+			return
+	statuses.append({"stat": "dot", "value": 0.0, "turns": turns, "per_turn": 0.0,
+			"first": first, "percent": percent, "source": source_name, "label": label})
 
 
 func _show_control_effect(stat: String) -> void:
@@ -660,19 +738,57 @@ func clear_statuses() -> void:
 func begin_turn() -> bool:
 	set_defending(false)
 	var sealed := has_status("seal")
-	# 持续回血（hot）：先把这一回合的回血结算掉，再递减回合。
+	# 回合开始的"每回合结算"：持续回血（hot）在回合**开始**回，持续伤害（dot）在回合**结束**掉
+	# （见 end_turn()）。hot 带了施加者名字和技能名，这份治疗要记到当初放技能的人头上。
+	# 状态回合数在这里递减 —— **dot 例外**，它的回合数在 end_turn() 掉完那一跳才减。
 	if alive:
 		for s in statuses:
+			if not alive:
+				break
+			if s["stat"] != "hot":
+				continue
 			var per := float(s["per_turn"])
 			if per > 0.0:
-				heal(per)
+				heal(per, String(s.get("source", "")), Global.SOURCE_HOT, String(s.get("label", "")))
 	var kept: Array[Dictionary] = []
 	for s in statuses:
+		if s["stat"] == "dot":
+			kept.append(s)          # dot 的回合数在 end_turn() 里减
+			continue
 		s["turns"] = int(s["turns"]) - 1
 		if int(s["turns"]) > 0:
 			kept.append(s)
 	statuses = kept
 	return sealed
+
+
+## 回合**结束**结算：持续伤害（dot）在这里掉血，掉完这一跳回合数才 -1（挂上那回合不算）。
+## 每一跳：还留着 first（第一跳）就用 first，否则掉「气血上限 × percent」。
+## 说明：
+##   · 走 take_direct_damage()：按气血上限百分比算的伤害不吃攻防差/格挡（否则就不是 10% 了）；
+##   · 可能把人打死 —— _die() 会 emit died，Battle._finish_turn() 之后会先判胜负再进下一个人；
+##   · 死人不结算（_die() 之后调用方还是会调到这里，直接返回）。
+func end_turn() -> void:
+	if not alive:
+		return
+	var kept: Array[Dictionary] = []
+	for s in statuses:
+		if s["stat"] != "dot":
+			kept.append(s)
+			continue
+		if alive:
+			var amount := float(s.get("first", 0.0))
+			if amount > 0.0:
+				s["first"] = 0.0        # 第一跳只吃一次
+			else:
+				amount = max_hp * float(s.get("percent", 0.0))
+			if amount > 0.0:
+				take_direct_damage(amount, String(s.get("source", "")),
+						Global.SOURCE_DOT, String(s.get("label", "")))
+		s["turns"] = int(s["turns"]) - 1
+		if int(s["turns"]) > 0:
+			kept.append(s)
+	statuses = kept
 
 
 ## 技能是否暴击：roll_crit(skill.crit_bonus)，skill 为 null 时加成按 0。副作用：推进随机数序列。
@@ -781,7 +897,6 @@ const ATTACK_DASH_SPEED := 1900.0
 const ATTACK_DASH_MIN := 0.10
 const ATTACK_DASH_MAX := 0.26
 ## 招式动作最长等多久（帧动画问得到就按它，问不到用这个兜底）。
-const ATTACK_SWING_MAX := 0.5
 ## 冲进敌阵时临时抬高层级。
 ## 为什么需要：敌我单位是同一个父节点下的兄弟节点、按生成顺序绘制 —— 我方先生成、
 ## 敌人后生成，所以人一冲进敌方阵地就会被敌人的立绘盖住。抬高层级最省事，
@@ -857,22 +972,29 @@ func attack_approach(target: BattleUnit) -> void:
 	await tween.finished
 
 
-## 普攻第二段：出招（播 attack 动作并等它播完）。近战门派技能不需要它 —— 那些有自己的特效。
+## 伤害反馈只占动画尾段。短动作按比例缩短，长特效最多留 0.20 秒。
+static func impact_tail_duration(animation_duration: float) -> float:
+	return minf(0.20, animation_duration * 0.30)
+
+
+## 普攻第二段：出招，在挥击的最后几帧触发命中。
 func attack_swing(on_impact: Callable = Callable()) -> void:
-	# 骨骼角色：播 attack，按动画时长分配"命中"时刻
-	if on_impact.is_valid():
-		on_impact.call()
 	if _anim != null:
 		_anim.play_once("attack")
-	# 有帧动画：等它播完（能问就问到播完为止，加 ATTACK_SWING_MAX 上限防死等）。
-	if _anim != null:
-		var waited := 0.0
-		while _anim.is_playing_once() and waited < ATTACK_SWING_MAX:
-			await get_tree().process_frame
-			waited += get_process_delta_time()
-		return
+		var duration := _anim.once_duration()
+		if duration > 0.0:
+			var impact_time := duration - impact_tail_duration(duration)
+			var waited := 0.0
+			while _anim.is_playing_once() and waited < duration + 0.1:
+				await get_tree().process_frame
+				waited += get_process_delta_time()
+				if on_impact.is_valid() and waited >= impact_time:
+					on_impact.call(maxf(0.01, duration - waited))
+					on_impact = Callable()
+			return
+		_anim.play("idle")
 	# 没有帧动画（怪物 = 静态立绘）：用缩放 + 倾斜演一套"蓄力→突刺→回正"。
-	await _procedural_swing()
+	await _procedural_swing(on_impact)
 
 
 ## 程序化反馈作用于当前可见的形象。
@@ -881,23 +1003,31 @@ func _visual_body() -> Node2D:
 
 
 ## 缺少攻击剪辑时，蓄力后仰 → 突刺前倾 → 回正。
-func _procedural_swing() -> void:
+func _procedural_swing(on_impact: Callable) -> void:
+	var windup_time := 0.08
+	var strike_time := 0.10
+	var recover_time := 0.14
+	var tail_duration := impact_tail_duration(windup_time + strike_time + recover_time)
 	var body := _visual_body()
 	if body == null:
+		if on_impact.is_valid():
+			on_impact.call(tail_duration)
 		return
 	var rest_scale := _base_scale
 	var sx := rest_scale.x
 	var sy := rest_scale.y
 	var tween := create_tween()
 	# 蓄力：横向收、纵向拉，身体微后仰
-	tween.tween_property(body, "scale", Vector2(sx * SWING_ANTIC_X, sy * SWING_ANTIC_Y), 0.08)
-	tween.parallel().tween_property(body, "rotation", deg_to_rad(-SWING_TILT), 0.08)
+	tween.tween_property(body, "scale", Vector2(sx * SWING_ANTIC_X, sy * SWING_ANTIC_Y), windup_time)
+	tween.parallel().tween_property(body, "rotation", deg_to_rad(-SWING_TILT), windup_time)
 	# 突刺：横向拉、纵向压，向前倾
-	tween.tween_property(body, "scale", Vector2(sx * SWING_STRIKE_X, sy * SWING_STRIKE_Y), 0.10)
-	tween.parallel().tween_property(body, "rotation", deg_to_rad(SWING_TILT), 0.10)
+	tween.tween_property(body, "scale", Vector2(sx * SWING_STRIKE_X, sy * SWING_STRIKE_Y), strike_time)
+	tween.parallel().tween_property(body, "rotation", deg_to_rad(SWING_TILT), strike_time)
 	# 回正
-	tween.tween_property(body, "scale", rest_scale, 0.14)
-	tween.parallel().tween_property(body, "rotation", 0.0, 0.14)
+	tween.tween_property(body, "scale", rest_scale, recover_time)
+	tween.parallel().tween_property(body, "rotation", 0.0, recover_time)
+	if on_impact.is_valid():
+		tween.parallel().tween_callback(on_impact.bind(tail_duration)).set_delay(recover_time - tail_duration)
 	await tween.finished
 
 
@@ -989,8 +1119,9 @@ func play_hit(from := Vector2.INF, hold := 0.35) -> void:
 	# 之前写成 -tilt，等于把人往攻击者那边倒，方向正好反了。
 	var tilt := deg_to_rad(HIT_TILT) * (signf(dir.x) if absf(dir.x) > 0.05 else 1.0)
 	var rest := Color.WHITE if not defending else DEFEND_TINT
-	var lean := HIT_LEAN_TIME
-	var back := HIT_BACK_TIME
+	var reaction_scale := minf(1.0, hold / (HIT_LEAN_TIME + HIT_BACK_TIME))
+	var lean := HIT_LEAN_TIME * reaction_scale
+	var back := HIT_BACK_TIME * reaction_scale
 	var shake := maxf(0.0, hold - lean - back)
 
 	# 上一击的后仰还没播完就再来一记：先掐掉，否则两个 tween 抢 rotation 会互相抵消

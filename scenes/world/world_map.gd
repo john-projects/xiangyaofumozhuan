@@ -322,6 +322,9 @@ var _leader_key := ""
 @onready var panel: Panel = %TravelPanel
 ## UI 层（CanvasLayer）。操作菜单等浮层运行时挂到这里（见 _setup_overlays），不随相机移动、不参与 y_sort。
 @onready var ui_layer: CanvasLayer = $UI
+## 右上角的伤害统计面板（和战斗里那块是同一个场景，数据都读 Global）。
+## 它不在 _setup_overlays() 里创建，而是 world_map.tscn 直接摆好的常驻 HUD。
+@onready var battle_stats: BattleStatsPanel = $UI/BattleStats
 ## 面板里的 NPC 名字 + 冒号（和台词**同一行**，见 PanelLine 那个 HBox）。
 @onready var panel_name: Label = %PanelName
 ## NPC 台词。名字在它左边同一行（「名字：台词」），所以比名字单独一行时矮一截。
@@ -812,6 +815,8 @@ func _update_nearest() -> void:
 ## 每帧驱动：走动 → 轨迹 → 队友跟随 → 最近 NPC 判定（顺序不能反）。
 ## 提前返回：_map_size 为 ZERO（没配图）或 _ui_open()（看面板/菜单时冻住，否则 WASD 会边选边跑）。
 func _process(delta: float) -> void:
+	# 浮层开关会改面板可见性，所以在提前返回之前先同步一次（否则开着背包就再也不会更新）。
+	_sync_battle_stats_visible()
 	if _map_size == Vector2.ZERO or _ui_open():
 		return
 	_move_player(delta)
@@ -822,6 +827,17 @@ func _process(delta: float) -> void:
 	_check_portals(delta)
 	_update_patrol(delta)
 	_update_encounter(delta)
+
+
+## 右上角伤害统计面板：开任何浮层（背包/属性/队伍/商店/暂停/对话/自动施法）时先收起来。
+## 为什么：背包/属性面板贴右边、几乎占满整屏，统计面板只会在它上面露半截，很难看。
+## 只是 visible 切换，数据照旧由 Global 的信号刷新，收起来再展开不会丢。
+func _sync_battle_stats_visible() -> void:
+	if battle_stats == null:
+		return
+	var want := not _ui_open()
+	if battle_stats.visible != want:
+		battle_stats.visible = want
 
 
 ## 按输入向量移动玩家并夹在地图内；dash 按住即持续冲刺，flip_h 只在 |dir.x| > 0.01 时更新以免朝向抖动。

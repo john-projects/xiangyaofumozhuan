@@ -9,7 +9,8 @@
 | `battle.tscn` / `battle.gd` | 战斗根：站位 Marker、回合调度、指令分发、技能执行（单体 `_perform_skill` / 群体 `_cast_aoe`）、胜负判定、**背景（地图截图 + 蒙层）** |
 | `battle_unit.tscn` / `battle_unit.gd` | 战斗单位：血量/蓝量、技能冷却、选中高亮、受击与施法表现 |
 | `command_menu.tscn` / `command_menu.gd` | 指令菜单（攻击/法术/道具/防御/逃跑）+ **技能二级菜单** |
-| `turn_order.tscn` / `turn_order.gd` | 出手顺序条（当前出手的加亮边框） |
+| `turn_order.tscn` / `turn_order.gd` | 出手顺序条（当前出手的加亮边框 + 「本轮 / 下一轮」分隔） |
+| `battle_stats_panel.tscn` / `.gd` | 右上角**伤害统计面板**（战斗内 + 地图上共用同一个场景；悬停某一行看伤害构成） |
 | `../effects/projectile/skill_projectile.tscn` / `.gd` | **公共弹道**（所有元素共用）：静态贴图 + 外观包插槽 + 拖尾 + 命中爆炸 + 生命周期 |
 | `../effects/burst_effect.tscn` / `.gd` | 默认命中爆炸：闪光 / 冲击波 / 火星 / 浓烟（`play(tint, count)`，播完自毁） |
 
@@ -41,6 +42,10 @@
   所以"给某个单位改描边颜色"不会串到别人身上。
 - **两套操作共享同一个"当前目标"**：鼠标悬停会同步键盘光标（`Battle._on_unit_hovered`），
   所以不会出现"鼠标指着一个、箭头指着另一个"的割裂感。
+- **出手顺序条是环形的**：当前出手者排最前，出过手的自动转到队尾等下一轮。为了避免"队尾那几个人
+  到底是本轮还是下轮"的歧义，`Battle._turn_display()` 会算出"下一轮第一个出手的人"，
+  `TurnOrder.update_turn()` 在那一格前面插一条竖线 + 小字「下轮」。回合刚开始（还没人出手）时
+  整条都是本轮，不显示分隔。
 
 ## 站位（双方上限 5 人 · 前三后二）
 
@@ -133,15 +138,13 @@ Pillow 裁掉水印 + 按亮度抠出 alpha + 拼 4×4 图集 → `scenes/effect
 
 _perform_skill()（公共起手）
    扣蓝 → 进冷却 → cast_sfx → 施法起手 play_cast()
-   ├─ 单体：for 每个目标 → 生成一颗飞体 → 飞过去 → 命中结算 → burst() → 下一个目标
+   ├─ 单体：飞体抵达（或直接命中）→ 开播命中特效 → 最后几帧结算和跳字
    └─ 群体：交给 _cast_aoe()
 
 _cast_aoe()（群体技能走的路径）
    ① 只生成**一颗**飞体，目标是敌阵几何中心 _group_center()
    ② 抵达 → burst() 中心大爆炸（burst_scale 生效）+ hit_sfx + 镜头抖动（各只做一次）
-   ③ 逐个结算全体：格挡判定 → 伤害（暴击 ×1.5）→ 飘字 → 每个敌人身上补一朵
-	  0.55 倍小爆炸 → play_hit()（故意不 await，"同时闪红"）
-	  目标之间只隔 aoe_step_delay = 0.06s，观感是同时被炸到
+   ③ 在命中动画最后几帧同帧结算所有目标 → 跳字和暴击特效各自播放到结束
 ```
 
 冷却按**回合**递减（`_next_round()` 对全体单位 `tick_cooldowns()`），所以冷却 3 = 放完隔两个回合能再用。
@@ -153,16 +156,52 @@ _cast_aoe()（群体技能走的路径）
 `silence_*` / `heal_power` / `hot_*` / `buff_*`），资源在 `resources/skills/sect_skills/`。
 多目标技能（`max_targets > 1`）**走群体演出**：玩家点主目标后 `_expand_targets()` 补齐最近的 N-1 个敌人，
 然后和 `ENEMY_ALL` 一样走 `_cast_aoe()` —— **只生成一颗弹体、只播一次命中特效**，
-所有目标在 `aoe_step_delay`（0.06s）内逐个结算，观感是"同时受击"。
+所有目标在同一帧结算。
 > 之前 `max_targets` 走单体循环，每个敌人各播一遍特效，像连放 3 次技能（已修）。
 `hits > 1` 在同一目标上连结算 N 次；`fixed_damage` 的技能伤害取 `flat_damage`（不吃攻击力）；
 辅助技能（`SELF` / `ALLY_SINGLE`）走 `_perform_support()`：治疗、持续回血、增益状态。
 
-**状态**：`BattleUnit.statuses` 是 `{stat, value, turns, per_turn}` 的数组，同种状态合并（数值相加、回合取长）。
+**状态**：`BattleUnit.statuses` 是 `{stat, value, turns, per_turn, source, label}` 的数组，同种状态合并（数值相加、回合取长）。
 `begin_turn()` 里结算：被 `seal` 封印 → 返回 true（`Battle._begin_turn()` 跳过这次行动）；
-`hot` 按 `per_turn` 回血；其余状态回合 -1、到期移除。`silence` 会让 `can_use_skill()` 返回 false。
+`hot` 按 `per_turn` 回血；其余状态回合 -1、到期移除（**`dot` 例外**，它在下文 `end_turn()` 里结算）。
+`silence` 会让 `can_use_skill()` 返回 false。
 数值加成参与战斗：`damage_pct` / `damage_spell`（百分比）、`spell_damage`（点数）、`crit_rate`（暴击率）、
 `crit_damage_bonus`（暴击倍率，见 `BattleUnit.crit_multiplier()`）。
+
+**持续伤害（dot）**：`BattleUnit.end_turn()` 在**每回合结束时**结算（`Battle._finish_turn()` 调），
+掉完这一跳回合数才 -1，所以 `dot_turns = 3` 就是结结实实跳 3 次：
+
+| 第几跳 | 伤害 | 配置 |
+|---|---|---|
+| 第一跳 | 施法者等级 × `dot_first_level` + 技能等级 × `dot_first_skill` + 施法者伤害 × `dot_first_damage` | 默认 1/1/0.25 = 等级 + 技能等级 + 伤害/4 |
+| 之后每跳 | 目标**气血上限** × `dot_percent` | 药雾弥漫 = 10% |
+
+- 走 `take_direct_damage()`：按气血上限百分比算的伤害**不吃攻防差/格挡/防御姿态**（减完防御就不是 10% 了）；
+- 可能把人打死，`_die()` 照常发 `died`，`Battle._begin_turn()` 会先判胜负再进下一个人；
+- 重复施放：回合数取更长、`first` 重新武装（所以每回合重放能一直吃"第一跳"）；
+- 等级来源：玩家副本由 `GameRoot._make_player_team()` 写 meta `level`，敌人写地图难度，
+  门派技能副本由 `_bake_sect_skill()` 写 meta `level`；没有 meta 的一律按 1 级算。
+
+## 伤害统计（battle_stats_panel.tscn / .gd）
+
+战斗里贴在右上角出手顺序条下面；地图上（`world_map.tscn` 的 `UI/BattleStats`）是**同一个场景**，
+只是挪到「开始巡逻」按钮下方。面板本身**不记账**：数据全在 `Global`（`battle_stats_roster` /
+`battle_stats_last` / `battle_stats_total`），`Battle` 把 `BattleUnit.damaged / healed` 信号转给
+`Global.record_battle_*()`，两块面板监听 `Global.battle_stats_changed` 刷新自己。
+
+- 顶部页签「总计 / 上场战斗」，左侧页签「伤害 / 治疗 / 承伤」，按当前页签降序排。
+  每行是「名字 + 分段比例条 + 数值（占比）」：
+  - **条形按来源拼接**：普攻骨白、持续伤害紫、持续回血青绿、其他灰；技能和承伤来源按名字从
+    `SEG_PALETTE` 取色（同一个名字永远同一个颜色）。条长相对「全队最高值」，第一名正好占满；
+  - 数值后面的括号是**占全队合计**的百分比（和表头「合计」同一分母），第一名的数值标金色。
+- **鼠标悬停某一行**弹出明细，**拉平显示**：一行一个来源（没有大类/缩进），按数值从大到小排。
+  伤害/治疗直接列到具体技能名；持续伤害、持续回血在名字后标注（如「药雾弥漫（持续伤害）」「回春诀（持续回血）」），
+  免得和同一个技能的直伤重名；承伤按「谁打的」一行一个。右侧是数值和占比。
+- 来源靠 `take_damage()` / `heal()` 的 `source_kind` + `source_label` 一路带到 `Global`：
+  普攻传 `SOURCE_ATTACK`，技能传 `SOURCE_SKILL` + 技能名，dot/hot 由 `BattleUnit.end_turn()` / `begin_turn()`
+  结算时带上，认不出的一律 `SOURCE_OTHER`。新增伤害来源只要传对 `Global.SOURCE_*`，明细里就会自动多一组。
+- dot 的数值在 `SkillData` 的 `dot_turns` / `dot_percent` / `dot_first_*` 里（见上一节），
+  掉血飘字用 `Battle.dot_color`（紫色）。
 
 ## 加技能 / 换素材
 
@@ -186,7 +225,6 @@ _cast_aoe()（群体技能走的路径）
 |---|---|
 | 治疗 / 增益 | `BattleUnit` 加 `status: Dictionary` + `tick_status()`，在 `_on_skill_selected()` 里补 `SELF`/`ALLY_SINGLE` 分支 |
 | 灼烧 / 中毒 DOT | 同上，命中后 `target.add_status(...)`；飘字可复用 `create_floating_text()` |
-| 群体技能同时命中 | `_cast_aoe()` 里 ③ 的循环已经很快；要"完全同时"就把 ③ 的 `await aoe_step_delay` 去掉 |
 | 敌人也会放技能 | `_enemy_act()` 里判断 `actor.can_use_skill(...)` 优先放技能 |
 | 技能动画 | `BattleUnit.play_cast()` 现在是 Tween，换成 `AnimationPlayer.play("cast")` |
 | 技能等级 | `SkillData` 加 `level`，或在 `BattleUnit.skill_damage()` 里乘系数 |

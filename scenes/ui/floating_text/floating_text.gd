@@ -3,7 +3,7 @@ class_name FloatingText
 ## Fixed-size feedback: quick pop, readable hold, then fade.
 @onready var value_label: Label = $ValueLabel
 
-func setup(value: String, color: Color, is_critical: bool = false) -> void:
+func setup(value: String, color: Color, is_critical := false) -> void:
 	var is_damage := value.is_valid_int() and not value.begins_with("+")
 	if is_damage:
 		var settings := value_label.label_settings.duplicate() as LabelSettings
@@ -12,7 +12,7 @@ func setup(value: String, color: Color, is_critical: bool = false) -> void:
 		value_label.label_settings = settings
 	value_label.text = value
 	modulate = color
-	scale = Vector2.ZERO
+	scale = Vector2.ONE * 0.85 if is_damage else Vector2.ZERO
 	rotation = 0.0
 	var resting_scale := 1.15 if is_damage and is_critical else 1.0
 	var pop_time := 0.10 if is_damage else 0.22

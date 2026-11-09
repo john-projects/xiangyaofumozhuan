@@ -20,6 +20,10 @@ const LIFETIME := 1.6   # 最长的那层（浓烟 1.5s）+ 余量
 var _played := false
 
 
+func duration() -> float:
+	return LIFETIME
+
+
 ## tint 来自 SkillData.tint，让爆炸整体配色跟技能资源一致
 ## particle_count 来自 SkillData.hit_particles，控制粒子的疏密
 func play(tint: Color = Color(1, 0.55, 0.2), particle_count: int = 26) -> void:

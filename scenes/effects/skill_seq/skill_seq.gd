@@ -14,7 +14,7 @@
 extends Node2D
 class_name SkillSeq
 
-## 一段动画播完（自毁之前）发一次。Battle 用它实现"等这一段打完再跳伤害数字"。
+## 一段动画播完（自毁之前）发一次。
 signal finished
 
 ## 图集（8 列网格）。
@@ -200,8 +200,7 @@ func fit_units(units: Array, anchor := Vector2.INF, pad := 120.0) -> void:
 	scale = Vector2.ONE * maxf(half.x / (fw * 0.5), half.y / (fh * 0.5))
 
 
-## 本次（或整段）动画还剩多少秒。
-## Battle 在放特效后调一次，用来算"下一个行动要等多久"。
+## 当前播放段的总时长。Battle 在开播时用它对齐受击反馈。
 ## 还没开播时返回整段长度（按当前 segments/seg_bounds 推断）。
 func duration() -> float:
 	var n := _to - _from

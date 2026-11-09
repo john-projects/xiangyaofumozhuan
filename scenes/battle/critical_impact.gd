@@ -9,7 +9,7 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	elapsed += delta
-	if elapsed >= DURATION:
+	if elapsed >= DURATION or is_equal_approx(elapsed, DURATION):
 		queue_free()
 		return
 	queue_redraw()
