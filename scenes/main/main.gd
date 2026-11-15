@@ -204,8 +204,10 @@ var party: Array[UnitStats] = []
 ## ⚠ 同 party 是引用语义交给 WorldMap，也别整个重新赋值。
 var deployed: Array[UnitStats] = []
 var auto_cast_plan: Dictionary = {}
-## 是否在战斗中（enter_battle 置 true / _on_battle_ended 置 false）。⚠ 目前无人读，预留。
+## 从开始拍战斗背景到战斗结算，拒绝地图发出的其他切场请求。
 var in_battle := false
+## 淡出、换场景、淡入期间只接受一次切场。
+var _swapping := false
 
 ## 上一次战斗的结算文案（胜/负 + 奖励）。写：_on_battle_ended()；读：传给地图显示 + 主菜单副标题。
 var _last_result := ""
@@ -530,11 +532,13 @@ func _clear_screens() -> void:
 ## 换屏：fade_out → _clear_screens → add_child → fade_in（协程，全程演完才返回）。
 ## ⚠ 必须先等全黑再清屏，否则会闪跳；parent=null 约定挂 ui_root（默认参数不能用成员变量）。
 func _swap(screen: Node, parent: Node = null) -> void:
+	_swapping = true
 	var target: Node = parent if parent != null else ui_root
 	await fade_out()
 	_clear_screens()
 	target.add_child(screen)
 	await fade_in()
+	_swapping = false
 
 
 ## 淡出到全黑（协程，await tween.finished）。
@@ -559,6 +563,8 @@ func fade_in(duration := 0.3) -> void:
 ## 显示主菜单；last_result 必须在 add_child 前写入（TitleScreen._ready 会读）。
 ## connect 新游戏/退出信号后 await _swap（默认挂 ui_root）。
 func show_title() -> void:
+	if _swapping or in_battle:
+		return
 	var screen := TITLE_SCENE.instantiate() as TitleScreen
 	screen.last_result = _last_result
 	screen.new_game_requested.connect(start_new_game)
@@ -570,6 +576,8 @@ func show_title() -> void:
 ## 清 party/deployed/_map_positions/_last_result、current_map_id、Global.coins=starting_coins、
 ## 等级/经验/装备/门派/属性点/伤害统计/main_player_selected；最后 start_game_with_defaults()。
 func start_new_game() -> void:
+	if _swapping or in_battle:
+		return
 	auto_cast_plan.clear()
 	party.clear()
 	deployed.clear()
@@ -707,6 +715,8 @@ func _apply_debug_loadout() -> void:
 ## spawn_override/deployed/setup 都必须在 add_child 之前（_ready 会立刻读）；信号也先连，避免漏事件。
 ## 地图找不到时警告并回主菜单；专用场景根节点必须挂 WorldMap 脚本，否则 instantiate 后为 null。
 func show_map(result_text := "", from_map_id := "", restore_position := false) -> void:
+	if _swapping or in_battle:
+		return
 	var map := get_map(current_map_id)
 	if map == null:
 		push_warning("GameRoot: 找不到地图 %s" % current_map_id)
@@ -739,9 +749,11 @@ func show_map(result_text := "", from_map_id := "", restore_position := false) -
 	await _swap(world, world_root)
 
 
-## 传送到另一张图：⚠ 先 _remember_position()（在改 current_map_id 之前），再改 id、emit map_changed、show_map(from_id)。
+## 先记住原图位置，再改 id、启动换图并通知 map_changed。
 ## show_map 未 await：执行到第一个 await 就返回，过场在后台继续，之后不能假设已换好图。
 func travel_to(next_id: String) -> void:
+	if _swapping or in_battle:
+		return
 	var next := get_map(next_id)
 	if next == null:
 		push_warning("GameRoot: 没有这张地图 -> %s" % next_id)
@@ -749,8 +761,8 @@ func travel_to(next_id: String) -> void:
 	_remember_position()
 	var from_id := current_map_id
 	current_map_id = next.id
-	map_changed.emit(current_map_id)
 	show_map("抵达 %s" % next.display_name, from_id)
+	map_changed.emit(current_map_id)
 
 
 ## 构造 {地图id: display_name}，供 WorldMap 把目的地 id 翻成中文。
@@ -760,7 +772,6 @@ func _map_names() -> Dictionary:
 		if map != null:
 			names[map.id] = map.display_name
 	return names
-
 
 ## 取 world_root 下当前的世界地图（按类型找，避免保存野引用）；没有返回 null。
 func _current_world_map() -> WorldMap:
@@ -781,6 +792,8 @@ func _remember_position() -> void:
 ## ⚠ auto_start_demo=false 和 connect 都必须在 add_child 之前；start_battle 必须在淡入之后，否则黑屏中开打。
 ## 上阵为空或敌人池为空时警告返回；_last_enemy_count 在这里记下。
 func enter_battle(from_patrol := false) -> void:
+	if _swapping or in_battle:
+		return
 	if deployed.is_empty():
 		push_warning("GameRoot: 没有上阵的队员（去队伍管理里上阵，或先招募队友）")
 		show_map()
@@ -794,14 +807,17 @@ func enter_battle(from_patrol := false) -> void:
 
 	# 战斗背景 = 当前地图的截图（隐藏 NPC/玩家/UI 后拍，Battle 里再压一层暗色蒙层）。
 	# 必须在 _swap 淡出之前拍：那时地图还是可见的、fade 还是透明的。
+	in_battle = true
 	var backdrop := await _capture_battle_backdrop()
 
 	var battle := BATTLE_SCENE.instantiate() as Battle
 	battle.auto_start_demo = false          # ★ 必须在 add_child 之前
 	battle.battle_ended.connect(_on_battle_ended)
 	battle.set_backdrop(backdrop)           # 也必须早于 add_child（_ready 里就要用）
-	in_battle = true
 	await _swap(battle, world_root)
+	if not is_instance_valid(battle) or battle.is_queued_for_deletion():
+		in_battle = false
+		return
 	# 自动施法只看全局开关：巡逻中就带施法计划（from_patrol 也兼容）
 	battle.start_battle(_make_player_team(from_patrol or Global.patrol_on), enemies)
 
@@ -831,7 +847,6 @@ func _capture_battle_backdrop() -> Texture2D:
 ## 不直接清 Battle：show_map→_swap 先 fade_out，_clear_screens 发生在信号返回后，避免在自身回调里 free 自己。
 ## ⚠ Battle 侧对 battle_ended 只发一次，这里不会重复发奖。
 func _on_battle_ended(player_won: bool) -> void:
-	in_battle = false
 	var map := get_map(current_map_id)
 
 	if player_won:
@@ -867,6 +882,7 @@ func _on_battle_ended(player_won: bool) -> void:
 	else:
 		# 失败文案统一由 Battle._finish_battle 发过一条，这里不再重复（原来会多出一条带地图名的）
 		_last_result = ""
+	in_battle = false
 	show_map(_last_result, "", true)         # 回到地图上原来的位置
 
 

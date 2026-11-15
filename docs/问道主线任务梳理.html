@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>《问道》主线任务全梳理（端游）</title>
+<meta name="description" content="《问道》端游主线剧情任务全清单：妖魔道、仙魔录、伏魔记、幻仙劫、鲲鹏变、地藏王传、后羿射日、夸父逐日、精卫填海、天狗吞月，共 82 章，附等级、NPC 与飞升主线。">
+<style>
+:root{
+  --ink:#1c2430; --muted:#5b6675; --brand:#1f3864; --brand2:#2e548c;
+  --line:#dde3ea; --soft:#f6f8fb; --accent:#f0f4fa;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0; padding:32px 16px 72px;
+  background:#eef1f6; color:var(--ink);
+  font-family:"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans SC",system-ui,-apple-system,"Segoe UI",sans-serif;
+  font-size:16px; line-height:1.85;
+  -webkit-font-smoothing:antialiased;
+}
+.page{
+  max-width:900px; margin:0 auto; background:#fff; border-radius:14px;
+  box-shadow:0 1px 2px rgba(16,24,40,.04),0 12px 40px rgba(16,24,40,.08);
+  padding:56px 64px 64px;
+}
+h1{
+  font-size:30px; line-height:1.35; margin:0 0 22px; color:var(--brand);
+  letter-spacing:.5px;
+}
+h2{
+  font-size:21px; margin:44px 0 14px; padding-left:12px; color:var(--brand);
+  border-left:5px solid var(--brand2); line-height:1.4;
+}
+h3{
+  font-size:17px; margin:30px 0 10px; color:var(--brand2);
+}
+h4{font-size:16px; margin:20px 0 8px; color:var(--ink)}
+p{margin:0 0 14px}
+strong{color:#17202b}
+a{color:#1f4e79; text-decoration:none; border-bottom:1px solid rgba(31,78,121,.35)}
+a:hover{background:#eaf1f9}
+ul,ol{margin:0 0 16px; padding-left:1.55em}
+li{margin:4px 0}
+blockquote{
+  margin:18px 0 22px; padding:14px 18px; color:#4d5866;
+  background:var(--soft); border-left:3px solid #b9c6d9; border-radius:0 8px 8px 0;
+  font-size:14.5px;
+}
+blockquote p{margin:0}
+pre{
+  margin:16px 0 20px; padding:16px 18px; overflow-x:auto;
+  background:#f2f4f7; border:1px solid #e5e9ef; border-radius:10px;
+  font-family:Consolas,"SFMono-Regular","Cascadia Mono","Liberation Mono",monospace;
+  font-size:13px; line-height:1.7; color:#2b3440;
+}
+pre code{font-family:inherit; white-space:pre}
+code{font-family:Consolas,monospace; font-size:.92em}
+.table-wrap{overflow-x:auto; margin:14px 0 24px; border:1px solid var(--line); border-radius:10px}
+table{border-collapse:collapse; width:100%; font-size:14px; line-height:1.65; background:#fff}
+thead th{
+  background:var(--accent); color:var(--brand); font-weight:600; text-align:left;
+  padding:10px 12px; border-bottom:1px solid var(--line); white-space:nowrap;
+}
+tbody td{padding:9px 12px; border-bottom:1px solid #edf0f4; vertical-align:top}
+tbody tr:last-child td{border-bottom:none}
+tbody tr:nth-child(even){background:#fbfcfe}
+tbody tr:hover{background:#f4f8fd}
+hr{border:none; border-top:1px solid var(--line); margin:32px 0}
+
+.toc{
+  margin:26px 0 10px; padding:18px 22px; background:var(--soft);
+  border:1px solid var(--line); border-radius:12px;
+}
+.toc-title{font-size:13px; letter-spacing:2px; color:var(--muted); margin:0 0 10px; font-weight:600}
+.toc ul{margin:0; padding:0; list-style:none; columns:2; column-gap:28px}
+.toc li{margin:3px 0; break-inside:avoid; font-size:14.5px}
+.toc li a{border-bottom:none; color:#2d3c50}
+.toc li a:hover{color:#1f4e79; background:none; text-decoration:underline}
+.meta{color:var(--muted); font-size:13.5px; margin:-6px 0 18px}
+footer{
+  margin-top:44px; padding-top:18px; border-top:1px solid var(--line);
+  color:#7b8593; font-size:13px;
+}
+.top{
+  position:fixed; right:22px; bottom:22px; width:42px; height:42px; border-radius:50%;
+  background:#fff; border:1px solid var(--line); box-shadow:0 4px 14px rgba(16,24,40,.12);
+  display:flex; align-items:center; justify-content:center; color:var(--brand);
+  font-size:18px; text-decoration:none; border-bottom:1px solid var(--line);
+}
+.top:hover{background:var(--accent)}
+@media (max-width:720px){
+  body{padding:12px 8px 56px; font-size:15px}
+  .page{padding:28px 20px 36px; border-radius:10px}
+  h1{font-size:23px}
+  h2{font-size:18px; margin-top:34px}
+  .toc ul{columns:1}
+  table{font-size:12.5px}
+  thead th,tbody td{padding:7px 8px}
+}
+@media print{
+  body{background:#fff; padding:0; font-size:11pt}
+  .page{box-shadow:none; max-width:none; padding:0}
+  .toc,.top{display:none}
+  h2{page-break-after:avoid}
+  h3{page-break-after:avoid}
+  table,.table-wrap{page-break-inside:auto}
+  tr{page-break-inside:avoid}
+  thead{display:table-header-group}
+  a{color:#1c2430; border-bottom:none}
+}
+</style>
+</head>
+<body id="top">
+<main class="page">
+<h1>《问道》主线任务全梳理（端游）</h1>
+<blockquote><p>本文以光宇游戏《问道》端游（PC 版）为基准，依据官方“游戏资料—剧情任务”栏目与版本专题页整理。任务等级、奖励、战斗强度会随版本调整，官方资料页亦注明“仅为最初上线规则及内容，后期可能会随版本更新进行调整”，请以游戏内实际为准。</p></blockquote>
+<nav class="toc" aria-label="目录"><p class="toc-title">目 录</p><ul>
+<li><a href="#sec-1">一、先弄清楚：《问道》的“主线”是什么</a></li>
+<li><a href="#sec-2">二、故事背景</a></li>
+<li><a href="#sec-3">三、正传总览</a></li>
+<li><a href="#sec-4">四、逐部详解</a></li>
+<li><a href="#sec-5">五、境界主线：元婴、飞升与飞仙</a></li>
+<li><a href="#sec-6">六、番外与“容易混进主线”的任务</a></li>
+<li><a href="#sec-7">七、跑主线的实用建议</a></li>
+<li><a href="#sec-8">八、版本与平台说明</a></li>
+<li><a href="#sec-9">九、参考资料</a></li>
+</ul></nav><h2 id="sec-1">一、先弄清楚：《问道》的“主线”是什么</h2>
+<p>《问道》并没有一条从 1 级贯穿到满级的单一主线，而是由若干条按<strong>真身等级</strong>解锁的<strong>剧情任务</strong>串成，分成三块：</p>
+<ol><li><strong>正传剧情（十部，共 82 章）</strong>：妖魔道 → 仙魔录 → 伏魔记 → 幻仙劫 → 鲲鹏变 → 地藏王传 → 后羿射日 → 夸父逐日 → 精卫填海 → 天狗吞月。</li><li><strong>境界主线（4 个阶段）</strong>：100 级百级拜师 → 110 级“引路人”（凝结元婴/血婴）→ 元婴 130 级“仙道难”（飞升）→ 150 级“南天门试炼”（飞仙）。</li><li><strong>番外剧情</strong>：西域迷情（100 级以上，4 章）等独立故事。</li></ol>
+<p>剧情任务的共同规则：</p>
+<ul><li>一次性任务，领取后不会消失，完成后无法再次完成；</li><li>多数要求<strong>单人领取</strong>，可以组队完成，但只有队长能推进并完成任务；</li><li>战斗难度普遍偏高，越往后越建议满编组队；</li><li>剧情奖励的经验多数<strong>不受双倍、三倍、全局双倍影响</strong>，并按自身等级削减；</li><li>关键章节会给予<strong>剧情称谓</strong>、对应等级的改 3/改 5 蓝（金）装备、首饰、超级女娲石等。</li></ul>
+<h3>等级脉络一览</h3>
+<pre><code> 1—20   新手期（师门、揽仙镇、天墉城）
+20—80   妖魔道（7 章）          ┐
+65—92   仙魔录（10 章）         │ 中州篇：从除妖小案查到梅山七妖
+101—105 伏魔记（5 章）          │
+106—110 幻仙劫（5 章）          ┘
+110     引路人 → 元婴/血婴（真身上限 125 → 180）
+111—115 鲲鹏变（5 章）
+116—125 地藏王传（10 章）       ┐
+126—135 后羿射日（10 章）       │ 穿越篇：回到上古，亲历神话
+136—145 夸父逐日（10 章）       │
+146—155 精卫填海（10 章）       │
+156—165 天狗吞月（10 章）       ┘
+130     仙道难 → 飞升（元婴/血婴 130 级）
+150     南天门试炼 → 飞仙</code></pre>
+<h2 id="sec-2">二、故事背景</h2>
+<p>封神杀劫千年之后，妖族与魔族再度凝聚力量，图谋中州。玩家作为五大门派（金、木、水、火、土）的修道弟子，从揽仙镇一桩药材失窃的小事查起，一路揭开梅山七妖、兽神、镜中仙、北冥鲲鹏的连环阴谋；随后在上古神器与神祇的指引下“穿越”回上古，亲历目连救母、后羿射日、夸父逐日、精卫填海、天狗吞月的传说，最终在天狗与天庭的冲突中为灵兽族讨回公道。</p>
+<h2 id="sec-3">三、正传总览</h2>
+<div class="table-wrap"><table><thead><tr><th>序</th><th>篇章</th><th>等级段</th><th>章数</th><th>主要领取 NPC</th><th>核心冲突</th></tr></thead><tbody><tr><td>1</td><td>妖魔道</td><td>20—80</td><td>7</td><td>王老板、杜老板、通灵道人、贾仁和、师尊、天机老人、夏总兵</td><td>恶灵鬼王与骷髅军团</td></tr><tr><td>2</td><td>仙魔录</td><td>65—92</td><td>10</td><td>无名剑客、夏总兵、逍遥仙</td><td>梅山七妖之首袁洪</td></tr><tr><td>3</td><td>伏魔记</td><td>101—105</td><td>5</td><td>董老头、天机老人、逍遥仙、师尊、柳如尘</td><td>被兽神附身的董老头</td></tr><tr><td>4</td><td>幻仙劫</td><td>106—110</td><td>5</td><td>夏总兵、通灵道人</td><td>上古妖器映心镜与镜中仙</td></tr><tr><td>5</td><td>鲲鹏变</td><td>111—115</td><td>5</td><td>无想僧、逍遥仙</td><td>北冥神灵鲲鹏</td></tr><tr><td>6</td><td>地藏王传</td><td>116—125</td><td>10</td><td>逍遥仙</td><td>目连救母、超度亡灵</td></tr><tr><td>7</td><td>后羿射日</td><td>126—135</td><td>10</td><td>逍遥仙</td><td>十日并出、三足金乌</td></tr><tr><td>8</td><td>夸父逐日</td><td>136—145</td><td>10</td><td>逍遥仙</td><td>巨人部落与夸父之死</td></tr><tr><td>9</td><td>精卫填海</td><td>146—155</td><td>10</td><td>逍遥仙</td><td>炎帝被封印、精卫化鸟填海</td></tr><tr><td>10</td><td>天狗吞月</td><td>156—165</td><td>10</td><td>逍遥仙</td><td>灵兽族与天庭的旧怨</td></tr></tbody></table></div>
+<h2 id="sec-4">四、逐部详解</h2>
+<blockquote><p>说明：前五部（妖魔道—鲲鹏变）按官方逐章标注的等级列示；穿越篇（地藏王传—天狗吞月）每章等级依次 +1，表中等级以官方标注的首章、末章为准（如地藏王传 116 起、125 止，天狗吞月 156 起、165 止）。</p></blockquote>
+<h3>1. 妖魔道（20—80 级，7 章）</h3>
+<p><strong>定位</strong>：全剧情的开端。从揽仙镇药材失窃查起，牵出假药方、五龙窟恶龙、幽冥涧逃犯，最终在绝人阵与恶灵鬼王决战。这一部同时承担“教学”职能：教你认 NPC、跑地图、组队打剧情战斗。</p>
+<div class="table-wrap"><table><thead><tr><th>等级</th><th>章节</th><th>领取 NPC</th><th>要点</th></tr></thead><tbody><tr><td>20</td><td>勇擒鱼怪</td><td>揽仙镇·药店王老板</td><td>制药药材被鱼怪偷走，追到揽仙镇外夺回；战斗失败任务不消失，可再战</td></tr><tr><td>30</td><td>真假神兽</td><td>天墉城·药店杜老板</td><td>杜老板按同一张药方制出害人的药，顺藤摸出假“神兽异人”</td></tr><tr><td>40</td><td>试练之道</td><td>天墉城·通灵道人</td><td>入五龙窟击败五条恶龙头领，取回五颗恶灵珠交师尊</td></tr><tr><td>50</td><td>力擒恶匪</td><td>天墉城·仁和布庄贾仁和</td><td>妖怪放跑囚犯，赴幽冥涧抓回十名逃犯交夏总兵</td></tr><tr><td>60</td><td>探寻真相</td><td>师门·师尊</td><td>为封印恶灵鬼王向千年黄龙精问法；黄龙精反悔，击败后得封印之法</td></tr><tr><td>70</td><td>妖魔当道</td><td>天墉城·天机老人</td><td>圣灵珠被毁、恶灵珠被憾地魔盗走，追至骷髅山将其消灭</td></tr><tr><td>80</td><td>除魔卫道</td><td>天墉城·夏总兵</td><td>逃犯原是骷髅军团，赴绝人阵消灭恶灵鬼王</td></tr></tbody></table></div>
+<p><strong>奖励特点</strong>：全程金钱、经验、潜能，60 级后追加道行；70 章给高级内丹，80 章给首饰与超级女娲石。</p>
+<h3>2. 仙魔录（65—92 级，10 章）</h3>
+<p><strong>定位</strong>：整个中州篇的主干，也是称谓党最熟悉的一部。梅山修炼成精的七只妖怪成立“七尸十三堂”，欲颠覆天庭；玩家在众仙指点下周旋于各大妖魔之间，最终直捣黄龙，消灭七妖之首千年白猿精“袁洪”。仙魔录 65 级即可开启，与妖魔道后两章（70、80 级）在等级上重叠，两条线可按等级穿插完成。</p>
+<div class="table-wrap"><table><thead><tr><th>等级</th><th>章节</th><th>领取 NPC</th><th>要点与称谓</th></tr></thead><tbody><tr><td>65</td><td>疑云初现</td><td>无名剑客</td><td>赎当神像、借云中子“照妖镜”、桃柳林诛常昊；“江湖游侠”</td></tr><tr><td>68</td><td>迷局难解</td><td>夏总兵</td><td>天墉城孩童失踪，被夏总兵误认妖怪；官道南揪出假扮者；“智贤羽士”</td></tr><tr><td>71</td><td>初知真情</td><td>逍遥仙</td><td>东海恶龙作乱，通灵道人授咒降龙；恶龙供出“袁大圣”；“屠龙法师”</td></tr><tr><td>74</td><td>猪精伏诛</td><td>逍遥仙</td><td>梅山朱子真噬魂大法，借地狱牛头定魂珠、破十王鬼首阵后诛之；“辟邪仙师”</td></tr><tr><td>77</td><td>真假难辨</td><td>逍遥仙</td><td>大胡子服断肠草、医仙子赌局、苏苏盗灵山紫晶、杨显伏击；“九灵散人”</td></tr><tr><td>80</td><td>获知详情</td><td>逍遥仙</td><td>苏苏图谋以灵山紫晶解阙月天狼封印；夺天舞宝轮、取夔鼓；“伏魔真人”</td></tr><tr><td>83</td><td>封印得解</td><td>逍遥仙</td><td>烛武真神诈死、轩辕十四与白素旧事、集齐天道四生珠解九尾狐封印；“天道圣者”</td></tr><tr><td>86</td><td>重镇心魔</td><td>逍遥仙</td><td>九宫阵被破、三魔附体、制服罗睺星君；“妙应真君”</td></tr><tr><td>89</td><td>混迹魔军</td><td>逍遥仙</td><td>幻化为昆仑邪神，经冯喜来、翻天鼠混入袁洪帐下，破叁垣四象阵；“金身尊者”</td></tr><tr><td>92</td><td>大祸得消</td><td>逍遥仙</td><td>斩金大升救烛武，陆压助阵诛袁洪；“无量天尊”</td></tr></tbody></table></div>
+<p><strong>奖励特点</strong>：经验从 15 万递增到 140 万，每章一件对应等级改 3 蓝/金装备（92 章为改 4），并附带 1 点好心值（战斗胜利时队长与自己均未死亡）。</p>
+<h3>3. 伏魔记（101—105 级，5 章）</h3>
+<p><strong>定位</strong>：百级后的第一部，幕后黑手是“千年之前的兽神”。玩家因追求力量被假白虎引入圈套，盗取五山灵气，幡然悔悟后反过来保护五座仙山，最终逼出兽神真身。</p>
+<div class="table-wrap"><table><thead><tr><th>等级</th><th>章节</th><th>领取 NPC</th><th>要点</th></tr></thead><tbody><tr><td>101</td><td>突然事起</td><td>天墉城·董老头</td><td>通灵道人处除妖，北海沙滩九尾狐精逃往百花谷七，终诛之</td></tr><tr><td>102</td><td>风云再起</td><td>天机老人</td><td>千年虎精有妖法护身，集六色花瓣与瑶池泉水酿“百花仙露”破法</td></tr><tr><td>103</td><td>误入圈套</td><td>逍遥仙</td><td>求力心切，被假白虎所骗，盗取蓬莱与五山灵气</td></tr><tr><td>104</td><td>幡然悔悟</td><td>师门·师尊</td><td>万仙大会识破群妖、得师尊谅解，逐一归还五山灵气</td></tr><tr><td>105</td><td>解救仙山</td><td>东海渔村·柳如尘</td><td>五山神求援、击破五路妖军，董老头现兽神真身后遁走</td></tr></tbody></table></div>
+<h3>4. 幻仙劫（106—110 级，5 章）</h3>
+<p><strong>定位</strong>：由“魔教”引出“上古妖器”。孕妇失踪案牵出魔教，魔教背后是能操控人心的映心镜与镜中仙；最终在龙宫迎战五部天兵。</p>
+<div class="table-wrap"><table><thead><tr><th>等级</th><th>章节</th><th>领取 NPC</th><th>要点</th></tr></thead><tbody><tr><td>106</td><td>离奇失踪</td><td>夏总兵</td><td>孕妇接连失踪；卧龙坡神龙真人被夺宝，追查至百花谷，识破假官兵</td></tr><tr><td>107</td><td>惊现魔教</td><td>夏总兵</td><td>羊皮纸写“东昆仑—破元仙露”；轩辕坟三层战魔教教主</td></tr><tr><td>108</td><td>洞悉阴谋</td><td>通灵道人</td><td>天将作乱、多宝道人被上古妖器操控</td></tr><tr><td>109</td><td>浮出水面</td><td>通灵道人</td><td>妖器即映心镜、镜中仙；神龙真人制破元仙露，清剿四绝阵逃妖</td></tr><tr><td>110</td><td>力挽狂澜</td><td>通灵道人</td><td>龙宫连战火、木、水、遁天魔与金土五部天兵，破除镜中仙</td></tr></tbody></table></div>
+<p><strong>备注</strong>：官方专题注明，完成妖魔道、仙魔录、伏魔记、幻仙劫之后，才能接取“大飞升任务—仙道难”。</p>
+<h3>5. 鲲鹏变（111—115 级，5 章）</h3>
+<p><strong>定位</strong>：北海异象引出“北冥神灵”鲲鹏。全篇分“五变”，从调查渔民失踪，到求取五系御灵、连破鲲鹏幻影，最后借震天弓、射日箭与鲲鹏决战。</p>
+<div class="table-wrap"><table><thead><tr><th>等级</th><th>章节</th><th>领取 NPC</th><th>要点</th></tr></thead><tbody><tr><td>111</td><td>第一变·北海事起</td><td>轩辕庙·无想僧</td><td>渔民连人带船失踪，鱼人怪背后是“北冥神灵”；魔礼红琵琶引出恶兽乘黄</td></tr><tr><td>112</td><td>第二变</td><td>逍遥仙</td><td>太乙真人指点，向通天教主、太上老君、西方教主、准提道人、元始天尊破五灵阵，得五系御灵</td></tr><tr><td>113</td><td>第三变</td><td>逍遥仙</td><td>鲲鹏袭击四圣兽，连破黑熊精、狂狮怪、刺猬怪、猪妖、象精等幻影分身</td></tr><tr><td>114</td><td>第四变</td><td>逍遥仙</td><td>问修罗王后羿转世事、再战恶灵鬼王、为小花仙夺瑶池仙露、龙宫借震天弓与射日箭</td></tr><tr><td>115</td><td>第五变</td><td>逍遥仙</td><td>北海妖物再起，连战鲲鹏、无想僧与鲲鹏分身，收束全篇</td></tr></tbody></table></div>
+<p><strong>奖励特点</strong>：每章 400 万—450 万经验，附 110 级改 5 蓝（金）装备。</p>
+<h3>6. 地藏王传（116—125 级，10 章）</h3>
+<p><strong>定位</strong>：穿越篇第一部，取材“目连救母”与盂兰盆会。玩家随目连入地府，看尽饿鬼道之苦，最终助其超度亡母，玉帝封目连为地藏王。</p>
+<div class="table-wrap"><table><thead><tr><th>等级</th><th>章节</th></tr></thead><tbody><tr><td>116</td><td>游魂委托</td></tr><tr><td>117</td><td>寻找目连</td></tr><tr><td>118</td><td>龙宫寻道</td></tr><tr><td>119</td><td>脱离鬼道</td></tr><tr><td>120</td><td>脱离之法</td></tr><tr><td>121</td><td>转世回生</td></tr><tr><td>122</td><td>坠入地狱</td></tr><tr><td>123</td><td>解救目连</td></tr><tr><td>124</td><td>入地狱道</td></tr><tr><td>125</td><td>超度亡灵</td></tr></tbody></table></div>
+<p><strong>关键节点</strong>：116 章在地府遇李府管家孤魂，黄泉路寻李氏，野果入口即化炭；125 章需集“聚灵鼎”与四大神兽的“安魂咒”，请欲火上仙打开轮回之门，目连受封地藏王、紫衣仙子为护法。首章 640 万经验 + 110 级改 5，末章 820 万经验 + 120 级改 5。</p>
+<h3>7. 后羿射日（126—135 级，10 章）</h3>
+<p><strong>定位</strong>：十日并出，中州大旱。玩家结识风翅族族长后羿，造神弓、射九日，并在天帝报复下保护后羿族人。</p>
+<div class="table-wrap"><table><thead><tr><th>等级</th><th>章节</th></tr></thead><tbody><tr><td>126</td><td>十个太阳</td></tr><tr><td>127</td><td>寻找祸源</td></tr><tr><td>128</td><td>小惩大诫</td></tr><tr><td>129</td><td>下定决心</td></tr><tr><td>130</td><td>为民除害</td></tr><tr><td>131</td><td>保护族人</td></tr><tr><td>132</td><td>斩草除根</td></tr><tr><td>133</td><td>不堪重负</td></tr><tr><td>134</td><td>大功告成</td></tr><tr><td>135</td><td>恢复平静</td></tr></tbody></table></div>
+<p><strong>关键节点</strong>：129 章造弓——迷境花树取乌木、战千年狰兽，热砂荒漠取兽骨、战毒蝎，求何仙姑甘汁仙露，管神工铸弓，热砂精炼时战百年魔蜥精，弓成命名“神翼弓”；结局在西王母帮助下复活一只三足金乌，令其继续照耀中州。首章 850 万经验 + 120 级改 5。</p>
+<h3>8. 夸父逐日（136—145 级，10 章）</h3>
+<p><strong>定位</strong>：随夸父赴载天山寻找巨人部落，助其成为族长、统一六大部落；幽冥涧妖魔掠夺幼童，夸父为求克敌法宝魂断昆仑。</p>
+<div class="table-wrap"><table><thead><tr><th>等级</th><th>章节</th></tr></thead><tbody><tr><td>136</td><td>加入部族</td></tr><tr><td>137</td><td>创夸父族</td></tr><tr><td>138</td><td>一统全族</td></tr><tr><td>139</td><td>妖魔四起</td></tr><tr><td>140</td><td>蓄势待发</td></tr><tr><td>141</td><td>奔向隅谷</td></tr><tr><td>142</td><td>渭河之水</td></tr><tr><td>143</td><td>黄河之水</td></tr><tr><td>144</td><td>魂断昆仑</td></tr><tr><td>145</td><td>桃花盛开</td></tr></tbody></table></div>
+<p><strong>关键节点</strong>：136 章在十里坡与夸父不打不相识，同赴载天山，遇巨人乌由、战三头巨犬；144 章夸父渴死途中，145 章手杖化为桃林（邓林）。首章 1150 万经验 + 1588.8 万潜能。</p>
+<h3>9. 精卫填海（146—155 级，10 章）</h3>
+<p><strong>定位</strong>：炎帝除魔时被义合、祝融暗算，封印于毒火、夺走蓝灵珠；刑天持日光神镜复仇，祝融逃往北极冥海。玩家托西王母照料精卫，待其长大后陪她为父报仇；北海被魔族污染，精卫化青鸟衔圣灵石填海。</p>
+<div class="table-wrap"><table><thead><tr><th>等级</th><th>章节</th></tr></thead><tbody><tr><td>146</td><td>炎帝除魔</td></tr><tr><td>147</td><td>精卫寻父</td></tr><tr><td>148</td><td>精卫夺宝</td></tr><tr><td>149</td><td>冥海之战</td></tr><tr><td>150</td><td>炎谷救父</td></tr><tr><td>151</td><td>集结众神</td></tr><tr><td>152</td><td>绝地反击</td></tr><tr><td>153</td><td>初战金乌</td></tr><tr><td>154</td><td>灵石护体</td></tr><tr><td>155</td><td>决战金乌</td></tr></tbody></table></div>
+<p><strong>关键节点</strong>：146 章幽冥涧战嗜天魔、乾元山救炎帝、凤凰山战西王母、云霄宫问出真相。首章 1650 万经验 + 1831 万潜能。</p>
+<h3>10. 天狗吞月（156—165 级，10 章）</h3>
+<p><strong>定位</strong>：月现缺口，妖魔大举入侵天墉城、揽仙镇、东海渔村、无名小镇；玩家追查“天狗”身世，揭开灵兽族与天庭的旧怨，最终与天狗一同大闹天宫。</p>
+<div class="table-wrap"><table><thead><tr><th>等级</th><th>章节</th></tr></thead><tbody><tr><td>156</td><td>消失之月</td></tr><tr><td>157</td><td>天狗传说</td></tr><tr><td>158</td><td>灵兽天狗</td></tr><tr><td>159</td><td>寻找天狗</td></tr><tr><td>160</td><td>线索初现</td></tr><tr><td>161</td><td>天狗身世</td></tr><tr><td>162</td><td>修炼神功</td></tr><tr><td>163</td><td>复仇之路</td></tr><tr><td>164</td><td>株连之罪</td></tr><tr><td>165</td><td>灵魂不灭</td></tr></tbody></table></div>
+<p><strong>关键节点</strong>：156 章守天墉城、战猪妖，转战揽仙镇、东海渔村、无名小镇，为救治伤者向血丹魂借宝葫芦、向龙王求龙涎；165 章天狗被众护卫困住力竭而亡，却凭妖法元神不灭，再度上演吞月，警告玉帝不得追杀灵兽族，最终玉帝赦免。首章 1650 万经验 + 2090 万潜能，末章 2100 万经验 + 2338 万潜能。</p>
+<h2 id="sec-5">五、境界主线：元婴、飞升与飞仙</h2>
+<p>这条线不叫“剧情任务”，但决定了你能不能继续升级、能不能接后续正传，实质上是另一条主线。</p>
+<div class="table-wrap"><table><thead><tr><th>阶段</th><th>等级要求</th><th>任务</th><th>领取 NPC</th><th>结果</th></tr></thead><tbody><tr><td>百级拜师</td><td>真身 100</td><td>百级拜师</td><td>门派师尊</td><td>学习门派高阶技能，是“引路人”的前置</td></tr><tr><td>引路人（凝婴）</td><td>真身 110</td><td>人物飞升·引路人</td><td>天机老人 → 逍遥仙 → 南华真人（无名小镇）</td><td>选择元婴或血婴；真身等级上限由 125 提升至 180；可切换元婴/血婴修炼</td></tr><tr><td>仙道难（飞升）</td><td>元婴/血婴 130</td><td>人物飞升·仙道难</td><td>南华真人</td><td>获得“飞升”称号；真身可学另一门派 B 类技能；获得仙/魔属性与修道点</td></tr><tr><td>南天门试炼（飞仙）</td><td>150</td><td>南天门试炼</td><td>南华真人（无名小镇 103,51）</td><td>依次击败雷神、花神、龙神、炎神、山神，得“南天门试炼金丹”，完成飞仙</td></tr></tbody></table></div>
+<p><strong>注意</strong>：引路人任务领取后无法再找南华真人更换元婴/血婴；仙道难的所有剧情触发都必须以元婴/血婴形态进行；飞升后每升 1 级得 1 点修道点，可在天墉城鬼道子处分配仙道点/魔道点。</p>
+<p><strong>附：宠物飞升</strong>（宠物 110 级、亲密度 30000，东海渔村·灵兽异人）：让宠物突破 125 级上限，抗性上限与成长提升，与人物飞升线并行。</p>
+<h2 id="sec-6">六、番外与“容易混进主线”的任务</h2>
+<ul><li><strong>西域迷情</strong>（1.59 版本，真身 ≥100）：四章“中州异客 → 救死扶伤 → 王位之争 → 真相大白”。西域古城瘟疫、两位王子争位，幕后是千年前妖王蜃精。独立剧情，不属于正传序号。</li><li><strong>天降大任</strong>（30 级以上，天墉城青木道人）：传送到练功区完成守护神试炼，给经验、道行、武学，本质是练级任务。</li><li><strong>修行 / 仙人指路</strong>（50—100 级，东海渔村柳如尘）：3 人以上组队的循环修行，胜 5 位神仙领经验、道行、宠物经验与武学。</li><li><strong>天劫 / 地劫</strong>（134 级起，需先完成飞升）：天劫共十劫，每通过一劫提升单项相性点上限、突破当前等级上限，并获得“一劫散仙”等称号；未完成当前劫难时不获得经验。</li><li><strong>300 连环任务</strong>（50 级以上，问道活动大使）：每周一次的跑环，300 环封顶，可抽神兽精魄等大奖。</li><li><strong>亲子任务、功德任务、浮生传记</strong>：独立玩法或角色支线，不推进正传。</li></ul>
+<h2 id="sec-7">七、跑主线的实用建议</h2>
+<ol><li><strong>记住几个卡点</strong>：65（仙魔录开启）、92（仙魔录完结）、101（伏魔记）、110（引路人）、116（地藏王传入场）、126、134（天劫第一劫）、136、146、156。每到卡点先确认前置是否做完，否则会“等级够了却接不到任务”；134 级起每升一级都要先渡一劫，未渡劫时不获得经验。</li><li><strong>先做 100 级拜师</strong>：不做百级拜师，110 级接不到引路人；不凝婴，真身卡在 125 级，126 级后的穿越篇全部无法开启。</li><li><strong>组队配置</strong>：剧情战斗普遍是“1 主怪 + 多小怪”或连续多场，建议 5 人满编，带木系（疗伤/复活）、水系（障碍控制）、高防体宠；后期章节主怪速度、伤害都高，先清小怪再集火主怪。</li><li><strong>别浪费双倍</strong>：剧情经验大多不吃双倍/三倍/全局双倍，双倍时间留给刷道或日常。</li><li><strong>称谓是隐藏奖励</strong>：仙魔录十章的称谓链（江湖游侠 → 无量天尊）是很多老玩家的收藏目标，战斗胜利时队长和自己都没死还能多拿 1 点好心值。</li><li><strong>奖励随等级削减</strong>：穿越篇明确“三倍、双倍、全局双无效，均按自身等级进行削减”，卡级做剧情并不划算，按等级推进即可。</li></ol>
+<h2 id="sec-8">八、版本与平台说明</h2>
+<ul><li><strong>端游</strong>：光宇游戏运营，2006 年公测的 2D 回合制修真网游，五系（金木水火土）十角色，本文即以此为准。</li><li><strong>手游</strong>：《问道》手游由雷霆游戏发行，主线按“章节”推进，剧情结构与端游不完全一致（例如早期同样有妖魔道、仙魔录、伏魔记的等级段，但章节划分与任务名有差异），不能直接套用本文的章节表。</li><li><strong>版本</strong>：官方资料页的等级、奖励多为“最初上线规则”，历次版本可能调整过战斗难度、奖励数值与个别任务名；本文标注的等级段以官方页面为准，若游戏内显示不同，以游戏内为准。</li></ul>
+<h2 id="sec-9">九、参考资料</h2>
+<ul><li><a href="https://wd.gyyx.cn/GameHelp/GameHelpNodeList.aspx" target="_blank" rel="noopener">《问道》官方游戏资料·剧情任务</a></li><li><a href="https://wd.gyyx.cn/GameHelp/GameHelpDetail.aspx?GameHelpTypeID=279&amp;ParentId=156&amp;CurrentParentId=241&amp;level=2" target="_blank" rel="noopener">妖魔道</a></li><li><a href="https://wd.gyyx.cn/GameHelp/GameHelpDetail.aspx?GameHelpTypeID=280&amp;ParentId=156&amp;CurrentParentId=241&amp;level=2" target="_blank" rel="noopener">仙魔录</a></li><li><a href="https://wd.gyyx.cn/GameHelp/GameHelpDetail.aspx?GameHelpTypeID=281&amp;ParentId=156&amp;CurrentParentId=241&amp;level=2" target="_blank" rel="noopener">伏魔记</a></li><li><a href="http://wd.gyyx.cn/action/1.451/hxj.html" target="_blank" rel="noopener">幻仙劫（1.451 专题）</a></li><li><a href="http://wd.gyyx.cn/action/1.46/kpb_bhsq.html" target="_blank" rel="noopener">鲲鹏变（1.46 专题）</a></li><li><a href="http://wd.gyyx.cn/action/1.49/yhwt.html" target="_blank" rel="noopener">地藏王传（1.49 专题）</a></li><li><a href="https://wd.gyyx.cn/GameHelp/GameHelpDetail.aspx?GameHelpTypeID=755&amp;ParentId=156&amp;CurrentParentId=241&amp;level=2" target="_blank" rel="noopener">后羿射日</a></li><li><a href="https://wd.gyyx.cn/GameHelp/GameHelpDetail.aspx?GameHelpTypeID=766&amp;ParentId=156&amp;CurrentParentId=241&amp;level=2" target="_blank" rel="noopener">夸父逐日</a></li><li><a href="https://wd.gyyx.cn/GameHelp/GameHelpDetail.aspx?GameHelpTypeID=780&amp;ParentId=156&amp;CurrentParentId=241&amp;level=2" target="_blank" rel="noopener">精卫填海</a></li><li><a href="https://wd.gyyx.cn/GameHelp/GameHelpDetail.aspx?GameHelpTypeID=808&amp;ParentId=156&amp;CurrentParentId=241&amp;level=2" target="_blank" rel="noopener">天狗吞月</a></li><li><a href="https://wd.gyyx.cn/GameHelp/GameHelpDetail.aspx?GameHelpTypeID=284&amp;ParentId=156&amp;CurrentParentId=270&amp;level=3" target="_blank" rel="noopener">人物飞升（引路人·仙道难）</a></li><li><a href="http://wd.gyyx.cn/action/1.49/qmfx.html" target="_blank" rel="noopener">南天门试炼（1.49 专题）</a></li><li><a href="http://wd.gyyx.cn/action/1.59/index.html" target="_blank" rel="noopener">西域迷情（1.59 专题）</a></li><li><a href="https://news.17173.com/content/06032021/103531446.shtml" target="_blank" rel="noopener">17173：《问道》剧情任务全解析</a></li></ul>
+<footer>整理日期：2026-11-14 · 依据《问道》官网“游戏资料—剧情任务”与各版本专题页核对；数值与等级以游戏内当前版本为准。</footer>
+</main>
+<a class="top" href="#top" title="回到顶部" aria-label="回到顶部">↑</a>
+</body>
+</html>

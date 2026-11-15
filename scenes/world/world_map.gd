@@ -445,10 +445,12 @@ func _ready() -> void:
 	_show_result()
 
 
-## 取当前主角的头像（读 Global.main_player_selected）。
+## 取当前队长的头像（读 _leader_stats()，不要读 Global.main_player_selected）。
+## ⚠ Global.main_player_selected 是“开局选的主角”，set_leader 只挪 deployed、不会改它；
+##   读它会导致换队长后立绘仍是原来那个人。
 ## 返回 null 表示没选人（调用方据此显示占位色块）；返回的是共享 Resource 的贴图引用，只读。
 func _player_icon() -> Texture2D:
-	var stats := Global.main_player_selected
+	var stats := _leader_stats()
 	return stats.icon if stats != null else null
 
 
@@ -728,15 +730,15 @@ func _spawn_portals() -> void:
 		_portals.append(node)
 
 
-## 每帧判定：玩家踩进任一光圈 → 请求切图。
+## 玩家踩进可用光圈时请求切图，并返回 true 让本帧跳过遇敌判定。
 ## 两个保护：UI 打开时不触发（否则关面板瞬间会误传）；刚抵达后的 0.8 秒不触发
 ## （防止目标图的返回光圈就在脚下，一落地又被弹回去）。
-func _check_portals(delta: float) -> void:
+func _check_portals(delta: float) -> bool:
 	if _portal_cooldown > 0.0:
 		_portal_cooldown -= delta
-		return
+		return false
 	if _portals.is_empty() or player == null:
-		return
+		return false
 	for node in _portals:
 		if not is_instance_valid(node) or node.portal == null:
 			continue
@@ -744,16 +746,17 @@ func _check_portals(delta: float) -> void:
 			continue
 		var target := node.portal.target_map_id
 		if target.is_empty() or target == _map.id:
-			return
+			return false
 		# GameRoot 是 class_name 不是 autoload，get_map() 不能静态调用；
 		# 用 GameRoot 注入的 _map_names（全地图 id → 显示名）判断目标是否存在。
 		if not _map_names.has(target):
 			show_toast("「%s」尚未开放" % node.display_label)
 			_portal_cooldown = 2.0
-			return
+			return false
 		_portal_cooldown = 1.2
 		travel_requested.emit(target)
-		return
+		return true
+	return false
 
 
 ## 暗雷遭遇（暗雷模式：野外走动随机遇敌，站着不动不遇）。
@@ -824,7 +827,8 @@ func _process(delta: float) -> void:
 	_update_trail()
 	_update_companions(delta)
 	_update_nearest()
-	_check_portals(delta)
+	if _check_portals(delta):
+		return
 	_update_patrol(delta)
 	_update_encounter(delta)
 
@@ -935,9 +939,14 @@ func _setup_party_visuals() -> void:
 ## 由 notify_party_changed() 检测到队长变化时 deferred 调用（不能在同一帧里 free 正在发信号的节点）。
 func _refresh_player_avatar() -> void:
 	if _player_anim != null and is_instance_valid(_player_anim):
+		_player_anim.set_process(false)
 		_player_anim.queue_free()
 	_player_anim = null
 	player_sprite.visible = true
+	# 上一位队长可能走的是帧动画（region_enabled = true）：不清掉 region，
+	# 静态贴图会被裁成动画帧大小，看起来还是旧形象或残缺。
+	player_sprite.region_enabled = false
+	player_sprite.region_rect = Rect2()
 
 	var stats := _leader_stats()
 	if stats != null and not stats.anim_dir.is_empty():
@@ -961,6 +970,8 @@ func _refresh_player_avatar() -> void:
 			_anchor_sprite_feet(player_sprite)
 	player_fallback.visible = icon == null and _player_anim == null
 	_update_leader_name()
+	# 队长换了，手里的武器也要跟着换（旧队长的武器不能留在新队长身上）。
+	_refresh_weapon_visuals()
 
 
 ## 刷新队长头顶的名字（队长换人/改名时调；平时只在 _setup_party_visuals 里调一次）。

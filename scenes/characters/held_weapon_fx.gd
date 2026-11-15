@@ -64,6 +64,13 @@ static func apply(sprite: Sprite2D, tier: int, item_ref = null) -> void:
 	var t := clampi(tier, 0, TIER_FX.size() - 1)
 	var cfg: Dictionary = TIER_FX[t]
 	var weapon_type := int(item_ref.weapon_type) if item_ref != null else 0
+	# 昆仑及后续八档已有动画光效，降低额外光环与散射粒子。
+	var subdued_spear := weapon_type == 4 and int(item_ref.req_level) >= 80
+	if subdued_spear:
+		cfg = cfg.duplicate()
+		cfg["strength"] = float(cfg["strength"]) * 0.60
+		cfg["amount"] = roundi(float(cfg["amount"]) * 0.35)
+		cfg["halo_alpha"] = 0.32
 	# 白装扇、爪也有专属流光，但仍不挂通用品质光环。
 	if t == 0 and (weapon_type == 3 or weapon_type == 6):
 		cfg = cfg.duplicate()
@@ -89,13 +96,13 @@ static func apply(sprite: Sprite2D, tier: int, item_ref = null) -> void:
 			mat.set_shader_parameter("glow_width", 0.005 + 0.002 * strength)
 			mat.set_shader_parameter("pulse_speed", 1.2 + 0.7 * float(cfg["speed"]))
 			mat.set_shader_parameter("sweep_speed", 0.0 if t <= 1 else 0.35 + 0.22 * float(cfg["speed"]))
-			mat.set_shader_parameter("sweep_strength", 1.5)
+			mat.set_shader_parameter("sweep_strength", 0.85 if subdued_spear else 1.5)
 
 	var active_anim := host.get_node_or_null("WeaponAnim") as AnimatedSprite2D
 	if active_anim != null:
 		active_anim.material = sprite.material
 	_apply_weapon_fx(sprite, t, cfg, weapon_type)
-	_align_weapon_bottom(sprite)
+	_align_weapon_bottom(sprite, weapon_type)
 
 
 static func _apply_weapon_fx(sprite: Sprite2D, tier: int, cfg: Dictionary, weapon_type: int) -> void:
@@ -282,7 +289,7 @@ static func _apply_frames(host: Node, cfg: Dictionary, layout: Dictionary) -> vo
 	node.scale = Vector2.ONE * (float(layout["glow_size"]) / maxf(1.0, sheet_w))
 	node.position = layout["glow"]
 	var col: Color = cfg["color"]
-	col.a = 0.18 if layout.get("compact", false) else 1.0
+	col.a = 0.18 if layout.get("compact", false) else float(cfg.get("halo_alpha", 1.0))
 	node.modulate = col
 	node.visible = true
 	if not node.is_playing():
@@ -487,6 +494,8 @@ static func _make_anim(parent: Node, sheet_path: String) -> AnimatedSprite2D:
 
 ## 手持图的握把点在贴图里的坐标（见 make_held_weapons.py）
 const HELD_GRIP := Vector2(120, 950)
+## 枪尾在对齐后的动画格中的坐标。
+const SPEAR_ANIM_TAIL := Vector2(69.73, 374.78)
 
 ## 各类型的武器长度 = **角色身高的几倍**（不是绝对像素）。
 ## 立绘本体会被缩到 ~195px，用绝对像素会变成只有几十像素。
@@ -494,7 +503,7 @@ const HELD_RATIO := {
 	1: 1.72,   # 剑（调大：之前和刀共用 1.55，显得小）
 	2: 1.38,   # 刀（调小：之前和剑共用 1.55，显得大）
 	3: 1.35,   # 扇
-	4: 2.05,   # 枪（更长）
+	4: 2.05 * 0.75,   # 枪
 	5: 1.55,   # 杖
 	6: 1.05,   # 爪（调小）
 }
@@ -539,7 +548,7 @@ static func held_ratio(item) -> float:
 
 ## Align the visible weapon to the portrait's feet, moving the whole FX group.
 ## Measure once on refresh, never per animation frame (avoids vertical jitter).
-static func _align_weapon_bottom(body: Sprite2D) -> void:
+static func _align_weapon_bottom(body: Sprite2D, weapon_type: int) -> void:
 	var pivot := body.get_parent() as Node2D
 	if pivot == null:
 		return
@@ -550,6 +559,12 @@ static func _align_weapon_bottom(body: Sprite2D) -> void:
 	var textures: Array[Texture2D] = [body.texture]
 	var origin := body.get_rect().position
 	var anim := pivot.get_node_or_null("WeaponAnim") as AnimatedSprite2D
+	if weapon_type == 4:
+		# 以硬质枪尾对齐脚底。飘带和光效的外轮廓不参与定位。
+		var tail := pivot.transform * (anim.transform * SPEAR_ANIM_TAIL) if anim != null and anim.visible \
+				else pivot.transform * (body.transform * (origin + HELD_GRIP))
+		_align_tail_to_feet(pivot, portrait, tail.y)
+		return
 	if anim != null and anim.visible:
 		visual = anim
 		textures.clear()
@@ -577,6 +592,10 @@ static func _align_weapon_bottom(body: Sprite2D) -> void:
 					weapon_bottom = maxf(weapon_bottom, point.y)
 	if not is_finite(weapon_bottom):
 		return
+	_align_tail_to_feet(pivot, portrait, weapon_bottom)
+
+
+static func _align_tail_to_feet(pivot: Node2D, portrait: Sprite2D, weapon_bottom: float) -> void:
 	var portrait_image := portrait.texture.get_image()
 	if portrait_image == null:
 		return

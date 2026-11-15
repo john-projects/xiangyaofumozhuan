@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>《降妖伏魔传》门派技能扩展方案（单机 PvE 版）</title>
+<meta name="description" content="单机刷怪向的门派技能扩展：不设克制，突出清屏、连杀、滚雪球；5 派各 10 个技能、体系改造与引擎工作量。">
+<style>
+:root{
+  --ink:#1c2430; --muted:#5b6675; --brand:#1f3864; --brand2:#2e548c;
+  --line:#dde3ea; --soft:#f6f8fb; --accent:#f0f4fa;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0; padding:32px 16px 72px;
+  background:#eef1f6; color:var(--ink);
+  font-family:"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans SC",system-ui,-apple-system,"Segoe UI",sans-serif;
+  font-size:16px; line-height:1.85;
+  -webkit-font-smoothing:antialiased;
+}
+.page{
+  max-width:900px; margin:0 auto; background:#fff; border-radius:14px;
+  box-shadow:0 1px 2px rgba(16,24,40,.04),0 12px 40px rgba(16,24,40,.08);
+  padding:56px 64px 64px;
+}
+h1{
+  font-size:30px; line-height:1.35; margin:0 0 22px; color:var(--brand);
+  letter-spacing:.5px;
+}
+h2{
+  font-size:21px; margin:44px 0 14px; padding-left:12px; color:var(--brand);
+  border-left:5px solid var(--brand2); line-height:1.4;
+}
+h3{
+  font-size:17px; margin:30px 0 10px; color:var(--brand2);
+}
+h4{
+  font-size:16px; margin:24px 0 8px; color:var(--brand2); font-weight:700;
+  padding-bottom:5px; border-bottom:1px dashed #d7dee8;
+}
+p{margin:0 0 14px}
+strong{color:#17202b}
+a{color:#1f4e79; text-decoration:none; border-bottom:1px solid rgba(31,78,121,.35)}
+a:hover{background:#eaf1f9}
+ul,ol{margin:0 0 16px; padding-left:1.55em}
+li{margin:4px 0}
+blockquote{
+  margin:18px 0 22px; padding:14px 18px; color:#4d5866;
+  background:var(--soft); border-left:3px solid #b9c6d9; border-radius:0 8px 8px 0;
+  font-size:14.5px;
+}
+blockquote p{margin:0}
+pre{
+  margin:16px 0 20px; padding:16px 18px; overflow-x:auto;
+  background:#f2f4f7; border:1px solid #e5e9ef; border-radius:10px;
+  font-family:Consolas,"SFMono-Regular","Cascadia Mono","Liberation Mono",monospace;
+  font-size:13px; line-height:1.7; color:#2b3440;
+}
+pre code{font-family:inherit; white-space:pre}
+code{font-family:Consolas,monospace; font-size:.92em}
+.table-wrap{overflow-x:auto; margin:14px 0 24px; border:1px solid var(--line); border-radius:10px}
+table{border-collapse:collapse; width:100%; font-size:14px; line-height:1.65; background:#fff}
+thead th{
+  background:var(--accent); color:var(--brand); font-weight:600; text-align:left;
+  padding:10px 12px; border-bottom:1px solid var(--line); white-space:nowrap;
+}
+tbody td{padding:9px 12px; border-bottom:1px solid #edf0f4; vertical-align:top}
+tbody tr:last-child td{border-bottom:none}
+tbody tr:nth-child(even){background:#fbfcfe}
+tbody tr:hover{background:#f4f8fd}
+hr{border:none; border-top:1px solid var(--line); margin:32px 0}
+
+.toc{
+  margin:26px 0 10px; padding:18px 22px; background:var(--soft);
+  border:1px solid var(--line); border-radius:12px;
+}
+.toc-title{font-size:13px; letter-spacing:2px; color:var(--muted); margin:0 0 10px; font-weight:600}
+.toc ul{margin:0; padding:0; list-style:none; columns:2; column-gap:28px}
+.toc li{margin:3px 0; break-inside:avoid; font-size:14.5px}
+.toc li a{border-bottom:none; color:#2d3c50}
+.toc li a:hover{color:#1f4e79; background:none; text-decoration:underline}
+.meta{color:var(--muted); font-size:13.5px; margin:-6px 0 18px}
+footer{
+  margin-top:44px; padding-top:18px; border-top:1px solid var(--line);
+  color:#7b8593; font-size:13px;
+}
+.top{
+  position:fixed; right:22px; bottom:22px; width:42px; height:42px; border-radius:50%;
+  background:#fff; border:1px solid var(--line); box-shadow:0 4px 14px rgba(16,24,40,.12);
+  display:flex; align-items:center; justify-content:center; color:var(--brand);
+  font-size:18px; text-decoration:none; border-bottom:1px solid var(--line);
+}
+.top:hover{background:var(--accent)}
+@media (max-width:720px){
+  body{padding:12px 8px 56px; font-size:15px}
+  .page{padding:28px 20px 36px; border-radius:10px}
+  h1{font-size:23px}
+  h2{font-size:18px; margin-top:34px}
+  .toc ul{columns:1}
+  table{font-size:12.5px}
+  thead th,tbody td{padding:7px 8px}
+}
+@media print{
+  body{background:#fff; padding:0; font-size:11pt}
+  .page{box-shadow:none; max-width:none; padding:0}
+  .toc,.top{display:none}
+  h2{page-break-after:avoid}
+  h3{page-break-after:avoid}
+  table,.table-wrap{page-break-inside:auto}
+  tr{page-break-inside:avoid}
+  thead{display:table-header-group}
+  a{color:#1c2430; border-bottom:none}
+}
+</style>
+</head>
+<body id="top">
+<main class="page">
+<h1>《降妖伏魔传》门派技能扩展方案</h1>
+<blockquote><p>现状：5 个门派 × 5 个技能（2 被动 + 3 主动）。目标：每派 8—10 个师门技能。参照：梦幻西游 18 门派 × 7 个师门技能（个别 8 个）的结构。本文给出一套可直接落表的技能清单，以及先改引擎、再改数值、最后加技能的顺序。</p></blockquote>
+<blockquote><p></p></blockquote>
+<blockquote><p>⚠ 本作是<strong>单机 PvE</strong>，不做 PvP，因此<strong>不设计门派克制</strong>；技能的取舍标准只有一个：<strong>刷怪爽不爽</strong>。</p></blockquote>
+<nav class="toc" aria-label="目录"><p class="toc-title">目 录</p><ul>
+<li><a href="#sec-1">一、先说结论</a></li>
+<li><a href="#sec-2">二、梦幻西游是怎么做的</a></li>
+<li><a href="#sec-3">三、现有体系的四个问题</a></li>
+<li><a href="#sec-4">四、目标结构：每派 10 个</a></li>
+<li><a href="#sec-5">五、五派技能表</a></li>
+<li><a href="#sec-6">六、体系改造：让技能“有选择”</a></li>
+<li><a href="#sec-7">七、单机刷怪的爽感从哪来</a></li>
+<li><a href="#sec-8">八、引擎要补什么</a></li>
+<li><a href="#sec-9">九、落地顺序</a></li>
+<li><a href="#sec-10">十、附录：梦幻西游 18 门派师门技能</a></li>
+</ul></nav><h2 id="sec-1">一、先说结论</h2>
+<ul><li>不要“每派再加 5 个伤害技”。现在缺的不是伤害，是<strong>职能</strong>：控制链、解控、复活、减益、吸血、护盾、场地、资源。</li><li>推荐每派 <strong>10 个 = 3 个被动 + 7 个主动</strong>。7 个主动固定覆盖：单体、群体、控制、增益、减益、生存/解控、大招。</li><li>但<strong>先别急着加</strong>。当前 100 级伤害曲线是 2—4 刀结束，单体技能倍率 1.8 就能秒人；在这个节奏下加治疗、复活、控制，只会让战斗变成“谁先手谁赢”。先拉长 TTK，技能才有博弈空间。</li><li>落地顺序：<strong>补引擎字段 → 调数值 → 每派加到 8 → 再加到 10 → 专精与刷怪节奏</strong>。</li><li><strong>单机不设克制</strong>：没有 PvP，克制只会增加理解成本；把这份复杂度换成清屏、连杀、滚雪球。</li></ul>
+<h2 id="sec-2">二、梦幻西游是怎么做的</h2>
+<h3>结构：7 个“职能”，不是一个“招式”</h3>
+<p>梦幻每个门派 7 个师门技能（普陀等个别门派 8 个）。每个师门技能本身是一个<strong>职能分类</strong>，下面挂着若干“法术”，按技能等级解锁（常见 25 / 50 / 75 / 100 / 125 / 150 级）。玩家点一个“龙腾”，里面可能包含单秒、群秒、加灵、解封好几个法术。</p>
+<p>也就是说：<strong>梦幻的“7 个技能”约等于“7 类职能”</strong>，实际可用法术数量是 15—20 个。你现在的 5 个技能是 5 个“法术”，所以感觉少是正常的。</p>
+<h3>五条设计逻辑</h3>
+<ol><li><strong>技能 = 职能</strong>：输出、群攻、控制、治疗、增益、被动、门派特色，一门派一套，缺一门就打不了对应的仗。</li><li><strong>法术分档解锁</strong>：同一职能随等级变强、变多目标、多效果，前期后期都能用。</li><li><strong>全学但不全精</strong>：技能都能学满，真正的分化在加点、装备、特技、法宝、宠物，而不是“选哪几个技能”。</li><li><strong>控制与反制齐全</strong>：有封印就有解封，有禁法就有抗封，有毒就有解毒，有复活就有守尸——不然控制系一家独大。</li><li><strong>门派克制循环</strong>：12 门派首尾相克，队伍搭配有取舍。<strong>这条不抄</strong>——单机 PvE 没有对手博弈，克制只增加理解成本，换成清屏与滚雪球更划算。</li></ol>
+<h3>和你的五派对位</h3>
+<div class="table-wrap"><table><thead><tr><th>你的门派</th><th>定位</th><th>梦幻里最接近的门派</th></tr></thead><tbody><tr><td>太虚剑宗</td><td>人族、物理爆发、暴击</td><td>大唐官府 / 凌波城</td></tr><tr><td>缥缈仙府</td><td>人仙、速度、封印控制</td><td>方寸山 / 女儿村</td></tr><tr><td>紫霄神道教</td><td>仙族、雷法、群体法伤</td><td>龙宫 / 魔王寨</td></tr><tr><td>万药谷</td><td>仙魔、治疗、毒、续航</td><td>化生寺 / 普陀山</td></tr><tr><td>星罗教</td><td>魔族、暴击、诅咒</td><td>狮驼岭 / 盘丝洞</td></tr></tbody></table></div>
+<h2 id="sec-3">三、现有体系的四个问题</h2>
+<div class="table-wrap"><table><thead><tr><th>现状</th><th>问题</th><th>后果</th></tr></thead><tbody><tr><td>每派 5 个技能，2 被动 + 3 主动</td><td>没有解控、复活、减益、吸血、护盾、场地、召唤</td><td>战斗只有“谁先手谁秒”，没有翻盘手段</td></tr><tr><td>被动是纯线性 +1%/级</td><td>满级 +100% 伤害、+50% 暴击</td><td>被动压过主动，门派差异只剩数值</td></tr><tr><td>拜师即学全，经验金币可全满</td><td>5 个技能全满 = 没有 build；加到 10 个就是 10 倍经验坑</td><td>同门派千人一面</td></tr><tr><td>100 级普攻 2—4 刀，单体技能 1.8 倍可秒</td><td>控制 1 回合等于对方 25—50% 的输出窗口</td><td>加治疗/复活前必须先拉长 TTK</td></tr><tr><td>引擎只有 dot / 封印 / 禁法 / 治疗 / 友方 buff</td><td>敌方减益、驱散、复活、护盾都没有字段</td><td>技能设计被引擎卡死</td></tr></tbody></table></div>
+<h2 id="sec-4">四、目标结构：每派 10 个</h2>
+<h3>3 个被动</h3>
+<div class="table-wrap"><table><thead><tr><th>被动</th><th>作用</th><th>例子</th></tr></thead><tbody><tr><td>属性被动</td><td>门派主属性，保留但降斜率</td><td>太虚剑典：伤害 +0.6%/级</td></tr><tr><td>机制被动</td><td>资源、印记、触发</td><td>剑意：暴击叠层，大招消耗</td></tr><tr><td>生存被动</td><td>抗性、闪避、护盾、回蓝</td><td>云身：每回合首次受击概率闪避</td></tr></tbody></table></div>
+<h3>7 个主动</h3>
+<div class="table-wrap"><table><thead><tr><th>职能</th><th>作用</th><th>每派都要有</th></tr></thead><tbody><tr><td>单体</td><td>常规输出/点杀</td><td>✓</td></tr><tr><td>群体</td><td>清场/压血线</td><td>✓</td></tr><tr><td>控制</td><td>封印/禁法/减速/中毒</td><td>✓（形式不同）</td></tr><tr><td>增益</td><td>自身或全队</td><td>✓</td></tr><tr><td>减益</td><td>破防/易伤/降速/降疗</td><td>✓</td></tr><tr><td>生存/解控</td><td>解封、净化、护盾、位移</td><td>✓</td></tr><tr><td>大招</td><td>高冷却、高收益、可被针对</td><td>✓</td></tr></tbody></table></div>
+<h3>职能矩阵</h3>
+<div class="table-wrap"><table><thead><tr><th>职能</th><th>太虚</th><th>缥缈</th><th>紫霄</th><th>万药</th><th>星罗</th></tr></thead><tbody><tr><td>单体</td><td>重击</td><td>固定伤</td><td>雷法</td><td>毒</td><td>连击</td></tr><tr><td>群体</td><td>剑阵</td><td>固定伤</td><td>雷暴</td><td>毒雾</td><td>星陨</td></tr><tr><td>控制</td><td>破甲</td><td>封印/禁法</td><td>麻痹</td><td>中毒/降疗</td><td>诅咒</td></tr><tr><td>增益</td><td>暴击</td><td>速度</td><td>法伤</td><td>全队增伤</td><td>暴伤</td></tr><tr><td>减益</td><td>破防</td><td>减速/降抗封</td><td>雷印易伤</td><td>降疗</td><td>易伤</td></tr><tr><td>生存</td><td>闪避反击</td><td>护盾</td><td>免法</td><td>护盾/复活</td><td>吸血</td></tr><tr><td>大招</td><td>万剑归宗</td><td>封天绝地</td><td>天罚</td><td>药王鼎</td><td>陨星</td></tr></tbody></table></div>
+<h2 id="sec-5">五、五派技能表</h2>
+<blockquote><p>数值是“起始值”，不是最终值；power 按现有公式（技能倍率 × 伤害/法伤，再走攻防差）。标【现有】的保留或微调，标【新增】的进表。</p></blockquote>
+<h3>太虚剑宗（人族 · 物理爆发 · 剑意）</h3>
+<div class="table-wrap"><table><thead><tr><th>技能</th><th>类型</th><th>效果</th><th>状态</th></tr></thead><tbody><tr><td>太虚剑典</td><td>被动</td><td>伤害 +1%/级（建议降到 0.6%）</td><td>现有</td></tr><tr><td>剑心通明</td><td>被动</td><td>暴击 +0.5%/级（建议降到 0.3%）</td><td>现有</td></tr><tr><td>剑意</td><td>被动</td><td>暴击或击杀叠 1 层（最多 5 层），每层 +2% 伤害，大招消耗</td><td>新增</td></tr><tr><td>三尺青锋</td><td>群体</td><td>2 目标，30 级 3 目标，power 1.3</td><td>现有</td></tr><tr><td>太虚神剑</td><td>连击</td><td>3 段 0.5 / 0.7 / 0.9</td><td>现有</td></tr><tr><td>断岳式</td><td>单体重击</td><td>2.6 倍；目标气血低于 30% 时 +50%（斩杀），冷却 1</td><td>新增</td></tr><tr><td>裂甲式</td><td>减益</td><td>1.2 倍 + 目标防御 -20%，2 回合</td><td>新增</td></tr><tr><td>人剑合一</td><td>增益</td><td>3 回合暴击 +15%、暴伤 +30%</td><td>现有（改）</td></tr><tr><td>御剑千里</td><td>生存</td><td>速度 +30%、闪避 1 次物理并反击 50%，冷却 3</td><td>新增</td></tr><tr><td>万剑归宗</td><td>大招</td><td>全体（不设目标上限）1.6 倍，每层剑意 +8%，清空剑意；击杀任一目标冷却 -2</td><td>新增</td></tr></tbody></table></div>
+<h3>缥缈仙府（人仙 · 速度 · 封印）</h3>
+<div class="table-wrap"><table><thead><tr><th>技能</th><th>类型</th><th>效果</th><th>状态</th></tr></thead><tbody><tr><td>云海心法</td><td>被动</td><td>速度 +0.5/级（建议 0.3）</td><td>现有</td></tr><tr><td>缥缈封心</td><td>被动</td><td>封印命中 +0.5%/级（必须接进战斗）</td><td>现有</td></tr><tr><td>云身</td><td>被动</td><td>每回合首次受击 15% 闪避；速度高于目标时伤害 +8%</td><td>新增</td></tr><tr><td>缥缈剑指</td><td>群体</td><td>固定伤害 2 目标，30 级 3 目标</td><td>现有</td></tr><tr><td>太虚封天</td><td>群体控制</td><td>全体定身 1 回合 + 受到伤害 +10%，命中 45%（精英减半），冷却 3</td><td>现有（改）</td></tr><tr><td>定身咒</td><td>单体控制</td><td>定身 2 回合（精英 1 回合）+ 受到伤害 +15%，冷却 2</td><td>新增</td></tr><tr><td>封灵诀</td><td>禁法</td><td>单体 2 回合不能放技能 + 法防 -15%，冷却 2</td><td>现有</td></tr><tr><td>云海潮生</td><td>减益</td><td>全体减速 30% + 受到伤害 +10%，2 回合</td><td>新增</td></tr><tr><td>镜花水月</td><td>护盾</td><td>给队友 1 次法术吸收（法伤 ×2），冷却 3</td><td>新增</td></tr><tr><td>封天绝地</td><td>大招</td><td>全场定身 1 回合 + 全队伤害 +20%，2 回合，冷却 4</td><td>新增</td></tr></tbody></table></div>
+<h3>紫霄神道教（仙族 · 雷法 · 雷印）</h3>
+<div class="table-wrap"><table><thead><tr><th>技能</th><th>类型</th><th>效果</th><th>状态</th></tr></thead><tbody><tr><td>紫霄雷体</td><td>被动</td><td>法伤 +1.5/级（建议 1.0）</td><td>现有</td></tr><tr><td>天雷淬体</td><td>被动</td><td>防御 +1/级（建议 0.6）</td><td>现有</td></tr><tr><td>雷印</td><td>被动</td><td>雷法命中叠 1 层（最多 3 层）；雷法击杀时，雷印扩散给相邻敌人</td><td>新增</td></tr><tr><td>五雷正法</td><td>单体</td><td>1.9 倍法伤</td><td>现有</td></tr><tr><td>雷动九天</td><td>群体</td><td>3 目标，60 级 5 目标，1.1 倍</td><td>现有</td></tr><tr><td>引雷诀</td><td>单体</td><td>1.4 倍 + 吸取目标 10% 魔法</td><td>新增</td></tr><tr><td>紫霄凝神</td><td>增益</td><td>法伤 +20%，3 回合</td><td>现有（改）</td></tr><tr><td>雷池</td><td>场地</td><td>3 回合，每回合结束对敌方全体 0.8 倍法伤</td><td>新增</td></tr><tr><td>雷遁</td><td>生存</td><td>速度 +30% + 免疫 1 次法术，冷却 3</td><td>新增</td></tr><tr><td>天罚</td><td>大招</td><td>全体 1.8 倍，引爆雷印每层 +15%；击杀任一目标冷却清零</td><td>新增</td></tr></tbody></table></div>
+<h3>万药谷（仙魔 · 治疗 · 毒）</h3>
+<div class="table-wrap"><table><thead><tr><th>技能</th><th>类型</th><th>效果</th><th>状态</th></tr></thead><tbody><tr><td>百草心经</td><td>被动</td><td>治疗 +1/级（建议 0.7）</td><td>现有</td></tr><tr><td>药王体魄</td><td>被动</td><td>气血 +0.8%/级（建议 0.5%）</td><td>现有</td></tr><tr><td>药性</td><td>被动</td><td>治疗溢出 30% 转为护盾（上限 20% 气血）</td><td>新增</td></tr><tr><td>药雾弥漫</td><td>群体</td><td>0.9 倍法伤 + 中毒 3%/回合，2 回合；目标 2 个，30 级 3 个、60 级 4 个</td><td>现有（改）</td></tr><tr><td>回春诀</td><td>群体治疗</td><td>2—5 目标 + 持续回血</td><td>现有</td></tr><tr><td>金疮药</td><td>单体治疗</td><td>2.5 倍治疗 + 净化 1 个负面</td><td>新增</td></tr><tr><td>万灵祝福</td><td>增益</td><td>全体伤害/法伤 +15%，3 回合</td><td>现有</td></tr><tr><td>噬心毒</td><td>减益</td><td>单体中毒 3%/回合 3 回合；中毒目标死亡时爆炸，对周围造成 15% 最大气血伤害</td><td>新增</td></tr><tr><td>续命散</td><td>复活</td><td>复活 1 名队友（30% 气血）并使其 2 回合伤害 +30%，每场 1 次，冷却 5</td><td>新增</td></tr><tr><td>药王鼎</td><td>大招</td><td>3 回合内全队受到伤害的 20% 转化为治疗，冷却 5</td><td>新增</td></tr></tbody></table></div>
+<h3>星罗教（魔族 · 暴击 · 诅咒）</h3>
+<div class="table-wrap"><table><thead><tr><th>技能</th><th>类型</th><th>效果</th><th>状态</th></tr></thead><tbody><tr><td>星象魔功</td><td>被动</td><td>伤害 +1%/级（建议 0.6%）</td><td>现有</td></tr><tr><td>摄魂咒</td><td>被动</td><td>暴伤 +0.5%/级（建议 0.3%）</td><td>现有</td></tr><tr><td>星命</td><td>被动</td><td>每击杀 1 个单位暴击 +5%（最多 5 层），换波保留、角色死亡清零</td><td>新增</td></tr><tr><td>星罗魔爪</td><td>连击</td><td>2 段 0.9 / 1.1</td><td>现有</td></tr><tr><td>群星陨落</td><td>群体</td><td>4 目标，30 级 6 目标，1.2 倍</td><td>现有</td></tr><tr><td>星蚀</td><td>减益</td><td>目标受到伤害 +15%，2 回合</td><td>新增</td></tr><tr><td>星罗杀机</td><td>增益</td><td>暴击 +10%、暴伤 +40%，3 回合</td><td>现有（改）</td></tr><tr><td>偷天换日</td><td>功能</td><td>立即刷新自身一个技能的冷却，并回复 20% 魔法，冷却 4</td><td>新增</td></tr><tr><td>星河倒卷</td><td>群体</td><td>1.3 倍 + 吸血 30%；击杀任一目标冷却重置</td><td>新增</td></tr><tr><td>陨星</td><td>大招</td><td>单体 4.0 倍，目标气血低于 40% 时翻倍；击杀返还 50% 消耗，冷却 3</td><td>新增</td></tr></tbody></table></div>
+<h2 id="sec-6">六、体系改造：让技能“有选择”</h2>
+<h3>1. 技能分档</h3>
+<p>每个技能 1 级只是起点，30 / 60 / 90 级各解锁一档强化：目标数 +1、附加效果、倍率提升。现有 `targets` 阈值已经这么做了，把同一套机制扩展到 power、状态、冷却即可。</p>
+<h3>2. 专精：3 个 100，其余 60</h3>
+<p>10 个技能全升到 100 是 10 倍经验坑，也会让所有人一样。建议：</p>
+<ul><li>每个角色选 <strong>3 个专精技能</strong>，上限 100；</li><li>其余技能上限 <strong>60</strong>（拿不到 90 级档的强化）；</li><li>洗专精花金币，不花人民币。</li></ul>
+<p>这样同门派也有“主修剑意爆发 / 主修群体 / 主修生存”的差别。</p>
+<h3>3. 资源与连携</h3>
+<ul><li><strong>剑意</strong>（太虚）：暴击叠层，大招消耗，每层 +8%。</li><li><strong>雷印</strong>（紫霄）：雷法在目标身上叠层，天罚引爆。</li><li><strong>星命</strong>（星罗）：击杀叠暴击，越打越强。</li><li><strong>药气</strong>（万药，可选）：治疗量攒资源，大招消耗。</li><li><strong>云息</strong>（缥缈，可选）：速度差攒资源，强化封印命中。</li></ul>
+<p>资源只给 3 个门派做深，另外 2 个用“标记/层数”即可，别一次上五套。</p>
+<h3>4. 控制与反制</h3>
+<p>现在封印是固定概率，面板上的 `seal_hit` / `seal_resist` 根本没接进战斗。加了群封之后必须接：</p>
+<pre><code>命中率 = 基础命中 + (seal_hit - 目标 seal_resist) / 100</code></pre>
+<p>同时给万药谷“净化”、缥缈“解封”、星罗“转移负面”，控制才不至于无解。</p>
+<h3>5. 刷怪节奏：波次、连杀、冷却重置</h3>
+<p>单机没有对手，节奏靠自己给：</p>
+<ul><li><strong>波次开始</strong>：全队大招冷却 -2，保证每波都有大技能放。</li><li><strong>连杀计数</strong>：连续击杀不清零（换波才清），每 10 连杀 +5% 伤害、+5% 移速，最多 +30%。</li><li><strong>击杀重置</strong>：大招/群攻在击杀后返还冷却或魔法，鼓励“清完再清”。</li><li><strong>精英与 Boss</strong>：小怪不吃控制抗性，精英 50%，Boss 免疫封印但受到“控制类技能”伤害 +20%。</li></ul>
+<h3>6. 被动重做</h3>
+<p>现在 +1%/级 × 100 级 = +100% 伤害，两个被动就把门派差异抹平了。建议：</p>
+<ul><li>斜率降到 0.5—0.6%/级（满级 +50—60%）；</li><li>25 / 50 / 75 / 100 级各给一个<strong>机制</strong>，而不是继续加数值；</li><li>例：太虚剑典 100 级“剑意上限 +2”，而不是“伤害再 +10%”。</li></ul>
+<h3>7. 自动战斗与 UI</h3>
+<ul><li>技能页现在是竖排按钮，7 个主动 + 普攻/防御/道具/逃跑会溢出，需要翻页或滚动；</li><li>自动战斗的 `auto_cast_plan` 要支持“按优先级循环”，而不是逐回合写死；</li><li>敌方 AI 也要按门派配技能，不然新技能只有玩家在用。</li></ul>
+<h2 id="sec-7">七、单机刷怪的爽感从哪来</h2>
+<p>单机 PvE 的技能评价标准，和 PvP 完全相反：<strong>不是“能不能反制”，而是“清得快不快、数字大不大、下一波还想不想点”</strong>。</p>
+<div class="table-wrap"><table><thead><tr><th>爽点</th><th>做法</th><th>对应技能</th></tr></thead><tbody><tr><td><strong>清屏</strong></td><td>每派至少一个“全体/6—8 目标”的群攻，小怪血量按 AOE 一轮残血设计</td><td>万剑归宗、雷动九天、群星陨落、药雾弥漫</td></tr><tr><td><strong>连杀</strong></td><td>连杀计数加伤害/移速，换波才清；失败不清零</td><td>全局系统</td></tr><tr><td><strong>滚雪球</strong></td><td>击杀叠层、扩散、刷新冷却，越打越强</td><td>剑意、雷印扩散、星命、星河倒卷</td></tr><tr><td><strong>大数字</strong></td><td>暴击、斩杀、溢出伤害溅射相邻</td><td>断岳式、陨星、万剑归宗</td></tr><tr><td><strong>聚怪</strong></td><td>减速/牵引把怪拢在一起，让 AOE 打满；可做通用道具「引怪香」</td><td>云海潮生（减速）、星蚀（标记）</td></tr><tr><td><strong>永动</strong></td><td>击杀回蓝/回血、吸血、伤害转治疗</td><td>星河倒卷、药王鼎</td></tr><tr><td><strong>低惩罚</strong></td><td>死亡不掉装备、不扣耐久，试错成本低</td><td>全局系统</td></tr><tr><td><strong>自动</strong></td><td>自动放技能、自动捡物、自动下一波</td><td>自动战斗 AI</td></tr></tbody></table></div>
+<h3>每派的“爽点”一句话</h3>
+<div class="table-wrap"><table><thead><tr><th>门派</th><th>爽点</th></tr></thead><tbody><tr><td>太虚剑宗</td><td>暴击叠剑意，万剑归宗清屏，击杀刷冷却</td></tr><tr><td>缥缈仙府</td><td>定身+减速把怪拢住，全队增伤一波带走</td></tr><tr><td>紫霄神道教</td><td>雷印扩散、雷池铺场、天罚连爆，连锁清场</td></tr><tr><td>万药谷</td><td>毒爆链 + 药王鼎，站着不动也能把怪耗死</td></tr><tr><td>星罗教</td><td>星命滚暴击，陨星斩杀，越杀越强</td></tr></tbody></table></div>
+<h3>为爽感做的三条取舍</h3>
+<ol><li><strong>控制改成增伤</strong>：定身/减速不再只是“让人不能动”，而是附带“受到伤害 +10—15%”，控住就是为了打得更疼。</li><li><strong>冷却按击杀算</strong>：大招不靠回合数硬等，击杀就返还，刷得越快放得越快。</li><li><strong>Boss 才讲规则</strong>：小怪随便控、随便秒；精英半抗；Boss 免控但吃“控制类技能”的额外伤害——难度只放在 Boss 上。</li></ol>
+<h2 id="sec-8">八、引擎要补什么</h2>
+<div class="table-wrap"><table><thead><tr><th>能力</th><th>现状</th><th>要加什么</th><th>优先级</th></tr></thead><tbody><tr><td>敌方减益</td><td>增益只给友方</td><td>ENEMY 目标也走 add_status（负值）</td><td>P0</td></tr><tr><td>净化/驱散</td><td>无</td><td>`dispel_count` 字段</td><td>P0</td></tr><tr><td>复活</td><td>无</td><td>`revive_percent` + 每场 1 次</td><td>P0</td></tr><tr><td>护盾</td><td>无</td><td>`shield_value` 存 status，take_damage 先扣</td><td>P1</td></tr><tr><td>吸血</td><td>无</td><td>`lifesteal_pct` 字段</td><td>P1</td></tr><tr><td>吸蓝</td><td>无</td><td>`mana_drain` 字段</td><td>P2</td></tr><tr><td>场地/光环</td><td>无</td><td>field / aura 节点</td><td>P2</td></tr><tr><td>资源层数</td><td>状态可叠</td><td>约定 status key（剑意/雷印/星命）</td><td>P1</td></tr><tr><td>封印命中</td><td>固定概率</td><td>`seal_hit` vs `seal_resist`</td><td>P0</td></tr><tr><td>躲避</td><td>未接入</td><td>命中判定</td><td>P1</td></tr><tr><td>技能页</td><td>竖排列表</td><td>翻页/滚动、快捷栏</td><td>P0</td></tr><tr><td>击杀事件</td><td>无</td><td>`on_kill` 钩子（叠层/重置/扩散）</td><td>P0</td></tr><tr><td>群体上限</td><td>`max_targets`</td><td>小怪可到 6—8，或“全体”</td><td>P0</td></tr><tr><td>溢出溅射</td><td>无</td><td>溢出伤害 30% 溅射相邻</td><td>P1</td></tr></tbody></table></div>
+<h2 id="sec-9">九、落地顺序</h2>
+<div class="table-wrap"><table><thead><tr><th>阶段</th><th>内容</th><th>产出</th></tr></thead><tbody><tr><td>0</td><td>调 TTK、补 P0 字段（敌方减益/驱散/复活/封印命中）</td><td>战斗能承载控制与治疗</td></tr><tr><td>1</td><td>每派 +3：控制、生存/解控、大招</td><td>5 派 × 8</td></tr><tr><td>2</td><td>每派 +2：减益、资源/特色</td><td>5 派 × 10</td></tr><tr><td>3</td><td>专精、连杀/波次、自动战斗、敌方 AI</td><td>有 build、刷得爽</td></tr></tbody></table></div>
+<h3>数值建议</h3>
+<div class="table-wrap"><table><thead><tr><th>项</th><th>现状</th><th>目标</th></tr></thead><tbody><tr><td>100 级普攻击杀</td><td>2—4 刀</td><td>5—7 刀</td></tr><tr><td>单体技能</td><td>1.8 倍（可秒）</td><td>1.2—1.4 倍（3—4 刀）</td></tr><tr><td>群体技能</td><td>每目标同倍率</td><td>0.9—1.1 倍，目标 5—8</td></tr><tr><td>大招</td><td>无</td><td>2—2.5 刀，冷却 2—3 或击杀重置</td></tr><tr><td>控制时长</td><td>1 回合</td><td>小怪 1—2 回合，精英减半，Boss 免疫</td></tr><tr><td>治疗量</td><td>治疗 × 倍率</td><td>单次约 25% 气血</td></tr></tbody></table></div>
+<h2 id="sec-10">十、附录：梦幻西游 18 门派师门技能</h2>
+<blockquote><p>每个门派 7 个师门技能（普陀等个别门派 8 个），每个技能下挂多个法术。标“新”的是后加门派。</p></blockquote>
+<div class="table-wrap"><table><thead><tr><th>门派</th><th>师门技能</th></tr></thead><tbody><tr><td>大唐官府</td><td>为官之道、无双一击、神兵鉴赏、疾风步、十方无敌、紫薇之术、文韬武略</td></tr><tr><td>方寸山</td><td>黄庭经、磬龙灭法、霹雳咒、符之术、归元心法、神道无念、斜月步</td></tr><tr><td>女儿村</td><td>毒经、倾国倾城、沉鱼落雁、闭月羞花、香飘兰麝、玉质冰肌、清歌妙舞</td></tr><tr><td>化生寺</td><td>小乘佛法、金刚伏魔、诵经、佛光普照、大慈大悲、歧黄之术、渡世步</td></tr><tr><td>龙宫</td><td>九龙诀、破浪诀、呼风唤雨、龙腾、逆鳞、游龙术、龙附</td></tr><tr><td>五庄观</td><td>周易学、潇湘仙雨、乾坤袖、修仙术、混元道果、明性修身、七星遁</td></tr><tr><td>天宫</td><td>天罡气、傲世诀、清明自在、宁气诀、乾坤塔、混天术、云霄步</td></tr><tr><td>普陀山</td><td>灵性、护法金刚、观音咒、五行学说、日光华、金刚经、五行扭转、莲花宝座</td></tr><tr><td>阴曹地府</td><td>灵通术、六道轮、幽冥术、拘魂诀、九幽阴魂、尸腐恶、无常步</td></tr><tr><td>魔王寨</td><td>牛逼神功、震天诀、火云术、火牛阵、牛虱阵、回身击、裂石步</td></tr><tr><td>狮驼岭</td><td>魔兽神功、生死搏、训兽诀、阴阳二气诀、狂兽诀、大鹏展翅、魔兽反噬</td></tr><tr><td>盘丝洞</td><td>蛛丝阵法、迷情大法、秋波暗送、天外魔音、盘丝大法、移形换影、姊妹相随</td></tr><tr><td>神木林（新）</td><td>瞬息万变、万灵诸念、巫咒、万物轮转、天人庇护、神木恩泽、驭灵咒</td></tr><tr><td>天机城（新）</td><td>神工无形、攻玉以石、擎天之械、千机奇巧、匠心不移、运思如电、探奥索隐</td></tr><tr><td>无底洞（新）</td><td>枯骨心法、阴风绝章、鬼蛊灵蕴、燃灯灵宝、地冥妙法、混元神功、秘影迷踪</td></tr><tr><td>女魃墓（新）</td><td>天火献誓、天罚之焰、煌火无明、化神以灵、弹指成烬、藻光灵狱、离魂</td></tr><tr><td>凌波城（新）</td><td>天地无极、九转玄功、武神显圣、啸傲、气吞山河、诛魔、法天象地</td></tr><tr><td>花果山（新）</td><td>神通广大、如意金箍、齐天逞胜、金刚之躯、灵猴九窍、七十二变、腾云驾雾</td></tr></tbody></table></div>
+<footer>2026-11-16 · 单机 PvE，不考虑 PvP 与门派克制；数值为起始建议值。</footer>
+</main>
+<a class="top" href="#top" title="回到顶部" aria-label="回到顶部">↑</a>
+</body>
+</html>

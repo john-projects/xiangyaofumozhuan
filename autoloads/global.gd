@@ -729,7 +729,9 @@ var msg_log: Control = null
 ## 最多保留多少行。
 var msg_log_max := 300
 
-const MSG_LOG_LAYER := 90
+## 画在地图之上、游戏 UI 之下：低于世界/战斗/主界面的 UI 层（10），
+## 商店、属性、背包等面板打开时才能盖住它，不再挡住按钮。
+const MSG_LOG_LAYER := 5
 
 
 func _ready() -> void:

@@ -10,6 +10,8 @@ class_name BattleUnit
 extends Node2D
 
 const HeldWeaponFx := preload("res://scenes/characters/held_weapon_fx.gd")
+const WeaponAction := preload("res://scenes/characters/weapon_actions/weapon_action.gd")
+const WEAPON_ACTION_NAMES := ["", "sword", "blade", "fan", "spear", "staff", "claw"]
 
 ## 战斗单位：血量/蓝量状态 + 表现；战斗流程（谁出手、打谁、何时结束）由 Battle 驱动。
 ## 数据来源：UnitStats（name/icon/health/mana/damage/speed/block_chance/skills），只读。
@@ -959,6 +961,7 @@ func attack_approach(target: BattleUnit) -> void:
 	# 自己在目标的左边还是右边（我方在右、敌方在左，不会歧义）
 	var dx := global_position.x - target.global_position.x
 	var side_x := 1.0 if dx >= 0.0 else -1.0
+	_weapon_action_facing = side_x
 	var to_global := Vector2(target.global_position.x + side_x * ATTACK_STAND_OFF,
 			target.global_position.y)
 	var to := position + (to_global - global_position)
@@ -983,6 +986,7 @@ func attack_swing(on_impact: Callable = Callable()) -> void:
 		_anim.play_once("attack")
 		var duration := _anim.once_duration()
 		if duration > 0.0:
+			_start_weapon_action(&"attack", duration)
 			var impact_time := duration - impact_tail_duration(duration)
 			var waited := 0.0
 			while _anim.is_playing_once() and waited < duration + 0.1:
@@ -991,10 +995,14 @@ func attack_swing(on_impact: Callable = Callable()) -> void:
 				if on_impact.is_valid() and waited >= impact_time:
 					on_impact.call(maxf(0.01, duration - waited))
 					on_impact = Callable()
+			_restore_weapon_pose()
 			return
 		_anim.play("idle")
 	# 没有帧动画（怪物 = 静态立绘）：用缩放 + 倾斜演一套"蓄力→突刺→回正"。
-	await _procedural_swing(on_impact)
+	var duration := _weapon_action_length(&"attack", 0.32)
+	_start_weapon_action(&"attack", duration)
+	await _procedural_swing(on_impact, duration)
+	_restore_weapon_pose()
 
 
 ## 程序化反馈作用于当前可见的形象。
@@ -1003,11 +1011,11 @@ func _visual_body() -> Node2D:
 
 
 ## 缺少攻击剪辑时，蓄力后仰 → 突刺前倾 → 回正。
-func _procedural_swing(on_impact: Callable) -> void:
-	var windup_time := 0.08
-	var strike_time := 0.10
-	var recover_time := 0.14
-	var tail_duration := impact_tail_duration(windup_time + strike_time + recover_time)
+func _procedural_swing(on_impact: Callable, duration: float) -> void:
+	var windup_time := duration * 0.25
+	var strike_time := duration * 0.3125
+	var recover_time := duration - windup_time - strike_time
+	var tail_duration := impact_tail_duration(duration)
 	var body := _visual_body()
 	if body == null:
 		if on_impact.is_valid():
@@ -1071,6 +1079,7 @@ func attack_return(from_position: Vector2) -> void:
 	tween.tween_property(self, "position", from_position, t)
 	await tween.finished
 	z_index = _z_before
+	_weapon_action_facing = 1.0
 
 
 ## 普攻完整收尾：出招 + 归位（普通攻击用；近战技能只调 attack_return）。
@@ -1087,16 +1096,25 @@ func play_cast() -> void:
 	var rest_scale := _base_scale
 	body.modulate = Color.WHITE
 	# 帧动画：播放施法动作（一次性）。涨大/染色 tween 与它并行，不冲突。
+	var body_duration := 0.0
 	if _anim != null:
 		_anim.play_once("cast")
+		body_duration = _anim.once_duration()
+		if body_duration <= 0.0:
+			_anim.play("idle")
+	var duration := 0.30 if body_duration > 0.0 else _weapon_action_length(&"cast", 0.30)
+	_start_weapon_action(&"cast", maxf(duration, body_duration))
+	var lift_time := duration * (0.14 / 0.30)
+	var settle_time := duration - lift_time
 	var tween := create_tween()
-	tween.tween_property(body, "scale", rest_scale * 1.14, 0.14)
-	tween.parallel().tween_property(body, "modulate", CAST_TINT, 0.14)
-	tween.tween_property(body, "scale", rest_scale, 0.16)
-	tween.parallel().tween_property(body, "modulate", DEFEND_TINT if defending else Color.WHITE, 0.16)
+	tween.tween_property(body, "scale", rest_scale * 1.14, lift_time)
+	tween.parallel().tween_property(body, "modulate", CAST_TINT, lift_time)
+	tween.tween_property(body, "scale", rest_scale, settle_time)
+	tween.parallel().tween_property(body, "modulate", DEFEND_TINT if defending else Color.WHITE, settle_time)
 	await tween.finished
-	if is_instance_valid(_anim) and _anim.is_playing_once():
+	if body_duration > 0.0 and is_instance_valid(_anim) and _anim.is_playing_once():
 		await _anim.action_finished
+	_restore_weapon_pose()
 
 
 ## 受击表现：朝**远离攻击者**的方向后仰，然后**保持这个姿势**直到攻击/技能动画播完，
@@ -1184,6 +1202,9 @@ func _on_mouse_exited() -> void:
 ## 手持武器（静态立绘）
 var _weapon_spr: Sprite2D = null
 var _weapon_pivot: Node2D = null
+var _weapon_action: WeaponAction = null
+var _weapon_action_type := 0
+var _weapon_action_facing := 1.0
 ## 手持武器在立绘上的位置（立绘本地像素，原点 = 贴图中心）。
 ## 立绘 403x670，右手心在贴图像素 (352, 330) → 相对中心 (150, -5)。
 ## ⚠ 手持图已经把「握把」对齐到枢轴，所以这里只要填手心位置，不要再加偏移。
@@ -1196,6 +1217,7 @@ var _weapon_pivot: Node2D = null
 
 
 func _refresh_weapon_visual() -> void:
+	_restore_weapon_pose()
 	var item = stats.weapon_visual if is_player else null
 	if item == null or item.item_icon == null:
 		HeldWeaponFx.hide_weapon(_weapon_spr)
@@ -1228,6 +1250,42 @@ func _refresh_weapon_visual() -> void:
 	_weapon_spr.position = -HeldWeaponFx.HELD_GRIP * k
 	_weapon_spr.visible = true
 	HeldWeaponFx.apply(_weapon_spr, int(item.item_tier), item)
+	_configure_weapon_action(int(item.weapon_type))
+
+
+func _configure_weapon_action(weapon_type: int) -> void:
+	if _weapon_action_type == weapon_type:
+		return
+	if _weapon_action != null:
+		_weapon_action.queue_free()
+		_weapon_action = null
+	_weapon_action_type = weapon_type
+	if weapon_type <= 0 or weapon_type >= WEAPON_ACTION_NAMES.size():
+		return
+	var path := "res://scenes/characters/weapon_actions/%s.tscn" % WEAPON_ACTION_NAMES[weapon_type]
+	var scene := load(path) as PackedScene
+	if scene != null:
+		_weapon_action = scene.instantiate() as WeaponAction
+		_weapon_action.hide()
+		add_child(_weapon_action)
+
+
+func _weapon_action_length(action: StringName, fallback: float) -> float:
+	if _weapon_action == null or _weapon_pivot == null or not _weapon_pivot.visible:
+		return fallback
+	return _weapon_action.clip_length(action, fallback)
+
+
+func _start_weapon_action(action: StringName, duration: float) -> void:
+	if _weapon_action == null or _weapon_pivot == null or not _weapon_pivot.visible:
+		return
+	var portrait_scale := sprite.get_rect().size.y / 600.0 if sprite.texture != null else 1.0
+	_weapon_action.play_on(_weapon_pivot, action, duration, _weapon_action_facing, portrait_scale)
+
+
+func _restore_weapon_pose() -> void:
+	if _weapon_action != null:
+		_weapon_action.restore()
 
 
 ## 按武器类型决定装备时的旋转角。

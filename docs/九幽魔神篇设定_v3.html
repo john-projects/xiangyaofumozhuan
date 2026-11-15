@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>《降妖伏魔传》九幽魔神篇设定 v3</title>
+<meta name="description" content="以九幽魔气为核心：军师四处掘开渊口散气，魔神随世间魔气积累而苏醒。玩家从桃花滩被侵染的八爪鱼查起，一路封口除将，到 100 级杀尽四将，却仍差一步。">
+<style>
+:root{
+  --ink:#1c2430; --muted:#5b6675; --brand:#1f3864; --brand2:#2e548c;
+  --line:#dde3ea; --soft:#f6f8fb; --accent:#f0f4fa;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0; padding:32px 16px 72px;
+  background:#eef1f6; color:var(--ink);
+  font-family:"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans SC",system-ui,-apple-system,"Segoe UI",sans-serif;
+  font-size:16px; line-height:1.85;
+  -webkit-font-smoothing:antialiased;
+}
+.page{
+  max-width:900px; margin:0 auto; background:#fff; border-radius:14px;
+  box-shadow:0 1px 2px rgba(16,24,40,.04),0 12px 40px rgba(16,24,40,.08);
+  padding:56px 64px 64px;
+}
+h1{
+  font-size:30px; line-height:1.35; margin:0 0 22px; color:var(--brand);
+  letter-spacing:.5px;
+}
+h2{
+  font-size:21px; margin:44px 0 14px; padding-left:12px; color:var(--brand);
+  border-left:5px solid var(--brand2); line-height:1.4;
+}
+h3{
+  font-size:17px; margin:30px 0 10px; color:var(--brand2);
+}
+h4{
+  font-size:16px; margin:24px 0 8px; color:var(--brand2); font-weight:700;
+  padding-bottom:5px; border-bottom:1px dashed #d7dee8;
+}
+p{margin:0 0 14px}
+strong{color:#17202b}
+a{color:#1f4e79; text-decoration:none; border-bottom:1px solid rgba(31,78,121,.35)}
+a:hover{background:#eaf1f9}
+ul,ol{margin:0 0 16px; padding-left:1.55em}
+li{margin:4px 0}
+blockquote{
+  margin:18px 0 22px; padding:14px 18px; color:#4d5866;
+  background:var(--soft); border-left:3px solid #b9c6d9; border-radius:0 8px 8px 0;
+  font-size:14.5px;
+}
+blockquote p{margin:0}
+pre{
+  margin:16px 0 20px; padding:16px 18px; overflow-x:auto;
+  background:#f2f4f7; border:1px solid #e5e9ef; border-radius:10px;
+  font-family:Consolas,"SFMono-Regular","Cascadia Mono","Liberation Mono",monospace;
+  font-size:13px; line-height:1.7; color:#2b3440;
+}
+pre code{font-family:inherit; white-space:pre}
+code{font-family:Consolas,monospace; font-size:.92em}
+.table-wrap{overflow-x:auto; margin:14px 0 24px; border:1px solid var(--line); border-radius:10px}
+table{border-collapse:collapse; width:100%; font-size:14px; line-height:1.65; background:#fff}
+thead th{
+  background:var(--accent); color:var(--brand); font-weight:600; text-align:left;
+  padding:10px 12px; border-bottom:1px solid var(--line); white-space:nowrap;
+}
+tbody td{padding:9px 12px; border-bottom:1px solid #edf0f4; vertical-align:top}
+tbody tr:last-child td{border-bottom:none}
+tbody tr:nth-child(even){background:#fbfcfe}
+tbody tr:hover{background:#f4f8fd}
+hr{border:none; border-top:1px solid var(--line); margin:32px 0}
+
+.toc{
+  margin:26px 0 10px; padding:18px 22px; background:var(--soft);
+  border:1px solid var(--line); border-radius:12px;
+}
+.toc-title{font-size:13px; letter-spacing:2px; color:var(--muted); margin:0 0 10px; font-weight:600}
+.toc ul{margin:0; padding:0; list-style:none; columns:2; column-gap:28px}
+.toc li{margin:3px 0; break-inside:avoid; font-size:14.5px}
+.toc li a{border-bottom:none; color:#2d3c50}
+.toc li a:hover{color:#1f4e79; background:none; text-decoration:underline}
+.meta{color:var(--muted); font-size:13.5px; margin:-6px 0 18px}
+footer{
+  margin-top:44px; padding-top:18px; border-top:1px solid var(--line);
+  color:#7b8593; font-size:13px;
+}
+.top{
+  position:fixed; right:22px; bottom:22px; width:42px; height:42px; border-radius:50%;
+  background:#fff; border:1px solid var(--line); box-shadow:0 4px 14px rgba(16,24,40,.12);
+  display:flex; align-items:center; justify-content:center; color:var(--brand);
+  font-size:18px; text-decoration:none; border-bottom:1px solid var(--line);
+}
+.top:hover{background:var(--accent)}
+@media (max-width:720px){
+  body{padding:12px 8px 56px; font-size:15px}
+  .page{padding:28px 20px 36px; border-radius:10px}
+  h1{font-size:23px}
+  h2{font-size:18px; margin-top:34px}
+  .toc ul{columns:1}
+  table{font-size:12.5px}
+  thead th,tbody td{padding:7px 8px}
+}
+@media print{
+  body{background:#fff; padding:0; font-size:11pt}
+  .page{box-shadow:none; max-width:none; padding:0}
+  .toc,.top{display:none}
+  h2{page-break-after:avoid}
+  h3{page-break-after:avoid}
+  table,.table-wrap{page-break-inside:auto}
+  tr{page-break-inside:avoid}
+  thead{display:table-header-group}
+  a{color:#1c2430; border-bottom:none}
+}
+</style>
+</head>
+<body id="top">
+<main class="page">
+<h1>《降妖伏魔传》九幽魔神篇设定（v3）</h1>
+<blockquote><p>依游戏现有五大门派与 27 张地图重排。核心改为<strong>九幽魔气</strong>：军师在四处掘开渊口，把魔气散向人间；世上魔气愈多，渊底那位就愈强。玩家从桃花滩一条被魔气侵染的八爪鱼查起，一路封口、净化、除将，到 100 级杀尽四将，却仍差一步。</p></blockquote>
+<nav class="toc" aria-label="目录"><p class="toc-title">目 录</p><ul>
+<li><a href="#sec-1">一、本版原则</a></li>
+<li><a href="#sec-2">二、世界观接口：五派与地图</a></li>
+<li><a href="#sec-3">三、核心设定：九幽魔气</a></li>
+<li><a href="#sec-4">四、军师与四将</a></li>
+<li><a href="#sec-5">五、镇渊司</a></li>
+<li><a href="#sec-6">六、人物表</a></li>
+<li><a href="#sec-7">七、主线十二章（1—100 级）</a></li>
+<li><a href="#sec-8">八、魔气系统与玩法</a></li>
+<li><a href="#sec-9">九、100 级：收气</a></li>
+<li><a href="#sec-10">十、与现有游戏数据的接口</a></li>
+<li><a href="#sec-11">十一、命名说明</a></li>
+</ul></nav><h2 id="sec-1">一、本版原则</h2>
+<ul><li><strong>不设机关型封印道具</strong>。全篇的冲突只由一样东西推动：九幽魔气。</li><li><strong>四将是活人对手</strong>，不是机关。他们各有私心、各管一个渊口，替军师拖住玩家。</li><li><strong>司主是执棋人</strong>，不是背景板。他封口、收宝、筹备净化大阵，与军师对局。</li><li><strong>“晚了一步”是算术问题</strong>：玩家堵住了流量，军师要的是存量。</li></ul>
+<h2 id="sec-2">二、世界观接口：五派与地图</h2>
+<h3>五大门派</h3>
+<div class="table-wrap"><table><thead><tr><th>门派</th><th>门派地图</th><th>可入种族</th><th>在故事里的位置</th></tr></thead><tbody><tr><td>太虚剑宗</td><td>剑鸣峰（Lv.20+）</td><td>人族</td><td>长老秦断锋以魔气淬剑，剑成之日弟子疯了三个</td></tr><tr><td>缥缈仙府</td><td>浮云岛（Lv.60+）</td><td>人族 / 仙族</td><td>封印术是净化阵的关键；府主云舒首鼠两端</td></tr><tr><td>紫霄神道教</td><td>神霄峰（Lv.55+）</td><td>仙族</td><td>长老雷嗔私炼魔雷，想借魔气破境</td></tr><tr><td>万药谷</td><td>灵药涧（Lv.15+）</td><td>仙族 / 魔族</td><td>谷主孙渺为治绝症研究魔药，是魔气扩散的第一条暗线</td></tr><tr><td>星罗教</td><td>落星崖（Lv.45+）</td><td>魔族</td><td>教主玄星子用魔气改命，最后带着镇派星盘反水</td></tr></tbody></table></div>
+<p>桃花村是五派共同收徒的地方，五位掌门各守一处。镇渊司的暗桩老陈，就在村口摆渡。</p>
+<h3>地图怎么用</h3>
+<p>地图按等级天然分成几段，正好对应故事的几个阶段：</p>
+<ul><li><strong>桃花村—桃花滩—桃林—落霞坡（1—21）</strong>：新手区，魔气初现。桃花滩的八爪鱼是第一个被侵染的精英。</li><li><strong>芦花渡—广陵城（枢纽）</strong>：水路与主城。芦花渡是孟九娘的地盘，广陵城地下是镇渊司总部。</li><li><strong>灵药涧—乱石岗—黑风坳—剑鸣峰（15—35）</strong>：五派与矿脉，魔药、魔晶、魔剑三条线。</li><li><strong>临江城—落雁关—寒潭涧—断魂崖（30—49）</strong>：水路污染、商会囤货、魔器反噬。</li><li><strong>落星崖—苍云岭—神霄峰（45—60）</strong>：星罗教内乱、紫霄魔雷。</li><li><strong>幽冥泽—万骨墟—九霄雷池（55—82）</strong>：三个渊口，三将。</li><li><strong>望海城—野狐关—栖霞山</strong>：支线与海路，用来喘气、补给、埋线索。</li><li><strong>太虚天渊—无光渊底（80—100）</strong>：第四个渊口与终局。</li></ul>
+<h2 id="sec-3">三、核心设定：九幽魔气</h2>
+<h3>从哪来</h3>
+<p>无光渊底那位魔神的呼吸，沿地底“渊脉”上涌，本是极缓的渗漏。千年前五派封渊，把渗漏压到几乎为零。如今军师在四处掘开渊口，魔气便像被捅破的墨囊，一股股往人间冒。</p>
+<p>魔气是黑紫色的雾，像活的墨：沾水水黑，沾铁铁锈，沾人人做噩梦。</p>
+<h3>九重</h3>
+<p>镇渊司用“观气盘”量魔气浓度，分九重。一重是桃花滩那样的渗漏，九重是日月无光、魔神出世。</p>
+<div class="table-wrap"><table><thead><tr><th>重数</th><th>大致章节</th><th>世相</th></tr></thead><tbody><tr><td>一</td><td>序章</td><td>桃花滩妖兽凶化，天色比往年暗</td></tr><tr><td>二</td><td>第一章</td><td>水路生变，鱼群翻白</td></tr><tr><td>三</td><td>第二章</td><td>药材变异，病人同做一梦</td></tr><tr><td>四</td><td>第三章</td><td>铁器自鸣生锈，剑修心浮</td></tr><tr><td>五</td><td>第四章</td><td>江水发黑，雾三日不散</td></tr><tr><td>六</td><td>第五、六章</td><td>亡魂白日现形</td></tr><tr><td>七</td><td>第七、八章</td><td>雷云常驻，庄稼枯死</td></tr><tr><td>八</td><td>第九、十章</td><td>夜无星月，血色月亮</td></tr><tr><td>九</td><td>终章</td><td>日月无光，魔神出世</td></tr></tbody></table></div>
+<h3>对生灵的影响</h3>
+<ul><li><strong>低阶妖兽</strong>：失智、凶性大发，实力暴涨但会自毁。桃花滩的八爪鱼、桃林的顽石精怪、落霞坡的赤睛野彘，都是这么疯的。</li><li><strong>高阶妖兽</strong>：有灵智，可以主动吸纳魔气，修为大进。苍云岭的岭上云君、幽冥泽主、万骨将军、雷池天将，后来都成了魔气的“储户”。</li><li><strong>修士</strong>：同样可以吸魔气提升修为、淬炼装备、炼魔丹。五派明令禁用，暗地里总有人试——魔气太好用了。</li><li><strong>凡人</strong>：久处魔气会生病、做噩梦、失踪。魔气浓到七重，一村一镇地死人。</li></ul>
+<h3>存量与流量：军师真正要的东西</h3>
+<p>这是全篇的算术，也是“晚了一步”的根。</p>
+<ul><li><strong>流量</strong>：四个渊口每时每刻冒出的魔气。关掉渊口，流量就断了。</li><li><strong>存量</strong>：已经散到天下的魔气——被妖兽吸了、被修士炼了、封进魔器了、熬进丹药了。这些东西走到哪，魔气就跟到哪。</li></ul>
+<p>玩家一路封口、净化、杀将，堵的是流量。可军师从一开始就没打算靠流量：他要的是<strong>让天下人替他存气</strong>。魔器越好用，用的人越多；魔丹越灵，吃的人越多。等存量够了，他只需以幽都令一收，天下魔气尽归渊底，魔神便出来了。</p>
+<p>所以玩家每赢一仗，世上的魔器就多一件，用魔气的人就多一个。</p>
+<h2 id="sec-4">四、军师与四将</h2>
+<h3>四处渊口</h3>
+<div class="table-wrap"><table><thead><tr><th>渊口</th><th>地图</th><th>守将</th><th>经营什么</th></tr></thead><tbody><tr><td>毒沼渊口</td><td>幽冥泽（55—65）</td><td>桑百足</td><td>以魔气养毒兽、毒人，炼万毒丹</td></tr><tr><td>白骨渊口</td><td>万骨墟（63—73）</td><td>戚长夜</td><td>以魔气养魂、养鬼修，把古战场变成养魂场</td></tr><tr><td>雷池渊口</td><td>九霄雷池（71—82）</td><td>祝烈</td><td>以雷池加魔气炼魔器，供给天下魔修</td></tr><tr><td>天深渊口</td><td>太虚天渊（80—91）</td><td>屠岸</td><td>以血食喂渊，守着最后一扇门</td></tr></tbody></table></div>
+<h3>四将</h3>
+<div class="table-wrap"><table><thead><tr><th>将</th><th>私心</th><th>挡路的方式</th><th>结局</th></tr></thead><tbody><tr><td>桑百足（毒尊）</td><td>想摆脱军师单干，自立毒宗</td><td>沼中养毒，拿活人试丹</td><td>65 级死于幽冥泽，毒囊被柳三提前带走</td></tr><tr><td>戚长夜（鬼琴）</td><td>想用魔气复活一个人</td><td>琴音驱魔化亡魂，困住万骨墟</td><td>73 级死于万骨墟，死前说“我只是想让她再说一句话”</td></tr><tr><td>祝烈（炎罗）</td><td>想证明自己是最好的匠人</td><td>雷池炼魔器，武装天下魔修</td><td>82 级死于九霄雷池，工坊被毁</td></tr><tr><td>屠岸（血屠）</td><td>只想再见魔神一面</td><td>血食喂渊，守天深渊口</td><td>91 级身死魂逃，100 级借魔气重生，再被诛</td></tr></tbody></table></div>
+<p>四将之间不和，军师不在乎。他要的是四道门——四道会自己咬人的门。</p>
+<h2 id="sec-5">五、镇渊司</h2>
+<ul><li><strong>来历</strong>：千年前五派结“镇渊盟”封魔，战后盟不散，改名镇渊司，脱离五派独立运作。</li><li><strong>总部</strong>：广陵城旧皇城地下，地面上是一间卖纸扎香烛的旧铺子“镇渊斋”。</li><li><strong>人手</strong>：不到百人，能打的三十来个。穷，靠五派每年送点物资、自己接悬赏。</li><li><strong>手段</strong>：观气盘（测浓度、寻源头）、封渊钉（封口，需仪式）、净化符（小范围清除）、五派净化大阵（底牌）。</li><li><strong>司训</strong>：气不可纵，渊不可开。</li></ul>
+<h3>陆沉的棋</h3>
+<p>陆沉是第七代司主，五十来岁，看着四十，两鬓早白。修为深不可测，但与镇渊堂地脉相连，离堂则弱，在堂中可单手镇将。</p>
+<p>他从不跟玩家解释全盘，只下指令。因为他知道司里有内鬼，也知道军师在听。</p>
+<p>他真正的布局有三层：</p>
+<ol><li><strong>封口</strong>：派玩家拔掉四个渊口，断魔气流量。</li><li><strong>收宝</strong>：同时暗中收集五派镇派之宝，筹备净化大阵。</li><li><strong>净存量</strong>：阵成之日，把天下魔气一举净化。</li></ol>
+<p>军师的应对只有一句：让五派自己舍不得。魔气太好用，用得越多，越不愿交宝。</p>
+<h2 id="sec-6">六、人物表</h2>
+<h3>镇渊司</h3>
+<div class="table-wrap"><table><thead><tr><th>名字</th><th>身份</th><th>性格</th><th>作用</th></tr></thead><tbody><tr><td>陆沉</td><td>第七代司主</td><td>温、慢、做决定不解释</td><td>执棋人，三层布局</td></tr><tr><td>裴照</td><td>外勤执事，玩家师父</td><td>严厉、护短、刀疤脸</td><td>引路人，60 级为护玩家而死</td></tr><tr><td>白鹤</td><td>档案后勤执事</td><td>周到、体贴、从不发火</td><td>内鬼，军师埋了二十年的子</td></tr><tr><td>苏晚</td><td>情报执事</td><td>冷、话少、擅易容</td><td>查内鬼、递情报</td></tr><tr><td>阿蛮</td><td>同期新人，体修</td><td>憨、力大</td><td>前排，替玩家挡伤</td></tr><tr><td>顾砚</td><td>同期新人，阵法</td><td>书生气、记性极好</td><td>破阵解谜</td></tr><tr><td>叶小满</td><td>万药谷弟子</td><td>活泼、嘴快</td><td>验药解毒，替玩家省下不少净化符</td></tr><tr><td>老陈</td><td>桃花村暗桩</td><td>话少、爱蹲船头</td><td>接引玩家入司，第一任务的线人</td></tr></tbody></table></div>
+<h3>九幽引</h3>
+<div class="table-wrap"><table><thead><tr><th>名字</th><th>身份</th><th>备注</th></tr></thead><tbody><tr><td>阴无咎</td><td>无相军师</td><td>千年布局者，从不亲自动手</td></tr><tr><td>玄冥</td><td>九幽魔神</td><td>渊底未睡，以魔气看人间</td></tr><tr><td>孟九娘</td><td>芦花渡渡婆</td><td>耳目，亦正亦邪，可收买</td></tr><tr><td>柳三</td><td>纸人</td><td>传信、设套、收尾</td></tr><tr><td>桑掌柜</td><td>临江城药铺掌柜</td><td>桑百足的傀儡，负责卖魔丹</td></tr></tbody></table></div>
+<h3>五派相关</h3>
+<div class="table-wrap"><table><thead><tr><th>名字</th><th>门派</th><th>位置</th></tr></thead><tbody><tr><td>秦断锋</td><td>太虚剑宗长老</td><td>剑鸣峰，魔剑事件</td></tr><tr><td>孙渺</td><td>万药谷谷主</td><td>灵药涧，魔药事件</td></tr><tr><td>雷嗔</td><td>紫霄神道教长老</td><td>神霄峰，魔雷事件</td></tr><tr><td>玄星子</td><td>星罗教教主</td><td>落星崖，带星盘反水</td></tr><tr><td>云舒</td><td>缥缈仙府府主</td><td>浮云岛，最后关头才肯出手</td></tr></tbody></table></div>
+<h2 id="sec-7">七、主线十二章（1—100 级）</h2>
+<div class="table-wrap"><table><thead><tr><th>章</th><th>等级</th><th>地图</th><th>魔气事件</th><th>章末</th></tr></thead><tbody><tr><td>序</td><td>1—7</td><td>桃花村、桃花滩</td><td>八爪鱼被侵染</td><td>老陈引荐入司</td></tr><tr><td>一</td><td>7—15</td><td>桃林、芦花渡、广陵城</td><td>魔气沿水路上行</td><td>见陆沉，定四源</td></tr><tr><td>二</td><td>15—22</td><td>灵药涧、落霞坡</td><td>万药谷魔药</td><td>孙渺交出药方</td></tr><tr><td>三</td><td>22—30</td><td>乱石岗、黑风坳、剑鸣峰</td><td>魔晶、魔剑</td><td>秦断锋伏诛或醒悟</td></tr><tr><td>四</td><td>30—38</td><td>临江城、落雁关、寒潭涧</td><td>商会囤魔器、水鬼</td><td>桑掌柜落网</td></tr><tr><td>五</td><td>38—45</td><td>断魂崖</td><td>刀客魔化</td><td>柳三现身</td></tr><tr><td>六</td><td>45—52</td><td>落星崖</td><td>星罗教内乱</td><td>星盘被夺</td></tr><tr><td>七</td><td>52—60</td><td>苍云岭、神霄峰</td><td>紫霄魔雷、内鬼收网</td><td>白鹤死，裴照死，雷嗔伏诛</td></tr><tr><td>八</td><td>55—65</td><td>幽冥泽</td><td>桑百足养毒</td><td>一将死</td></tr><tr><td>九</td><td>63—73</td><td>万骨墟</td><td>戚长夜养魂</td><td>二将死</td></tr><tr><td>十</td><td>71—82</td><td>九霄雷池</td><td>祝烈炼魔器</td><td>三将死</td></tr><tr><td>十一</td><td>80—91</td><td>太虚天渊</td><td>屠岸守渊</td><td>四将身死，魂逃</td></tr><tr><td>终</td><td>91—100</td><td>无光渊底</td><td>收气、魔神出世</td><td>屠岸重生被诛，渊开</td></tr></tbody></table></div>
+<h3>分章</h3>
+<h4>序章｜桃花滩的八爪鱼（1—7）</h4>
+<p>玩家刚入镇渊司，第一个外勤就是桃花村：桃花滩的八爪鱼连伤数人。司里给的由头是“去桃花村拜师学艺”，真正的任务写在老陈递来的纸条上。村口船夫老陈接头，塞来一面观气盘。桃滩上虾精蟹怪都比往年凶，八爪鱼身上浮着黑纹。打完之后净化，捡到一枚“引幽钉”的碎片。</p>
+<p>章末：观气盘亮起一重。陆沉传讯，只有一句——“这不是妖兽发疯，是有人在喂它。”</p>
+<h4>第一章｜芦花渡（7—15）</h4>
+<p>魔气沿水路上行，桃林猴蜂异常，芦花渡的渡船夜里载的不是人。玩家第一次见孟九娘，她用一条情报换走半船香烛。到广陵城，进镇渊斋，见陆沉。陆沉摊开地图，指出魔气有四个大源，桃花滩只是渗漏。</p>
+<p>章末：魔气二重。</p>
+<h4>第二章｜灵药涧（15—22）</h4>
+<p>万药谷的药市出了“神药”，治病，也让人做同一个噩梦。叶小满带路，查出药里有魔气结晶。谷主孙渺承认：他为治一种绝症，拿魔药做引，桑百足的药商供的货。玩家可以选择揭发、包庇，或逼他交出药方。</p>
+<p>章末：魔气三重。孙渺的药方成了净化阵的第一块拼图。</p>
+<h4>第三章｜剑鸣峰（22—30）</h4>
+<p>太虚剑宗长老秦断锋以魔晶淬剑，剑成之日，三个试剑弟子疯了。乱石岗的魔晶、黑风坳的老魅，都是这条线的中间人。玩家夺剑、毁剑，或者劝他自废剑心。</p>
+<p>章末：魔气四重。若夺剑成功，玩家可留下一柄魔剑自用——很好用，但会记账。</p>
+<h4>第四章｜临江城（30—38）</h4>
+<p>苏晚的情报指向临江城：商会囤积魔器，寒潭涧水鬼魔化，落雁关商路断了。桑百足的明面生意就在这里：一间药铺、一支镖局。玩家顺藤摸瓜，抓了桑掌柜。</p>
+<p>章末：魔气五重。桑掌柜临死前说：“你以为你在封口，我们老板在种地。”</p>
+<h4>第五章｜断魂崖（38—45）</h4>
+<p>断魂刀客魔化，屠了一整支镖队——他是被魔器反噬的散修。玩家追到崖上，第一次撞见柳三的纸人。纸人自燃前留下一句话：“四道门，你才关了一道。”</p>
+<p>章末：魔气六重。</p>
+<h4>第六章｜落星崖（45—52）</h4>
+<p>星罗教内乱：教主玄星子用魔气改命，要把镇派星盘炼成“改命盘”，长老们反对。玩家卷入教内斗法，星盘被玄星子带走。</p>
+<p>章末：魔气六重。陆沉第一次失算——他后来才知道，失算的不是他，是他身边泡茶的人。</p>
+<h4>第七章｜神霄峰（52—60）</h4>
+<p>紫霄长老雷嗔私炼魔雷，想借魔气破境。神霄峰的雷池被污，苍云岭的云君因此魔化。玩家上山前，行踪被人卖给了雷嗔——白鹤暴露，他二十年前就是军师的人。裴照为护玩家，硬接一记魔雷，死在神霄峰下。玩家诛白鹤、斩雷嗔。</p>
+<p>章末：魔气七重。雷嗔死前说：“你以为我是贪？我是怕。”陆沉在裴照灵前坐了一夜。</p>
+<h4>第八章｜幽冥泽（55—65）</h4>
+<p>桑百足在沼中养毒兽、毒人，用魔气炼万毒丹。玩家与叶小满破毒阵，阿蛮扛下三次毒爆。桑百足死，毒囊却被柳三提前带走。</p>
+<p>章末：魔气七重。第一将死，世上的毒丹却流了出去。</p>
+<h4>第九章｜万骨墟（63—73）</h4>
+<p>戚长夜以琴音驱使魔化亡魂，把古战场变成养魂场。顾砚以阵换命破阵，玩家杀戚。他死前说：“我只是想让她再说一句话。”</p>
+<p>章末：魔气八重。万骨墟的魂散了，散出去的魔气却没有。</p>
+<h4>第十章｜九霄雷池（71—82）</h4>
+<p>祝烈用雷池加魔气炼魔器，工坊就在雷池底。玩家毁工坊、杀祝烈，碎掉的魔器却散落天下。</p>
+<p>章末：魔气八重。天下魔修手里，多了无数把好刀。</p>
+<h4>第十一章｜太虚天渊（80—91）</h4>
+<p>屠岸守天深渊口，以血食喂渊。军师的收气阵就布在渊口。玩家与屠岸决战，毁其肉身，他的魂遁入渊底。</p>
+<p>章末：魔气九重（临界）。军师现身，只说了一句：“谢谢你，最后一个渊口也关了。”</p>
+<h4>终章｜无光渊底（91—100）</h4>
+<p>玩家下渊。守渊者——千年前五派留下的镇渊傀儡，已被魔气侵蚀——挡在路前，击败或净化它。屠岸借魔气重生，100 级再战，终于伏诛。</p>
+<p>可就在他倒下的一刻，军师以幽都令收气：天下魔气尽归渊底，九重圆满。</p>
+<p>广陵城，陆沉的五派净化大阵升到一半，缺了星罗教那一角——星盘在玄星子手里，早已不知去向。</p>
+<p>阵光熄灭。渊底传来一声呼吸。</p>
+<p>魔神出世。</p>
+<h2 id="sec-8">八、魔气系统与玩法</h2>
+<ul><li><strong>观气盘</strong>：主线道具，显示当前地图魔气浓度与源头方向。浓度越高，画面越暗、雾越重、怪物越强。</li><li><strong>魔器强化</strong>：玩家可以收集魔气结晶，找黑市或残存的雷池工坊强化装备。强化后属性大涨，但每件魔器有“魔性值”，战斗中累积，满了会反噬。</li><li><strong>净化</strong>：净化符可清除一小片区域的魔气；净化魔器可洗掉魔性，但材料贵。</li><li><strong>隐藏的账</strong>：玩家每用一次魔气强化，全局存量 +1，不显示在界面上，只影响 100 级之后魔神的强度与世界的破败程度。这是给二周目留的。</li><li><strong>门派技能与魔气</strong>：魔气强化不占用门派技能位，但魔性值满时，门派技能有概率被“染黑”，效果变强、消耗变高。</li></ul>
+<h2 id="sec-9">九、100 级：收气</h2>
+<ul><li>屠岸倒下，军师不怒，反而松了口气。他等的就是四将死绝、渊口全关——门关上了，气才收得回来。</li><li>收气三息：天下魔器碎、魔丹化、妖獸倒地，黑雾从四面八方往渊底倒灌。</li><li>陆沉的阵只差一角，硬撑了半刻，碎。</li><li>魔神玄冥踏出渊口，只说了一句：“一千年，你们把人间养得不错。”</li><li>100 级后的世界：日月无光，三城沦陷，五派各自封山。</li></ul>
+<h2 id="sec-10">十、与现有游戏数据的接口</h2>
+<ul><li><strong>守渊者</strong>：保留为千年前五派留下的镇渊傀儡，被魔气侵蚀后挡在渊底。可做成 95 级 Boss，打赢后净化，成为一个悲剧 NPC，而不是纯反派。</li><li><strong>无光渊底的最终 Boss</strong>：原设定是守渊者，本篇改为“守渊者（95）→ 重生屠岸（100）→ 魔神（100+）”。若不想改原有 Boss，可把屠岸重生放到 100 级的独立副本“血池”，无光渊底仍以守渊者收尾。</li><li><strong>地图等级</strong>：篇章等级与地图区间已对齐，跨图时靠相邻地图 2—3 级的重叠过渡。</li><li><strong>拜师</strong>：桃花村拜师与镇渊司招募并行。玩家先拜五派之一学技能，再被老陈引荐入司，两条线不冲突。</li><li><strong>门派地图</strong>：灵药涧、剑鸣峰、落星崖、神霄峰、浮云岛既是门派功能图，也是五派线的剧情现场。</li></ul>
+<h2 id="sec-11">十一、命名说明</h2>
+<ul><li><strong>陆沉</strong>：沉者，沉渊也；也是“神州陆沉”，他一个人坐在渊边撑着。</li><li><strong>阴无咎</strong>：姓阴，取《易》“无咎”，算无遗策，也从不认错。</li><li><strong>四将</strong>：号取凶相（血、鬼、毒、炎），名取形（岸、长夜、百足、烈）。</li><li><strong>孟九娘、柳三、老陈</strong>：市井名字，和桃花村、芦花渡的烟火气对得上。</li><li><strong>秦断锋、孙渺、雷嗔、玄星子、云舒</strong>：一人一个毛病——剑痴、药痴、怕死、贪命、怕事，五派的堕落都不重样。</li></ul>
+<footer>版本 3.0 · 2026-11-15 · 依现有五大门派与 27 张地图重排；核心改为九幽魔气的存量与流量。</footer>
+</main>
+<a class="top" href="#top" title="回到顶部" aria-label="回到顶部">↑</a>
+</body>
+</html>

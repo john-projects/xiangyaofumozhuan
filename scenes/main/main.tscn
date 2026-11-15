@@ -25,6 +25,7 @@ enemy_pool = Array[ExtResource("2_unitstats")]([ExtResource("3_enemy1"), ExtReso
 unique_name_in_owner = true
 
 [node name="UIRoot" type="CanvasLayer" parent="." unique_id=1586561960]
+layer = 10
 unique_name_in_owner = true
 
 [node name="TransitionLayer" type="CanvasLayer" parent="." unique_id=898270137]
