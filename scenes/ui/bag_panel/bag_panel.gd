@@ -1,6 +1,8 @@
 extends Control
 class_name BagPanel
 
+const Paper := preload("res://styles/paper_ui.gd")
+
 ## 背包面板：方格背包（8 列 × 15 行 = 120 格）+ 角色区（形象 + 左右各 3 个装备栏）。
 ## 只读展示：不改游戏数据，点击只发信号，卖 / 穿 / 脱的规则由 WorldMap 与 GameRoot 决定。
 ## 角色区 ◀/▶ 只在团队名册里切换"看谁"，不动队长与上阵名单。
@@ -64,18 +66,19 @@ const PLAYER_ROW_HEIGHT := PLAYER_FRAME_HEIGHT
 # ── 全队头像选择器（点形象框弹出）──
 ## 每格人像边长（不含底部名字行）。
 const PICKER_SLOT_SIZE := 96.0
-const PICKER_BG := Color(1, 1, 1, 0.05)
-const PICKER_BG_HOVER := Color(1.0, 0.82, 0.35, 0.20)
-const PICKER_BORDER := Color(1, 1, 1, 0.16)
-const PICKER_BORDER_HOVER := Color(1.0, 0.84, 0.42, 1.0)
-const PICKER_TEXT := Color(0.88, 0.85, 0.78, 1.0)
+const PICKER_BG := Paper.INSET
+const PICKER_BG_HOVER := Paper.PAPER
+const PICKER_BORDER := Paper.PALE_EDGE
+const PICKER_BORDER_HOVER := Paper.VERMILION
+const PICKER_TEXT := Paper.INK
 
 ## 窗口外边距与面板内边距（16 省高度）。
 const WINDOW_MARGIN := 16.0
 const WINDOW_PADDING := 16.0
 const WINDOW_PADDING_V := 16.0
 ## 标题行 / 信息行的高度。
-const TITLE_ROW_HEIGHT := 40.0
+const TITLE_ROW_HEIGHT := 44.0
+const SHORTCUT_HEIGHT := 24.0
 const INFO_ROW_HEIGHT := 26.0
 ## VBox 块间距（.tscn 同值）。
 const VBOX_SEPARATION := 8.0
@@ -125,7 +128,10 @@ var _frame_base_style: StyleBox = null
 
 
 func _ready() -> void:
+	Paper.add_panel_pattern($Panel)
 	hide()
+	Paper.style_heading(count_label, "囊")
+	Paper.add_shortcut($Panel/Margin/VBox, "B", "关闭背包")
 	_ensure_scroll()          # 内部会把"可见行数 / 跟随焦点 / 禁横向滚动"都配好
 	_build_equip_slots()
 	if prev_button != null:
@@ -138,6 +144,7 @@ func _ready() -> void:
 		player_frame.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 		# 键盘也要能选中它：Panel 默认 focus_mode = NONE，Tab / 方向键根本到不了
 		player_frame.focus_mode = Control.FOCUS_ALL
+		Paper.add_portrait_wash(player_frame)
 		_frame_base_style = player_frame.get_theme_stylebox("panel")
 		player_frame.focus_entered.connect(_on_player_frame_focus.bind(true))
 		player_frame.focus_exited.connect(_on_player_frame_focus.bind(false))
@@ -308,10 +315,10 @@ func _refresh_equip_slot(slot: Button, slot_type: int) -> void:
 		slot.disabled = true
 		slot.focus_mode = Control.FOCUS_NONE
 		slot.add_theme_stylebox_override("disabled",
-				_slot_style(Color(1, 1, 1, 0.14), Color(1, 1, 1, 0.03), bottom_margin))
+				_slot_style(Paper.PALE_EDGE, Paper.INSET, bottom_margin))
 		if tag != null:
 			_set_tag_center(tag)
-			tag.modulate = Color(1, 1, 1, 0.42)
+			tag.add_theme_color_override("font_color", Paper.SOFT_INK)
 		# 空栏位没有属性卡，用原生 tooltip 说明这个坑位怎么用（提到当前是谁的栏位）
 		var who: String = character.name if character != null else "角色"
 		slot.tooltip_text = "%s栏：把%s从背包里点一下就能给「%s」穿上" % [
@@ -323,15 +330,15 @@ func _refresh_equip_slot(slot: Button, slot_type: int) -> void:
 	slot.disabled = false
 	slot.focus_mode = Control.FOCUS_ALL if _slot_focus_enabled else Control.FOCUS_NONE
 	slot.tooltip_text = ""      # 有属性卡就不再设原生 tooltip，免得两个框叠一起
-	var tier_color: Color = Global.TIER_COLORS.get(item.item_tier, Color(1, 1, 1, 0.4))
+	var tier_color: Color = Global.TIER_COLORS.get(item.item_tier, Paper.PALE_EDGE)
 	# 底色也跟品质走（和背包方格、商人货架同一套）
-	slot.add_theme_stylebox_override("normal", _slot_style(tier_color, _tier_bg(tier_color, 0.30), bottom_margin))
-	slot.add_theme_stylebox_override("hover", _slot_style(tier_color, _tier_bg(tier_color, 0.48), bottom_margin))
-	slot.add_theme_stylebox_override("focus", _slot_style(Color(1, 0.9, 0.5, 1.0), _tier_bg(tier_color, 0.42), bottom_margin))
-	slot.add_theme_stylebox_override("pressed", _slot_style(Color(1, 0.9, 0.5, 1.0), _tier_bg(tier_color, 0.55), bottom_margin))
+	slot.add_theme_stylebox_override("normal", _slot_style(Paper.quality_edge(tier_color), Paper.quality_fill(tier_color, 0.24), bottom_margin))
+	slot.add_theme_stylebox_override("hover", _slot_style(Paper.quality_edge(tier_color), Paper.quality_fill(tier_color, 0.39), bottom_margin))
+	slot.add_theme_stylebox_override("focus", _slot_style(Paper.VERMILION, Paper.quality_fill(tier_color, 0.35), bottom_margin))
+	slot.add_theme_stylebox_override("pressed", _slot_style(Paper.VERMILION, Paper.quality_fill(tier_color, 0.48), bottom_margin))
 	if tag != null:
 		_set_tag_bottom(tag)
-		tag.modulate = Color(1, 1, 1, 0.85)
+		tag.add_theme_color_override("font_color", Paper.INK)
 	_equip_slots.append(slot)
 
 
@@ -439,7 +446,7 @@ func _on_player_frame_focus(focused: bool) -> void:
 			style = (_frame_base_style as StyleBoxFlat).duplicate() as StyleBoxFlat
 		else:
 			style = StyleBoxFlat.new()
-		style.border_color = Color(1.0, 0.84, 0.42, 1.0)
+		style.border_color = Paper.VERMILION
 		style.set_border_width_all(3)
 		player_frame.add_theme_stylebox_override("panel", style)
 	elif _frame_base_style != null:
@@ -454,11 +461,7 @@ func _ensure_picker() -> void:
 	_picker = PanelContainer.new()
 	_picker.name = "CharacterPicker"
 	_picker.visible = false
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.043, 0.047, 0.067, 0.985)
-	style.border_color = Color(0.639, 0.518, 0.286, 1.0)
-	style.set_border_width_all(2)
-	style.set_corner_radius_all(12)
+	var style := get_theme_stylebox("panel", &"PanelContainer").duplicate() as StyleBox
 	style.content_margin_left = 14
 	style.content_margin_right = 14
 	style.content_margin_top = 12
@@ -646,7 +649,7 @@ func _apply_window_geometry() -> void:
 	var view := get_viewport_rect().size
 	# ① 先决定背包能显示几行：除了滚动区，其它部分（标题/角色区/信息行/边距）是固定高度
 	var fixed := TITLE_ROW_HEIGHT + PLAYER_ROW_HEIGHT + INFO_ROW_HEIGHT \
-			+ VBOX_SEPARATION * 3.0 + WINDOW_PADDING_V * 2.0 + WINDOW_MARGIN * 2.0
+			+ SHORTCUT_HEIGHT + VBOX_SEPARATION * 4.0 + WINDOW_PADDING_V * 2.0 + WINDOW_MARGIN * 2.0
 	var row_height := SLOT_SIZE + GRID_SEPARATION
 	var rows_budget := int(floor((view.y - fixed + GRID_SEPARATION) / row_height))
 	var rows := clampi(rows_budget, 1, VISIBLE_ROWS)
@@ -719,21 +722,21 @@ func _make_slot(item: ItemBase) -> Button:
 	# 空格子：不可点、不可聚焦，只留一个暗描边当"格位"
 	if item == null:
 		slot.disabled = true
-		slot.add_theme_stylebox_override("disabled", _slot_style(Color(1, 1, 1, 0.10), Color(1, 1, 1, 0.03)))
+		slot.add_theme_stylebox_override("disabled", _slot_style(Paper.PALE_EDGE, Paper.INSET))
 		return slot
 
 	slot.icon = item.item_icon
 	slot.expand_icon = true
 	slot.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	# 描边颜色跟稀有度走（TIER_COLORS 是 Global 上的共享常量，只读不改）
-	var tier_color: Color = Global.TIER_COLORS.get(item.item_tier, Color(1, 1, 1, 0.4))
+	var tier_color: Color = Global.TIER_COLORS.get(item.item_tier, Paper.PALE_EDGE)
 	# 底色也跟品质走：同一色相、极低透明度，既不抢图标又能分辨档次
-	var tier_bg := _tier_bg(tier_color, 0.30)
-	var tier_bg_hover := _tier_bg(tier_color, 0.48)
-	slot.add_theme_stylebox_override("normal", _slot_style(tier_color, tier_bg))
-	slot.add_theme_stylebox_override("hover", _slot_style(tier_color, tier_bg_hover))
-	slot.add_theme_stylebox_override("focus", _slot_style(Color(1, 0.9, 0.5, 1.0), _tier_bg(tier_color, 0.42)))
-	slot.add_theme_stylebox_override("pressed", _slot_style(Color(1, 0.9, 0.5, 1.0), _tier_bg(tier_color, 0.55)))
+	var tier_bg := Paper.quality_fill(tier_color, 0.24)
+	var tier_bg_hover := Paper.quality_fill(tier_color, 0.39)
+	slot.add_theme_stylebox_override("normal", _slot_style(Paper.quality_edge(tier_color), tier_bg))
+	slot.add_theme_stylebox_override("hover", _slot_style(Paper.quality_edge(tier_color), tier_bg_hover))
+	slot.add_theme_stylebox_override("focus", _slot_style(Paper.VERMILION, Paper.quality_fill(tier_color, 0.35)))
+	slot.add_theme_stylebox_override("pressed", _slot_style(Paper.VERMILION, Paper.quality_fill(tier_color, 0.48)))
 
 	# 悬停 / 键盘焦点都弹同一张属性卡（TooltipManager 会把卡片锚到这个格子的右上角）
 	slot.mouse_entered.connect(TooltipManager.show_for_control.bind(slot, item))
@@ -852,10 +855,3 @@ func clear_message() -> void:
 	for child in toast_stack.get_children():
 		child.queue_free()
 	_layout_toast_stack.call_deferred()
-
-
-## 品质底色：取品质色的色相，把明度压暗、透明度压到 alpha，得到一个淡淡的染色底。
-## 普通（白）没有配色，会走调用方的兜底色，不会调用本函数。
-func _tier_bg(color: Color, alpha: float) -> Color:
-	var c := Color(color.r, color.g, color.b, 1.0)
-	return Color(c.r * 0.7, c.g * 0.7, c.b * 0.7, alpha)

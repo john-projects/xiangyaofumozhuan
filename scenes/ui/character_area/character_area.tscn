@@ -1,27 +1,10 @@
-[gd_scene load_steps=4 format=3]
+[gd_scene format=3]
 
+[ext_resource type="Theme" path="res://styles/paper_theme.tres" id="99_paper"]
 [ext_resource type="Script" path="res://scenes/ui/character_area/character_area.gd" id="1_area"]
 
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_frame"]
-bg_color = Color(0.12941177, 0.12941177, 0.16078432, 0.9)
-border_width_left = 2
-border_width_top = 2
-border_width_right = 2
-border_width_bottom = 2
-border_color = Color(0.45490196, 0.38039216, 0.23921569, 1)
-corner_radius_top_left = 8
-corner_radius_top_right = 8
-corner_radius_bottom_right = 8
-corner_radius_bottom_left = 8
-
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_nameplate"]
-bg_color = Color(0, 0, 0, 0.55)
-corner_radius_top_left = 6
-corner_radius_top_right = 6
-corner_radius_bottom_right = 8
-corner_radius_bottom_left = 8
-
 [node name="CharacterArea" type="HBoxContainer"]
+theme = ExtResource("99_paper")
 theme_override_constants/separation = 16
 alignment = 1
 script = ExtResource("1_area")
@@ -38,7 +21,7 @@ custom_minimum_size = Vector2(44, 60)
 layout_mode = 2
 size_flags_vertical = 4
 theme_override_font_sizes/font_size = 24
-text = "◀"
+text = "‹"
 
 [node name="PlayerColumn" type="VBoxContainer" parent="."]
 layout_mode = 2
@@ -46,10 +29,10 @@ size_flags_vertical = 4
 theme_override_constants/separation = 6
 
 [node name="PlayerFrame" type="Panel" parent="PlayerColumn"]
+theme_type_variation = &"PaperPortrait"
 unique_name_in_owner = true
-custom_minimum_size = Vector2(240, 308)
+custom_minimum_size = Vector2(240, 366)
 layout_mode = 2
-theme_override_styles/panel = SubResource("StyleBoxFlat_frame")
 
 [node name="PlayerView" type="TextureRect" parent="PlayerColumn/PlayerFrame"]
 unique_name_in_owner = true
@@ -83,6 +66,7 @@ horizontal_alignment = 1
 vertical_alignment = 1
 
 [node name="PlayerNameLabel" type="Label" parent="PlayerColumn/PlayerFrame"]
+theme_type_variation = &"PaperName"
 unique_name_in_owner = true
 layout_mode = 1
 anchors_preset = 12
@@ -90,13 +74,11 @@ anchor_top = 1.0
 anchor_right = 1.0
 anchor_bottom = 1.0
 offset_left = 6.0
-offset_top = -30.0
+offset_top = -36.0
 offset_right = -6.0
 offset_bottom = -5.0
 grow_horizontal = 2
 grow_vertical = 0
-theme_override_font_sizes/font_size = 16
-theme_override_styles/normal = SubResource("StyleBoxFlat_nameplate")
 text = "主角"
 horizontal_alignment = 1
 vertical_alignment = 1
@@ -107,7 +89,7 @@ custom_minimum_size = Vector2(44, 60)
 layout_mode = 2
 size_flags_vertical = 4
 theme_override_font_sizes/font_size = 24
-text = "▶"
+text = "›"
 
 [node name="RightSlots" type="VBoxContainer" parent="."]
 unique_name_in_owner = true

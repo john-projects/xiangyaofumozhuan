@@ -1,6 +1,8 @@
 extends Control
 class_name MerchantPanel
 
+const Paper := preload("res://styles/paper_ui.gd")
+
 ## 商人面板：把装备（ItemBase / ItemEquipment）摆成方格卖（MapNPC.Action.SELL_WEAPONS 用）。
 ##
 ## 版面：名字居中 → 结果提示 → 6 列方格货架（6×20 = 120 格，一屏 6×10，其余靠滚动）；
@@ -105,6 +107,7 @@ var _restore_scroll := false
 
 
 func _ready() -> void:
+	Paper.add_panel_pattern($Panel)
 	# 根节点铺满全屏，必须忽略鼠标，否则并排的背包收不到任何事件；只影响根节点自己，子节点照常接管。
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hide()
@@ -441,14 +444,14 @@ func _make_slot(item: ItemBase, coins: int, owned: Array[ItemBase]) -> Button:
 	slot.expand_icon = true
 	slot.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	# 描边跟稀有度走（和背包、提示卡一套配色；TIER_COLORS 是 Global 上的只读常量）
-	var tier_color: Color = Global.TIER_COLORS.get(item.item_tier, Color(1, 1, 1, 0.4))
+	var tier_color: Color = Global.TIER_COLORS.get(item.item_tier, Paper.PALE_EDGE)
 	# 底色也跟品质走：同一色相、极低透明度，让每档一眼能分出来又不压住图标
-	var tier_bg := _tier_bg(tier_color, 0.30)
-	var tier_bg_hover := _tier_bg(tier_color, 0.48)
-	slot.add_theme_stylebox_override("normal", _slot_style(tier_color, tier_bg))
-	slot.add_theme_stylebox_override("hover", _slot_style(tier_color, tier_bg_hover))
-	slot.add_theme_stylebox_override("focus", _slot_style(Color(1, 0.9, 0.5, 1.0), _tier_bg(tier_color, 0.42)))
-	slot.add_theme_stylebox_override("pressed", _slot_style(Color(1, 0.9, 0.5, 1.0), _tier_bg(tier_color, 0.55)))
+	var tier_bg := Paper.quality_fill(tier_color, 0.24)
+	var tier_bg_hover := Paper.quality_fill(tier_color, 0.39)
+	slot.add_theme_stylebox_override("normal", _slot_style(Paper.quality_edge(tier_color), tier_bg))
+	slot.add_theme_stylebox_override("hover", _slot_style(Paper.quality_edge(tier_color), tier_bg_hover))
+	slot.add_theme_stylebox_override("focus", _slot_style(Paper.VERMILION, Paper.quality_fill(tier_color, 0.42)))
+	slot.add_theme_stylebox_override("pressed", _slot_style(Paper.VERMILION, Paper.quality_fill(tier_color, 0.55)))
 
 	var reason := GameRoot.item_can_buy(item, coins, owned)
 	# 价格角标（右下角）。金币不够时仍标红，但现在**不置灰格子** ——
@@ -477,7 +480,7 @@ func _make_empty_slot() -> Button:
 	slot.name = "EmptySlot"
 	slot.custom_minimum_size = Vector2(SLOT_SIZE, SLOT_SIZE)
 	slot.disabled = true
-	slot.add_theme_stylebox_override("disabled", _slot_style(Color(1, 1, 1, 0.10), Color(1, 1, 1, 0.03)))
+	slot.add_theme_stylebox_override("disabled", _slot_style(Paper.PALE_EDGE, Paper.INSET))
 	return slot
 
 
@@ -493,8 +496,8 @@ func _make_tag(text: String, is_owned: bool, affordable: bool) -> Label:
 	tag.add_theme_stylebox_override("normal", _tag_style())
 	tag.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	tag.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	tag.modulate = Color(0.75, 0.85, 1.0) if is_owned else \
-			(Color(1, 0.86, 0.45) if affordable else Color(1, 0.45, 0.4))
+	var ink := Color("#b9d3ea") if is_owned else (Color("#edd6ac") if affordable else Color("#f3a596"))
+	tag.add_theme_color_override("font_color", ink)
 	# 定位：锚在角上（左上 / 右下），尺寸固定，不参与容器布局
 	if is_owned:
 		tag.anchor_left = 0.0
@@ -536,7 +539,7 @@ func _slot_style(border: Color, bg: Color) -> StyleBoxFlat:
 ## 角标的底色样式（深色半透明 + 圆角，保证压在任何图标上都看得清）。
 func _tag_style() -> StyleBoxFlat:
 	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0, 0, 0, 0.62)
+	style.bg_color = Color("#49352b")
 	style.set_corner_radius_all(5)
 	return style
 
@@ -737,10 +740,3 @@ func clear_message() -> void:
 	for child in toast_stack.get_children():
 		child.queue_free()
 	_layout_toast_stack.call_deferred()
-
-
-## 品质底色：取品质色的色相，把明度压暗、透明度压到 alpha，得到一个淡淡的染色底。
-## 普通（白）没有配色，会走调用方的兜底色，不会调用本函数。
-func _tier_bg(color: Color, alpha: float) -> Color:
-	var c := Color(color.r, color.g, color.b, 1.0)
-	return Color(c.r * 0.7, c.g * 0.7, c.b * 0.7, alpha)

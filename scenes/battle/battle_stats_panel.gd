@@ -19,6 +19,8 @@
 extends Panel
 class_name BattleStatsPanel
 
+const Paper := preload("res://styles/paper_ui.gd")
+
 ## 顶部页签：总计（跨场累计）/ 上场战斗（战斗中是本场，地图上是上一场）。
 enum TopTab { TOTAL, BATTLE }
 ## 左侧页签：伤害 / 治疗 / 承伤。
@@ -27,12 +29,7 @@ enum SideTab { DAMAGE, HEALING, TAKEN }
 # ── 尺寸常量（面板宽度由 .tscn 的左右 offset 定死，这里只管内部排布和纵向高度）──
 
 ## 面板上下内边距（和 .tscn 里 VBox 的 offset_top / offset_bottom 一致，算高度要加回来）。
-const PAD_V := 9.0
-## 纵向容器之间的标准间距（和 .tscn 里各 VBox/HBox 的 separation 一致）。
-const V_SEP := 6
-## 左侧页签：宽 / 高。
-const SIDE_TAB_W := 72.0
-const SIDE_TAB_H := 32.0
+const PAD_V := 12.0
 ## 一行数据的高度。
 const ROW_H := 30.0
 ## 名字列 / 数值列的固定宽度（够放 3 个汉字 / 5 位数字；上万会压成「1.2万」，不会溢出）。
@@ -43,50 +40,25 @@ const NUMBERS_W := 146.0
 
 # ── 配色（伤害红、治疗绿、承伤蓝）──
 
-## 伤害（造成）：偏橙红，和飘字的普通伤害同色系。
-const DAMAGE_COLOR := Color(0.98, 0.46, 0.35)
-## 治疗：绿色，和回血飘字同色系。
-const HEALING_COLOR := Color(0.42, 0.92, 0.56)
-## 承伤：冷蓝，和上面两个明显区分。
-const TAKEN_COLOR := Color(0.48, 0.70, 1.0)
-## 角色名：米白。
-const NAME_COLOR := Color(0.92, 0.90, 0.84)
-## 非第一名、非零值的数值：浅灰。
-const VALUE_COLOR := Color(0.76, 0.78, 0.84)
-## 第一名的数值：金色（和回合数、施法技能名同色系），一眼能看出谁最高。
-const TOP_COLOR := Color(1.0, 0.92, 0.60)
-## 条形槽（背景）。
-const TRACK_COLOR := Color(1.0, 1.0, 1.0, 0.07)
-## "合计"、"暂无统计"这类辅助文字。
-const DIM_COLOR := Color(0.62, 0.64, 0.70)
+const DAMAGE_COLOR := Color("#983c30")
+const HEALING_COLOR := Color("#2b684c")
+const TAKEN_COLOR := Color("#2b557b")
+const NAME_COLOR := Paper.INK
+const VALUE_COLOR := Paper.INK
+const TOP_COLOR := Paper.VERMILION
+const TRACK_COLOR := Paper.INSET
+const DIM_COLOR := Paper.SOFT_INK
 
-# ── 分段条：不同来源用不同颜色 ──
-# 普攻 / 持续伤害 / 其他 用固定语义色（和飘字、明细对得上），技能与承伤来源从调色板里按名字取，
-# 同一个名字永远是同一个颜色（跨刷新、跨面板稳定）。
-
-## 普通攻击：骨白，最"朴素"的一段。
-const SEG_ATTACK_COLOR := Color(0.86, 0.82, 0.72)
-## 持续伤害：紫色，和 dot 飘字同色。
-const SEG_DOT_COLOR := Color(0.74, 0.48, 0.96)
-## 持续回血：青绿（刻意和技能的草绿拉开，治疗页里"技能治疗 / 持续回血"两段才分得出）。
-const SEG_HOT_COLOR := Color(0.30, 0.86, 0.80)
-## 来源不明：灰。
-const SEG_OTHER_COLOR := Color(0.55, 0.57, 0.62)
-## 技能 / 承伤来源的调色板：挑的都是暗底上清楚、彼此区分度高的颜色。
+## 固定来源保留语义色，可变来源按名字稳定取色。
+const SEG_ATTACK_COLOR := Color("#aa8150")
+const SEG_DOT_COLOR := Color("#8a60a4")
+const SEG_HOT_COLOR := Color("#4d9688")
+const SEG_OTHER_COLOR := Color("#897d6a")
 const SEG_PALETTE := [
-	Color(0.98, 0.52, 0.30),   # 橙
-	Color(0.38, 0.72, 0.98),   # 天蓝
-	Color(0.56, 0.88, 0.46),   # 草绿
-	Color(0.96, 0.44, 0.62),   # 玫红
-	Color(0.66, 0.62, 1.00),   # 蓝紫
-	Color(0.98, 0.80, 0.34),   # 金黄
-	Color(0.36, 0.86, 0.80),   # 青绿
-	Color(0.90, 0.68, 0.46),   # 土黄
-	Color(0.82, 0.54, 0.92),   # 紫罗兰
-	Color(0.62, 0.82, 0.42),   # 橄榄绿
+	Color("#b96342"), Color("#5b84ab"), Color("#67945a"), Color("#ae5f77"),
+	Color("#7774a9"), Color("#ae883d"), Color("#438d86"), Color("#ac765a"),
+	Color("#9a6d9f"), Color("#808747"),
 ]
-
-# ── 悬停明细（伤害构成）──
 
 ## 明细面板宽度（贴在主面板左边，主面板 510 宽、明细 340 宽，中间留 12px）。
 const DETAIL_WIDTH := 340.0
@@ -96,9 +68,7 @@ const DETAIL_PAD_V := 10.0
 ## 治疗页用不到 attack/dot，伤害页用不到 hot，空的分组直接跳过。
 const KIND_ORDER := ["attack", "skill", "dot", "hot", "other"]
 
-@onready var top_tabs: HBoxContainer = %TopTabs
-@onready var side_tabs: VBoxContainer = %SideTabs
-@onready var divider: ColorRect = %Divider
+@onready var content: VBoxContainer = $VBox
 ## 表头 + 数据行都动态挂在这里（表头恒为第 0 个孩子）。
 @onready var list: VBoxContainer = %List
 @onready var total_tab: Button = %TotalTab
@@ -109,6 +79,7 @@ const KIND_ORDER := ["attack", "skill", "dot", "hot", "other"]
 ## 悬停明细的浮层（平时隐藏，鼠标停在某一行上才出现）。
 @onready var detail: Panel = %Detail
 @onready var detail_body: VBoxContainer = %DetailBody
+@onready var turn_order := get_node_or_null(^"../TurnOrder") as Control
 
 ## 当前顶部页 / 左侧页。
 var _top := TopTab.TOTAL
@@ -125,6 +96,7 @@ var _hovered := ""
 
 ## 生命周期：两组页签各建一个 ButtonGroup（互斥），挂到 Global 的统计变化信号上，再画一次。
 func _ready() -> void:
+	detail.add_theme_stylebox_override("panel", get_theme_stylebox("panel", &"PanelContainer"))
 	var top_group := ButtonGroup.new()
 	total_tab.button_group = top_group
 	battle_tab.button_group = top_group
@@ -490,8 +462,15 @@ func _show_detail(who: String) -> void:
 	var h := detail.size.y
 	# 纵向居中对齐到那一行，再夹在屏幕内（面板本身就贴着屏幕右边，所以 x 不用夹）。
 	var center_y := row.get_global_rect().get_center().y
-	var top := clampf(center_y - h * 0.5, 8.0, maxf(8.0, screen_h - h - 8.0))
-	detail.position = Vector2(-DETAIL_WIDTH - 12.0, top - global_position.y)
+	var bottom_limit := maxf(8.0, screen_h - h - 8.0)
+	var top := clampf(center_y - h * 0.5, 8.0, bottom_limit)
+	var x := -DETAIL_WIDTH - 12.0
+	if turn_order != null and turn_order.is_visible_in_tree():
+		var order_rect := turn_order.get_global_rect()
+		var detail_rect := Rect2(Vector2(global_position.x + x, top), detail.size)
+		if detail_rect.intersects(order_rect):
+			top = minf(order_rect.end.y + 8.0, bottom_limit)
+	detail.position = Vector2(x, top - global_position.y)
 	detail.show()
 
 
@@ -646,7 +625,7 @@ func _make_detail_label(text: String, font_size: int, color: Color) -> Label:
 func _make_detail_separator() -> ColorRect:
 	var line := ColorRect.new()
 	line.custom_minimum_size = Vector2(0, 1)
-	line.color = Color(1, 0.85, 0.5, 0.18)
+	line.color = Paper.EDGE
 	line.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	return line
 
@@ -654,12 +633,9 @@ func _make_detail_separator() -> ColorRect:
 ## 把面板高度收成"刚好装下内容"：高度跟着行数走（1 人队和 5 人队都不会留一块空白）。
 ## 用容器的 get_combined_minimum_size() 而不是自己乘常量：字体行高比 ROW_H 高时不会把内容挤出去。
 func _fit_height() -> void:
-	if list == null or top_tabs == null:
+	if content == null:
 		return
-	var body := maxf(list.get_combined_minimum_size().y, side_tabs.get_combined_minimum_size().y)
-	var content := top_tabs.get_combined_minimum_size().y + V_SEP \
-			+ maxf(divider.get_combined_minimum_size().y, 1.0) + V_SEP + body
-	offset_bottom = offset_top + PAD_V * 2.0 + content
+	offset_bottom = offset_top + PAD_V * 2.0 + content.get_combined_minimum_size().y
 
 
 ## 数值显示：一律整数（伤害是 float，直接 str 会出现 12.000000）；

@@ -1,9 +1,11 @@
 extends PanelContainer
 class_name MsgLog
 
+const Paper := preload("res://styles/paper_ui.gd")
+
 ## 左下角常驻消息栏（地图 / 战斗共用）。
 ##
-## 结构：PanelContainer → ScrollContainer → VBoxContainer(每行一个 Label)
+## 结构：纸面消息框与可滚动的消息列表。
 ##   · 固定显示 VISIBLE_ROWS 行高度，多了靠滚轮/拖动往上翻
 ##   · 最多保留 max_lines 行，超了从最旧的开始删
 ##   · 新消息自动滚到底；玩家往上翻时不会被强行拉回（除非本来就在底部）
@@ -34,32 +36,28 @@ func setup(p_max_lines := 300) -> void:
 	anchor_right = 0.0
 	anchor_top = 1.0
 	anchor_bottom = 1.0
+	grow_vertical = Control.GROW_DIRECTION_BEGIN
 	offset_left = 16.0
 	offset_right = 16.0 + WIDTH
-	# 高度 = 7 行 + 内边距；用 top 负偏移把底边钉在屏幕下方
 	var content_h := float(VISIBLE_ROWS * LINE_HEIGHT)
-	offset_top = -(content_h + 16.0 + 12.0)
 	offset_bottom = -16.0
-
-	var box := StyleBoxFlat.new()
-	box.bg_color = Color(0.04, 0.06, 0.08, 0.62)
-	box.border_color = Color(0.75, 0.68, 0.50, 0.28)
-	box.set_border_width_all(1)
-	box.set_corner_radius_all(6)
-	box.content_margin_left = 8
-	box.content_margin_right = 8
-	box.content_margin_top = 6
-	box.content_margin_bottom = 6
-	add_theme_stylebox_override("panel", box)
+	theme = preload("res://styles/paper_theme.tres")
+	var frame := get_theme_stylebox("panel", &"Panel").duplicate() as StyleBox
+	frame.content_margin_left = 17
+	frame.content_margin_right = 17
+	frame.content_margin_top = 12
+	frame.content_margin_bottom = 12
+	add_theme_stylebox_override("panel", frame)
 
 	_scroll = ScrollContainer.new()
 	_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
-	_scroll.custom_minimum_size = Vector2(WIDTH - 16.0, content_h)
+	_scroll.custom_minimum_size = Vector2(0, content_h)
 	_scroll.mouse_filter = Control.MOUSE_FILTER_PASS
 	_scroll.clip_contents = true
 	_scroll.add_theme_stylebox_override("panel", StyleBoxEmpty.new())
 	add_child(_scroll)
+	offset_top = offset_bottom - get_combined_minimum_size().y
 
 	_lines = VBoxContainer.new()
 	_lines.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -89,11 +87,10 @@ func push(text: String) -> void:
 	var now := Time.get_time_dict_from_system()
 	stamp.text = "[%02d:%02d]" % [int(now["hour"]), int(now["minute"])]
 	stamp.custom_minimum_size = Vector2(60, 0)
+	stamp.vertical_alignment = VERTICAL_ALIGNMENT_TOP
 	stamp.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	stamp.add_theme_font_size_override("font_size", 17)
-	stamp.add_theme_color_override("font_color", Color(0.62, 0.66, 0.62, 0.9))
-	stamp.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.8))
-	stamp.add_theme_constant_override("outline_size", 3)
+	stamp.add_theme_color_override("font_color", Paper.SOFT_INK)
 	stamp.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.add_child(stamp)
 
@@ -105,9 +102,7 @@ func push(text: String) -> void:
 	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	label.add_theme_font_size_override("normal_font_size", 18)
-	label.add_theme_color_override("default_color", Color(0.88, 0.90, 0.86))
-	label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.8))
-	label.add_theme_constant_override("outline_size", 3)
+	label.add_theme_color_override("default_color", Paper.INK)
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	label.text = _bbcode_for(t)
 	row.add_child(label)
@@ -175,63 +170,48 @@ func clear() -> void:
 
 ## 按消息内容挑一个颜色（调用方不用传，自动判定）。
 func _color_for(text: String) -> Color:
-	var tier_colors := {
-		"白": Color(0.82, 0.82, 0.82),
-		"蓝": Color(0.42, 0.72, 1.00),
-		"紫": Color(0.76, 0.52, 1.00),
-		"粉": Color(1.00, 0.58, 0.88),
-		"橙": Color(1.00, 0.72, 0.32),
-	}
 	if text.contains("掉落") or text.contains("装备"):
-		for key in tier_colors.keys():
-			if text.contains("（%s）" % key) or text.contains("(%s)" % key):
-				return tier_colors[key]
+		for tier in TIER_INK:
+			if text.contains("（%s）" % tier) or text.contains("(%s)" % tier):
+				return Color(CN_COLORS[TIER_INK[tier]])
 
-	if text.contains("胜利"):
-		return Color(0.42, 1.00, 0.76)
+	if text.contains("胜利") or text.begins_with("开始自动巡逻"):
+		return Color(CN_COLORS["绿色"])
 	if text.contains("失败") or text.contains("无法") or text.contains("不足"):
-		return Color(1.00, 0.48, 0.42)
+		return Color(CN_COLORS["红色"])
 	if text.contains("升级") or text.contains("等级"):
-		return Color(0.55, 0.95, 1.00)
-	if text.contains("金币") or text.contains("获得") or text.contains("奖励"):
-		return Color(1.00, 0.86, 0.40)
-	# 巡逻开关：开=青绿，关=灰白
-	if text.begins_with("开始自动巡逻"):
-		return Color(0.42, 1.00, 0.76)
+		return Color(CN_COLORS["青色"])
+	if text.contains("金币") or text.contains("获得") or text.contains("奖励") \
+			or text.begins_with("欢迎") or text.begins_with("【开局】") or text.begins_with("抵达") \
+			or text.contains("买下") or text.contains("卖出"):
+		return Color(CN_COLORS["金色"])
 	if text.begins_with("停止自动巡逻"):
-		return Color(0.80, 0.82, 0.78)
-	# 欢迎语 / 开局提示：金色
-	if text.begins_with("欢迎") or text.begins_with("【开局】"):
-		return Color(1.00, 0.86, 0.40)
-	# 抵达某地：整条用金色，地图名也跟着亮起来
-	if text.begins_with("抵达"):
-		return Color(1.00, 0.86, 0.40)
-	if text.contains("买下") or text.contains("卖出"):
-		return Color(0.98, 0.90, 0.62)
+		return Paper.SOFT_INK
 	if text.contains("拜师") or text.contains("门派"):
-		return Color(0.82, 0.70, 1.00)
+		return Color(CN_COLORS["紫色"])
 	if text.contains("上阵") or text.contains("下阵") or text.contains("队伍"):
-		return Color(0.72, 0.92, 0.98)
-	return Color(0.88, 0.90, 0.86)
+		return Color(CN_COLORS["蓝色"])
+	return Paper.INK
 
 
-## 中文颜色标签 → BBCode 颜色。写消息时直接用中文，调用方不用记色值。
+## 保留中文颜色标签，字色适配浅纸面。
 const CN_COLORS := {
-	"绿色": "#6bffc2",
-	"青色": "#8cf2ff",
-	"金色": "#ffdb66",
-	"黄色": "#ffe082",
-	"蓝色": "#6bb8ff",
-	"紫色": "#c285ff",
-	"粉色": "#ff94e0",
-	"橙色": "#ffb852",
-	"红色": "#ff7a6b",
-	"白色": "#e6e8e2",
-	"灰色": "#9aa09a",
+	"绿色": "#256247",
+	"青色": "#175e64",
+	"金色": "#775119",
+	"黄色": "#76511e",
+	"蓝色": "#255477",
+	"紫色": "#69417f",
+	"粉色": "#8e3e67",
+	"橙色": "#904c1d",
+	"红色": "#9c342a",
+	"白色": "#433123",
+	"灰色": "#695844",
 }
+const TIER_INK := {"白": "白色", "蓝": "蓝色", "紫": "紫色", "粉": "粉色", "橙": "橙色"}
 
 
-## 把 "[绿色]xxx[/绿色]" 换成 "[color=#6bffc2]xxx[/color]"。
+## 把 "[绿色]xxx[/绿色]" 换成 "[color=#256247]xxx[/color]"。
 func _to_bbcode(text: String) -> String:
 	var out := text
 	for cn in CN_COLORS.keys():

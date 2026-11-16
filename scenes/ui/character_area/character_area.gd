@@ -1,6 +1,8 @@
 extends HBoxContainer
 class_name CharacterArea
 
+const Paper := preload("res://styles/paper_ui.gd")
+
 ## 角色形象区：◀ [形象 + 名字牌] ▶，左右各 3 个装备栏（头盔 / 武器 / 腰带 · 项链 / 衣服 / 鞋子）。
 ##
 ## ── 它是干什么的 ──
@@ -64,6 +66,7 @@ func _ready() -> void:
 		player_frame.mouse_filter = Control.MOUSE_FILTER_STOP
 		player_frame.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 		player_frame.focus_mode = Control.FOCUS_ALL
+		Paper.add_portrait_wash(player_frame)
 		_frame_base_style = player_frame.get_theme_stylebox("panel")
 		player_frame.focus_entered.connect(_on_player_frame_focus.bind(true))
 		player_frame.focus_exited.connect(_on_player_frame_focus.bind(false))
@@ -222,24 +225,24 @@ func _refresh_slot(slot: Button, slot_type: int, character: UnitStats) -> void:
 		slot.icon = null
 		slot.disabled = true
 		slot.add_theme_stylebox_override("disabled",
-				_slot_style(Color(1, 1, 1, 0.14), Color(1, 1, 1, 0.03), bottom_margin))
+				_slot_style(Paper.PALE_EDGE, Paper.INSET, bottom_margin))
 		if tag != null:
 			_set_tag_center(tag)
-			tag.modulate = Color(1, 1, 1, 0.42)
+			tag.add_theme_color_override("font_color", Paper.SOFT_INK)
 		var who: String = character.name if character != null else "角色"
 		slot.tooltip_text = "%s栏：%s现在没戴这个" % [ItemBase.equip_type_name(slot_type), who]
 		return
 	slot.icon = item.item_icon
 	slot.disabled = false
 	slot.tooltip_text = ""      # 有属性卡就不再设原生 tooltip，免得两个框叠一起
-	var tier_color: Color = Global.TIER_COLORS.get(item.item_tier, Color(1, 1, 1, 0.4))
+	var tier_color: Color = Global.TIER_COLORS.get(item.item_tier, Paper.PALE_EDGE)
 	# 底色也跟品质走
-	slot.add_theme_stylebox_override("normal", _slot_style(tier_color, _tier_bg(tier_color, 0.30), bottom_margin))
-	slot.add_theme_stylebox_override("hover", _slot_style(tier_color, _tier_bg(tier_color, 0.48), bottom_margin))
-	slot.add_theme_stylebox_override("pressed", _slot_style(Color(1, 0.9, 0.5, 1.0), _tier_bg(tier_color, 0.55), bottom_margin))
+	slot.add_theme_stylebox_override("normal", _slot_style(Paper.quality_edge(tier_color), Paper.quality_fill(tier_color, 0.24), bottom_margin))
+	slot.add_theme_stylebox_override("hover", _slot_style(Paper.quality_edge(tier_color), Paper.quality_fill(tier_color, 0.39), bottom_margin))
+	slot.add_theme_stylebox_override("pressed", _slot_style(Paper.VERMILION, Paper.quality_fill(tier_color, 0.48), bottom_margin))
 	if tag != null:
 		_set_tag_bottom(tag)
-		tag.modulate = Color(1, 1, 1, 0.85)
+		tag.add_theme_color_override("font_color", Paper.INK)
 
 
 ## 悬停时弹属性卡：**现取**当前角色这一栏的装备（不能提前绑定 item）。
@@ -293,11 +296,11 @@ func _slot_style(border: Color, bg: Color, bottom_margin: float) -> StyleBoxFlat
 
 ## 每格人像边长（不含底部名字行）。
 const PICKER_SLOT_SIZE := 96.0
-const PICKER_BG := Color(1, 1, 1, 0.05)
-const PICKER_BG_HOVER := Color(1.0, 0.82, 0.35, 0.20)
-const PICKER_BORDER := Color(1, 1, 1, 0.16)
-const PICKER_BORDER_HOVER := Color(1.0, 0.84, 0.42, 1.0)
-const PICKER_TEXT := Color(0.88, 0.85, 0.78, 1.0)
+const PICKER_BG := Paper.INSET
+const PICKER_BG_HOVER := Paper.PAPER
+const PICKER_BORDER := Paper.PALE_EDGE
+const PICKER_BORDER_HOVER := Paper.VERMILION
+const PICKER_TEXT := Paper.INK
 
 
 ## 形象框被点：开/关选择器。
@@ -335,11 +338,7 @@ func _ensure_picker() -> void:
 	_picker = PanelContainer.new()
 	_picker.name = "CharacterPicker"
 	_picker.visible = false
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.043, 0.047, 0.067, 0.985)
-	style.border_color = Color(0.639, 0.518, 0.286, 1.0)
-	style.set_border_width_all(2)
-	style.set_corner_radius_all(12)
+	var style := get_theme_stylebox("panel", &"PanelContainer").duplicate() as StyleBox
 	style.content_margin_left = 14
 	style.content_margin_right = 14
 	style.content_margin_top = 12
@@ -551,6 +550,3 @@ func _default_character() -> UnitStats:
 	return Global.main_player_selected
 
 
-## 品质底色：取品质色的色相，明度压到 0.7、透明度压到 alpha。
-func _tier_bg(color: Color, alpha: float) -> Color:
-	return Color(color.r * 0.7, color.g * 0.7, color.b * 0.7, alpha)

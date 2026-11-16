@@ -1,6 +1,8 @@
 extends Control
 class_name PauseMenu
 
+const Paper := preload("res://styles/paper_ui.gd")
+
 ## 操作菜单（Esc 唤出）。
 ##
 ## ── 在系统里的位置 ──
@@ -41,7 +43,10 @@ signal title_requested
 
 
 func _ready() -> void:
+	Paper.add_panel_pattern($Panel)
 	hide()
+	Paper.add_heading($Panel/Margin/VBox, "操作菜单", "单")
+	Paper.add_shortcut($Panel/Margin/VBox, "Esc", "继续游戏")
 	# 接在代码里而不是 .tscn 的 [connection]：按钮名和信号名都在这一屏能看全，
 	# 少一处"改了名字忘了改连线"的隐患（本工程的 UI 节点大多这么做）。
 	resume_button.pressed.connect(_emit_resume)

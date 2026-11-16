@@ -4,6 +4,7 @@ extends Node2D
 @onready var _pose: Node2D = $Pose
 @onready var _preview: Sprite2D = $Pose/Weapon
 @onready var _player: AnimationPlayer = $AnimationPlayer
+@onready var _preview_rest_transform: Transform2D = _preview.transform
 
 var _pivot: Node2D
 var _weapon_frames: AnimatedSprite2D
@@ -51,9 +52,16 @@ func _sample(time: float, facing: float, portrait_scale: float) -> void:
 		return
 	_player.seek(time, true)
 	var travel := Vector2(_pose.position.x * facing, _pose.position.y) * portrait_scale
-	_pivot.position = _rest_transform.origin + travel
-	_pivot.rotation = _rest_transform.get_rotation() + _pose.rotation * facing
-	_pivot.scale = _rest_transform.get_scale() * _pose.scale
+	var pose_transform := Transform2D(
+		_rest_transform.get_rotation() + _pose.rotation * facing,
+		_rest_transform.get_scale() * _pose.scale,
+		_rest_transform.get_skew(),
+		_rest_transform.origin + travel
+	)
+	# 武器局部轨迹使用相对于预览握点的变换，例如普攻时沿刀身轴线镜像。
+	if not _preview.transform.is_equal_approx(_preview_rest_transform):
+		pose_transform *= _preview_rest_transform.affine_inverse() * _preview.transform
+	_pivot.transform = pose_transform
 	_pivot.modulate = _rest_modulate * _pose.modulate
 	if is_instance_valid(_weapon_frames):
 		var count := _weapon_frames.sprite_frames.get_frame_count(_weapon_frames.animation)
@@ -75,3 +83,4 @@ func restore() -> void:
 		_weapon_frames.set_frame_and_progress(_rest_frame, _rest_progress)
 	_weapon_frames = null
 	_player.stop()
+	_preview.transform = _preview_rest_transform

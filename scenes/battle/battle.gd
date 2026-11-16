@@ -8,6 +8,8 @@
 extends Node2D
 class_name Battle
 
+const Paper := preload("res://styles/paper_ui.gd")
+
 ## 回合制战斗场景（梦幻西游式骨架）：状态机驱动，出手顺序每回合按 round_speed 重排。
 ## 直接 F6 可用 DEMO_* 起示例战斗；正式入口是 start_battle()，结束接 battle_ended。
 ## 扩展点：技能 .tres + _perform_skill()；伤害/暴击/格挡在 BattleUnit；敌方 AI 在 _enemy_act()。
@@ -1691,7 +1693,7 @@ func _ensure_auto_banner() -> void:
 	layer.layer = 20
 	add_child(layer)
 
-	# 和地图上的「自动巡逻中」同一套样式：顶部中央小胶囊
+	# 与地图的巡逻状态共用题牌样式。
 	var panel := Panel.new()
 	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	panel.anchor_left = 0.5
@@ -1700,17 +1702,11 @@ func _ensure_auto_banner() -> void:
 	panel.anchor_bottom = 0.0
 	panel.offset_left = -128.0
 	panel.offset_right = 128.0
-	panel.offset_top = 14.0
-	panel.offset_bottom = 56.0
+	panel.offset_top = 142.0
+	panel.offset_bottom = 184.0
 
-	var box := StyleBoxFlat.new()
-	box.bg_color = Color(0.05, 0.16, 0.15, 0.85)
-	box.border_color = Color(0.45, 0.95, 0.80, 0.85)
-	box.set_border_width_all(1)
-	box.set_corner_radius_all(20)
-	box.content_margin_left = 14
-	box.content_margin_right = 14
-	panel.add_theme_stylebox_override("panel", box)
+	panel.theme = Paper.THEME
+	panel.theme_type_variation = &"PaperPlaque"
 
 	var row := HBoxContainer.new()
 	row.alignment = BoxContainer.ALIGNMENT_CENTER

@@ -6,32 +6,33 @@
 extends Panel
 class_name TurnOrder
 
+const Paper := preload("res://styles/paper_ui.gd")
+
 ## 出手顺序条：按 Battle 给的队列显示图标，当前出手者加亮放大。
 
 # ── 视觉常量（全局唯一 UI，配色统一比可配重要）──
 
 ## 我方边框色。
-const PLAYER_BORDER := Color(0.35, 0.85, 0.45)
+const PLAYER_BORDER := Color("#477756")
 ## 敌方边框色。
-const ENEMY_BORDER := Color(0.95, 0.42, 0.42)
+const ENEMY_BORDER := Color("#a34f45")
 ## 「下一个出手」箭头色。
-const NEXT_ARROW := Color(1.0, 0.85, 0.3)
+const NEXT_ARROW := Paper.VERMILION
 ## 阵亡单位整体透明度（panel.modulate.a）。阵亡的已从队列剔除，这里只是兜底。
 const DEAD_ALPHA := 0.3
 ## 「本轮 / 下一轮」分隔线的颜色：暗金，和回合数那排字同色系但更淡（不抢头像）。
-const DIVIDER_COLOR := Color(1.0, 0.85, 0.5, 0.6)
+const DIVIDER_COLOR := Paper.SOFT_INK
 
 # ── 节点引用与运行时状态 ──
 
 ## 头像容器（%Icons），由 _rebuild() 动态增删子节点。
 @onready var icons: HBoxContainer = %Icons
+@onready var content: VBoxContainer = $VBox
 ## 顶部常驻的回合数字（"第 N 回合"里的 N，红色）。
 @onready var round_number: Label = %RoundNumber
 
 ## 面板左右内缩（VBox 的左右 offset 之和）—— 算自适应宽度时要加回来。
-const H_PADDING := 24.0
-## 自适应宽度下限，避免空队列时面板缩成一条线。
-const MIN_WIDTH := 96.0
+const H_PADDING := 34.0
 
 ## 单位队列（引用，不是拷贝）。弱类型 Array 才能直接接收 Array[BattleUnit]，代价是无静态类型检查。
 var _queue: Array = []
@@ -104,18 +105,17 @@ func _rebuild() -> void:
 			icons.add_child(_make_round_divider())
 		# `unit == _current` 是引用比较，判断"这个是不是当前出手的人"。
 		icons.add_child(_make_icon(ordered[i], ordered[i] == _current))
-	# 黑底宽度跟着头像数量走（右边缘固定贴屏幕，所以改左偏移）。
+	# 右边贴近伤害统计，队列变长时向左展开。
 	# 必须延后一帧：_make_icon 刚 add_child，容器的最小尺寸这一帧还没算完。
 	_fit_width.call_deferred()
 
 
-## 把面板宽度收成"刚好装下这一排头像"。
-## 锚点在屏幕右上（anchor_left = 1），所以宽度 = -(内容宽 + 左右内缩)。
+## 固定右侧间距，随头像数量调整宽度。
 func _fit_width() -> void:
 	if icons == null:
 		return
-	var w := maxf(MIN_WIDTH, icons.get_combined_minimum_size().x + H_PADDING)
-	offset_left = -12.0 - w
+	var w := content.get_combined_minimum_size().x + H_PADDING
+	offset_left = offset_right - w
 
 
 ## 刷新顶部常驻的回合数（"第 N 回合"里的 N）。
@@ -177,8 +177,8 @@ func _make_icon(unit: BattleUnit, is_current: bool) -> Control:
 	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.10, 0.10, 0.12, 0.92)
-	style.set_corner_radius_all(10)
+	style.bg_color = Paper.PAPER if is_current else Paper.INSET
+	style.set_corner_radius_all(5)
 	style.set_border_width_all(3 if is_current else 2)
 	# 边框颜色只表达阵营，**当前出手者不改色**：高亮只靠"放大一点 + 边框略粗"。
 	# 阵营看的是 unit.is_player（BattleUnit 的运行时属性），不是 stats 里的东西 ——
@@ -198,7 +198,19 @@ func _make_icon(unit: BattleUnit, is_current: bool) -> Control:
 	panel.add_child(tex)
 	# 入树后再设锚点预设：让贴图铺满 Panel。放在 add_child 之后是更稳的写法
 	# （锚点预设会参考父节点的 rect，父节点未定之前应用可能得到意外结果）。
-	tex.set_anchors_preset(Control.PRESET_FULL_RECT)
+	tex.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	tex.offset_left = 3
+	tex.offset_top = 3
+	tex.offset_right = -3
+	tex.offset_bottom = -3
+	if is_current:
+		var mark := Label.new()
+		mark.text = "◆"
+		mark.position = Vector2(4, 1)
+		mark.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		mark.add_theme_font_size_override("font_size", 12)
+		mark.add_theme_color_override("font_color", Paper.VERMILION)
+		panel.add_child(mark)
 
 	# 阵亡置灰：只调 alpha，保留边框颜色信息（还能看出他是哪一方的）。
 	if not unit.alive:

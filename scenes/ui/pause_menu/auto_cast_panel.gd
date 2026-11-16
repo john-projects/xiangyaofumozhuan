@@ -1,4 +1,6 @@
 extends Control
+
+const Paper := preload("res://styles/paper_ui.gd")
 ## Per-character skill choices, keyed by character resource and round number.
 
 signal back_requested
@@ -15,6 +17,14 @@ var _plan: Dictionary
 
 
 func _ready() -> void:
+	Paper.add_panel_pattern($Center/Panel)
+	var frame := get_theme_stylebox("panel", &"Panel").duplicate() as StyleBox
+	frame.content_margin_left = 32
+	frame.content_margin_right = 32
+	frame.content_margin_top = 25
+	frame.content_margin_bottom = 25
+	$Center/Panel.add_theme_stylebox_override("panel", frame)
+	Paper.style_heading($Center/Panel/Content/Title, "策")
 	hide()
 	_back.pressed.connect(func(): back_requested.emit())
 
@@ -151,5 +161,5 @@ func _label(value: String, font_size: int) -> Label:
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	label.add_theme_font_size_override("font_size", font_size)
-	label.add_theme_color_override("font_color", Color(0.92, 0.86, 0.73))
+	label.add_theme_color_override("font_color", Paper.INK)
 	return label

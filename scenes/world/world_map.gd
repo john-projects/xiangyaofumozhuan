@@ -10,6 +10,7 @@ class_name WorldMap
 extends Node2D
 
 const HeldWeaponFx := preload("res://scenes/characters/held_weapon_fx.gd")
+const Paper := preload("res://styles/paper_ui.gd")
 
 ## 可探索的地图：底图等比放大成世界，玩家自由走动、相机跟随，与 NPC 对话后传送。
 ## 传送双向：哪张图能去哪张由各图 NPC 的 destinations 决定；从 A 到 B 会优先出现在 B 里"指回 A"的 NPC 旁。
@@ -45,8 +46,6 @@ const STOP_KEEP := 3.0
 ## 巡逻时每隔这么多秒换一次方向（再叠加 ±0.6 抖动）。
 @export var patrol_turn_min := 1.0
 @export var patrol_turn_max := 2.6
-## 巡逻提示条的颜色（顶部那个渐变框）。
-@export var patrol_banner_color := Color(0.25, 0.85, 0.75, 0.30)
 
 
 ## 玩家在 NPC 面板里选了目的地。参数是目标地图 id（MapData.id）。
@@ -108,19 +107,11 @@ const BAG_PANEL_SCENE := preload("res://scenes/ui/bag_panel/bag_panel.tscn")
 const STATS_PANEL_SCENE := preload("res://scenes/ui/stats_panel/stats_panel.tscn")
 ## 拍地图截图（战斗背景）时最多等多少帧 frame_post_draw；headless / 最小化时渲染不推进，超时就放弃。
 const PHOTO_WAIT_FRAMES := 20
-## 对话面板最小高度。**必须等于 world_map.tscn 里 TravelPanel 的原始高度 200**，否则面板高度会莫名跳一下。
-const PANEL_MIN_HEIGHT := 200.0
-## 对话面板离屏幕底边的留白（像素）。面板是底部居中的横条，宽度靠 tscn 里的左右锚点 0.125 / 0.875。
+## 对话卷轴锚定屏幕底边，选项内容太多时在面板内滚动。
+const PANEL_MIN_HEIGHT := 240.0
 const PANEL_BOTTOM_MARGIN := 24.0
-## 选项按钮高度（像素）。不要用 52：文字只占 20 多，会显得很空；34 + 2px 行距刚好紧凑。
-const PANEL_OPTION_HEIGHT := 34.0
+const PANEL_OPTION_HEIGHT := 38.0
 const PANEL_OPTION_FONT := 20
-## 选项文字的左内边距（像素）：默认主题只给 4px，会贴着边框。
-const PANEL_BUTTON_INDENT := 16.0
-## 可选项的文字颜色（金色）；置灰的（已入门派/种族不符）保持灰色。
-const PANEL_OPTION_COLOR := Color(0.95, 0.82, 0.45)
-## 可选项在悬停/按下/聚焦时的颜色（更亮）。
-const PANEL_OPTION_COLOR_ACTIVE := Color(1.0, 0.92, 0.62)
 
 ## 玩家移动时的边缘留白（像素，世界坐标）；_move_player() 用它做 clamp。
 const EDGE_MARGIN := 60.0
@@ -238,11 +229,7 @@ var _patrol_anchor := Vector2.ZERO
 var _patrol_anchor_valid := false
 ## 连续走不动的累计时间（超过阈值就换方向脱困）。
 var _patrol_stuck := 0.0
-## 巡逻提示条（运行时创建，挂在 UI 层最上面）。
-var _patrol_banner: Control = null
-var _patrol_banner_label: Label = null
-var _patrol_tween: Tween = null
-## 右上角的「开始巡逻 / 停止巡逻」小按钮。
+## 顶部居中的「开始巡逻 / 停止巡逻」按钮。
 var _patrol_toggle: Button = null
 
 ## 左下角常驻消息栏（共用组件）。
@@ -325,10 +312,11 @@ var _leader_key := ""
 ## 右上角的伤害统计面板（和战斗里那块是同一个场景，数据都读 Global）。
 ## 它不在 _setup_overlays() 里创建，而是 world_map.tscn 直接摆好的常驻 HUD。
 @onready var battle_stats: BattleStatsPanel = $UI/BattleStats
-## 面板里的 NPC 名字 + 冒号（和台词**同一行**，见 PanelLine 那个 HBox）。
 @onready var panel_name: Label = %PanelName
-## NPC 台词。名字在它左边同一行（「名字：台词」），所以比名字单独一行时矮一截。
 @onready var panel_dialogue: Label = %PanelDialogue
+@onready var panel_content: HBoxContainer = %PanelContent
+@onready var panel_portrait: Control = %PanelPortrait
+@onready var portrait_art: TextureRect = %PortraitArt
 ## 面板里动态生成传送按钮的竖排容器（每次打开都会清空重建）。
 @onready var panel_buttons: VBoxContainer = %PanelButtons
 ## 面板右下角的「再想想」按钮，等价于按 Esc 关闭。
@@ -380,7 +368,6 @@ func _ready() -> void:
 		_patrol_anchor_valid = false       # 下一帧由 _update_patrol 记录真正的中心
 		_patrol_dir = _random_patrol_dir()
 		_patrol_turn_left = randf_range(patrol_turn_min, patrol_turn_max)
-		call_deferred("_update_patrol_banner")
 
 	_encounter_grace_left = encounter_grace
 	_encounter_target = maxf(0.5, encounter_interval + randf_range(-encounter_jitter, encounter_jitter))
@@ -435,13 +422,17 @@ func _ready() -> void:
 	# ── UI ──
 	# 面板上的按钮只连一次 pressed；本节点随场景销毁，连接会自动断，不用手动 disconnect。
 	close_button.pressed.connect(_close_panel)
+	Paper.add_panel_pattern(panel)
+	Paper.style_heading(panel_name, "话")
+	Paper.add_portrait_wash(panel_portrait)
+	panel_content.minimum_size_changed.connect(_fit_panel_height)
+	get_viewport().size_changed.connect(_fit_panel_height)
 	map_name_label.text = _map.display_name
+	map_name_label.reset_size()
 	# 初始没有最近 NPC，面板先藏起来。
 	panel.hide()
 	# 浮层放在 _map 已拿到之后：操作菜单要按 _map.battle_enabled 决定「进入战斗」灰不灰。
 	_setup_overlays()
-	# 「再想想」和选项按钮一样：文字居左 + 同样的左内边距（整块看起来像一张选项列表）
-	_indent_button(close_button)
 	_show_result()
 
 
@@ -513,14 +504,6 @@ func _layout_toast_stack() -> void:
 	# 锚点在屏幕正中（0.5/0.5），整体上移 TOAST_RISE，别压在角色身上。
 	toast_stack.offset_top = -TOAST_RISE
 	toast_stack.offset_bottom = toast_stack.get_combined_minimum_size().y - TOAST_RISE
-
-
-## 弹窗底板：半透深色 + 细金边 + 圆角。
-## 调色思路：整块调透比"字调透"安全 —— 字淡了在花纹地图上直接读不出，底板淡了只是"轻"。
-## alpha 0.72 是折中：足够压住底下的花纹，又不会像对话框那样怼在脸上。
-## 底板样式统一由 UiToast 提供（地图提示与团体面板共用同一套外观）。
-func _toast_style() -> StyleBoxFlat:
-	return UiToast.make_style()
 
 
 func _world_pos(normalized: Vector2) -> Vector2:
@@ -819,7 +802,7 @@ func _update_nearest() -> void:
 ## 提前返回：_map_size 为 ZERO（没配图）或 _ui_open()（看面板/菜单时冻住，否则 WASD 会边选边跑）。
 func _process(delta: float) -> void:
 	# 浮层开关会改面板可见性，所以在提前返回之前先同步一次（否则开着背包就再也不会更新）。
-	_sync_battle_stats_visible()
+	_sync_map_hud_visibility()
 	if _map_size == Vector2.ZERO or _ui_open():
 		return
 	_move_player(delta)
@@ -833,15 +816,14 @@ func _process(delta: float) -> void:
 	_update_encounter(delta)
 
 
-## 右上角伤害统计面板：开任何浮层（背包/属性/队伍/商店/暂停/对话/自动施法）时先收起来。
-## 为什么：背包/属性面板贴右边、几乎占满整屏，统计面板只会在它上面露半截，很难看。
-## 只是 visible 切换，数据照旧由 Global 的信号刷新，收起来再展开不会丢。
-func _sync_battle_stats_visible() -> void:
-	if battle_stats == null:
-		return
-	var want := not _ui_open()
-	if battle_stats.visible != want:
-		battle_stats.visible = want
+## 高窗展开时收起地图题牌和巡逻入口，避免与面板标题抢占空间。
+func _sync_map_hud_visibility() -> void:
+	if battle_stats != null:
+		battle_stats.visible = not _ui_open()
+	var show_badges := not (_stats_open or _bag_open or _shop_open)
+	map_name_label.visible = show_badges
+	if _patrol_toggle != null:
+		_patrol_toggle.visible = show_badges
 
 
 ## 按输入向量移动玩家并夹在地图内；dash 按住即持续冲刺，flip_h 只在 |dir.x| > 0.01 时更新以免朝向抖动。
@@ -1847,37 +1829,14 @@ func _open_panel(npc: WorldNPC) -> void:
 
 	_panel_open = true
 	_panel_npc = npc
-	panel_name.text = "%s：" % npc.data.display_name
+	panel_name.text = npc.data.display_name
+	portrait_art.texture = npc.data.texture
+	panel_portrait.visible = portrait_art.texture != null
 	panel_dialogue.text = npc.data.dialogue
 	_rebuild_panel_buttons()
 	# 顺序很重要：先 show() 再设焦点（grab_focus 对隐藏控件静默失败，键盘会失灵且无报错）。
 	panel.show()
 	_set_focus_ring(_collect_focusable(panel_buttons))
-
-
-## 把可选项文字染成金色（悬停/按下/聚焦更亮）。只给能点的上色，置灰的保持灰色。
-func _paint_option_gold(button: Button) -> void:
-	button.add_theme_color_override("font_color", PANEL_OPTION_COLOR)
-	button.add_theme_color_override("font_hover_color", PANEL_OPTION_COLOR_ACTIVE)
-	button.add_theme_color_override("font_pressed_color", PANEL_OPTION_COLOR_ACTIVE)
-	button.add_theme_color_override("font_focus_color", PANEL_OPTION_COLOR_ACTIVE)
-
-
-## 给按钮加左内边距，并把上下内边距压到 2px。
-## ⚠ 所有状态一起改：只改 normal，鼠标移上去换 hover 样式时文字会左右跳。
-## ⚠ 上下边距也要压：默认 4px 会让最小高度 ≈35，超过 PANEL_OPTION_HEIGHT = 34，行距看起来仍偏宽。
-func _indent_button(button: Button) -> void:
-	for state in ["normal", "hover", "pressed", "disabled", "focus"]:
-		var base := button.get_theme_stylebox(state)
-		if base == null:
-			continue
-		var style := base.duplicate() as StyleBox
-		if style == null:
-			continue
-		style.content_margin_left = PANEL_BUTTON_INDENT
-		style.content_margin_top = 2
-		style.content_margin_bottom = 2
-		button.add_theme_stylebox_override(state, style)
 
 
 ## 按当前 NPC 的交互类型重建按钮区（每次打开面板、招募成功后都调）。
@@ -1899,7 +1858,6 @@ func _rebuild_panel_buttons() -> void:
 			# SELL_WEAPONS 正常走不到这里（商人在 _open_panel() 就分流了）；
 			# 剩下的都是纯对话 NPC，不需要额外的操作说明。
 			pass
-	# 选项统一改样式：铺满整行、文字居左、留左内边距；能点的染金色；高度/字号也在这里统一。
 	for child in panel_buttons.get_children():
 		if child is Button:
 			var button := child as Button
@@ -1907,26 +1865,25 @@ func _rebuild_panel_buttons() -> void:
 			button.custom_minimum_size = Vector2(0, PANEL_OPTION_HEIGHT)
 			button.add_theme_font_size_override("font_size", PANEL_OPTION_FONT)
 			button.alignment = HORIZONTAL_ALIGNMENT_LEFT
-			_indent_button(button)
-			if not button.disabled:
-				_paint_option_gold(button)
+			button.theme_type_variation = &"PaperPrimary"
+			button.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	_fit_panel_height()
 
 
-## 按按钮区实际需要把面板撑高（tscn 里默认只有 200），否则按钮和「再想想」会漏到面板外。
-## 面板锚在屏幕底边（anchor_top = anchor_bottom = 1），只改 offset_top 就是"向上长高"。
-## 上限取视口高度 85%，小窗口下不会顶出屏幕。
+## 限制卷轴高度，长台词和选项在 ScrollContainer 内仍可访问。
 func _fit_panel_height() -> void:
-	var needed := 0.0
-	for child in panel_buttons.get_children():
-		needed += child.get_combined_minimum_size().y
-	if panel_buttons.get_child_count() > 1:
-		needed += panel_buttons.get_theme_constant("separation") * float(panel_buttons.get_child_count() - 1)
-	# 台词 64（名字已并进第一行）+ 关闭按钮 40 + 外框上下边距 48 + 两段间隔（6×2）= 164
-	var total := needed + 164.0
-	total = clampf(total, PANEL_MIN_HEIGHT, get_viewport_rect().size.y * 0.85)
+	if not _panel_open:
+		return
+	var margin := panel.get_node(^"Margin") as MarginContainer
+	var column := margin.get_node(^"VBox") as VBoxContainer
+	var chrome := float(margin.get_theme_constant("margin_top") + margin.get_theme_constant("margin_bottom"))
+	chrome += close_button.get_combined_minimum_size().y + column.get_theme_constant("separation")
+	var available := get_viewport_rect().size.y * 0.85
+	var total := clampf(panel_content.get_combined_minimum_size().y + chrome,
+			minf(PANEL_MIN_HEIGHT, available), available)
 	panel.offset_top = -(total + PANEL_BOTTOM_MARGIN)
 	panel.offset_bottom = -PANEL_BOTTOM_MARGIN
+
 
 ## 把 MapNPC.Action.AUTO 解析成"具体会干什么"：有 destinations 就是 TELEPORT，否则 TALK。
 ## 静态函数："这条老规则"只写在这里一份，老的 .tres 不用改就能继续用。
@@ -2253,7 +2210,7 @@ func toggle_patrol() -> void:
 		_patrol_turn_left = randf_range(patrol_turn_min, patrol_turn_max)
 	else:
 		_patrol_dir = Vector2.ZERO
-	_update_patrol_banner()
+	_refresh_patrol_toggle()
 
 
 func is_patrolling() -> bool:
@@ -2283,7 +2240,7 @@ func _update_patrol(delta: float) -> void:
 	if _ui_open():
 		_patrol_on = false
 		_patrol_dir = Vector2.ZERO
-		_update_patrol_banner()
+		_refresh_patrol_toggle()
 		return
 	_patrol_turn_left -= delta
 
@@ -2321,75 +2278,6 @@ func _patrol_bump() -> void:
 
 # ── 顶部提示条 ──
 
-func _ensure_patrol_banner() -> void:
-	if _patrol_banner != null:
-		return
-	# 顶部中央的小胶囊（不是通栏渐变），样式贴近战斗的出手顺序条
-	var panel := Panel.new()
-	panel.name = "PatrolBanner"
-	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	panel.anchor_left = 0.5
-	panel.anchor_right = 0.5
-	panel.anchor_top = 0.0
-	panel.anchor_bottom = 0.0
-	panel.offset_left = -118.0
-	panel.offset_right = 118.0
-	panel.offset_top = 14.0
-	panel.offset_bottom = 56.0
-
-	var box := StyleBoxFlat.new()
-	box.bg_color = Color(0.05, 0.16, 0.15, 0.85)
-	box.border_color = Color(0.45, 0.95, 0.80, 0.85)
-	box.set_border_width_all(1)
-	box.set_corner_radius_all(20)
-	box.content_margin_left = 14
-	box.content_margin_right = 14
-	box.content_margin_top = 4
-	box.content_margin_bottom = 4
-	panel.add_theme_stylebox_override("panel", box)
-
-	var row := HBoxContainer.new()
-	row.alignment = BoxContainer.ALIGNMENT_CENTER
-	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	row.set_anchors_preset(Control.PRESET_FULL_RECT)
-	row.add_theme_constant_override("separation", 8)
-	panel.add_child(row)
-
-	# 左边一个小圆点（呼吸闪烁，表示"正在跑"）
-	var dot := Panel.new()
-	dot.custom_minimum_size = Vector2(10, 10)
-	dot.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	dot.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var dot_box := StyleBoxFlat.new()
-	dot_box.bg_color = Color(0.55, 1.00, 0.85)
-	dot_box.set_corner_radius_all(5)
-	dot.add_theme_stylebox_override("panel", dot_box)
-	row.add_child(dot)
-
-	_patrol_banner_label = Label.new()
-	_patrol_banner_label.text = "自动巡逻中"
-	_patrol_banner_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_patrol_banner_label.add_theme_font_size_override("font_size", 19)
-	_patrol_banner_label.add_theme_color_override("font_color", Color(0.85, 1.0, 0.95))
-	_patrol_banner_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	row.add_child(_patrol_banner_label)
-
-	panel.modulate = Color(1, 1, 1, 0)
-	ui_layer.add_child(panel)
-	_patrol_banner = panel
-
-
-func _update_patrol_banner() -> void:
-	_ensure_patrol_banner()
-	_ensure_patrol_toggle()
-	_refresh_patrol_toggle()
-	if _patrol_banner == null:
-		return
-	if _patrol_tween != null and _patrol_tween.is_valid():
-		_patrol_tween.kill()
-	_patrol_tween = create_tween()
-	_patrol_tween.tween_property(_patrol_banner, "modulate:a", 1.0 if _patrol_on else 0.0, 0.18)
-
 func _ensure_patrol_toggle() -> void:
 	if _patrol_toggle != null:
 		return
@@ -2398,34 +2286,17 @@ func _ensure_patrol_toggle() -> void:
 	btn.text = "开始巡逻  G"
 	btn.focus_mode = Control.FOCUS_NONE
 	btn.mouse_filter = Control.MOUSE_FILTER_STOP
-	# 右上角
-	btn.anchor_left = 1.0
-	btn.anchor_right = 1.0
+	btn.anchor_left = 0.5
+	btn.anchor_right = 0.5
 	btn.anchor_top = 0.0
 	btn.anchor_bottom = 0.0
-	btn.offset_left = -180.0
-	btn.offset_right = -20.0
-	btn.offset_top = 18.0
-	btn.offset_bottom = 58.0
+	btn.offset_left = -95.0
+	btn.offset_right = 95.0
+	btn.offset_top = 16.0
+	btn.offset_bottom = 64.0
 
-	var normal := StyleBoxFlat.new()
-	normal.bg_color = Color(0.06, 0.09, 0.12, 0.72)
-	normal.border_color = Color(0.75, 0.68, 0.50, 0.55)
-	normal.set_border_width_all(1)
-	normal.set_corner_radius_all(6)
-	normal.content_margin_left = 10
-	normal.content_margin_right = 10
-
-	var active := normal.duplicate() as StyleBoxFlat
-	active.bg_color = Color(0.10, 0.42, 0.36, 0.88)
-	active.border_color = Color(0.55, 1.00, 0.85, 0.95)
-
-	btn.add_theme_stylebox_override("normal", normal)
-	btn.add_theme_stylebox_override("hover", normal)
-	btn.add_theme_stylebox_override("pressed", active)
-	btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
-	btn.add_theme_color_override("font_color", Color(0.92, 0.90, 0.82))
-	btn.add_theme_color_override("font_hover_color", Color(1, 0.95, 0.72))
+	btn.theme = Paper.THEME
+	btn.theme_type_variation = &"PaperPatrol"
 	btn.add_theme_font_size_override("font_size", 18)
 	btn.pressed.connect(_on_patrol_toggle_pressed)
 
@@ -2434,19 +2305,12 @@ func _ensure_patrol_toggle() -> void:
 	_refresh_patrol_toggle()
 
 
-## 按当前状态刷新右上角按钮的文字和底色。
+## 在同一个按钮上显示巡逻状态和 G 键入口。
 func _refresh_patrol_toggle() -> void:
 	if _patrol_toggle == null:
 		return
 	_patrol_toggle.text = "停止巡逻  G" if _patrol_on else "开始巡逻  G"
-	var normal := _patrol_toggle.get_theme_stylebox("normal") as StyleBoxFlat
-	if normal != null:
-		if _patrol_on:
-			normal.bg_color = Color(0.10, 0.42, 0.36, 0.88)
-			normal.border_color = Color(0.55, 1.00, 0.85, 0.95)
-		else:
-			normal.bg_color = Color(0.06, 0.09, 0.12, 0.72)
-			normal.border_color = Color(0.75, 0.68, 0.50, 0.55)
+	_patrol_toggle.theme_type_variation = &"PaperPatrolActive" if _patrol_on else &"PaperPatrol"
 
 
 func _on_patrol_toggle_pressed() -> void:

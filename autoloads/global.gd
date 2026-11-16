@@ -736,6 +736,27 @@ const MSG_LOG_LAYER := 5
 
 func _ready() -> void:
 	_ensure_msg_log()
+	_add_screen_frame()
+
+
+## 细边沿整个视口伸缩，中央留空。地图、战斗与菜单共用这一层。
+func _add_screen_frame() -> void:
+	var layer := CanvasLayer.new()
+	layer.name = "ScreenFrameLayer"
+	layer.layer = 90
+	add_child(layer)
+
+	var frame := NinePatchRect.new()
+	frame.name = "ScreenFrame"
+	frame.texture = load("res://assets/ui/paper_screen_frame.png") as Texture2D
+	frame.draw_center = false
+	frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	frame.patch_margin_left = 54
+	frame.patch_margin_top = 54
+	frame.patch_margin_right = 54
+	frame.patch_margin_bottom = 54
+	layer.add_child(frame)
+	frame.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 
 
 func _ensure_msg_log() -> void:

@@ -1,36 +1,31 @@
-[gd_scene load_steps=3 format=3]
+[gd_scene format=3]
 
 [ext_resource type="Script" path="res://scenes/battle/turn_order.gd" id="1_turnorder"]
-
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_turnorder"]
-bg_color = Color(0.07, 0.07, 0.09, 0.75)
-corner_radius_top_left = 14
-corner_radius_top_right = 14
-corner_radius_bottom_right = 14
-corner_radius_bottom_left = 14
+[ext_resource type="Theme" path="res://styles/paper_theme.tres" id="2_theme"]
 
 [node name="TurnOrder" type="Panel"]
 anchors_preset = 1
 anchor_left = 1.0
 anchor_right = 1.0
-offset_left = -300.0
-offset_top = 10.0
-offset_right = -12.0
-offset_bottom = 122.0
+offset_left = -824.0
+offset_top = 16.0
+offset_right = -536.0
+offset_bottom = 132.0
 grow_horizontal = 0
 mouse_filter = 2
-theme_override_styles/panel = SubResource("StyleBoxFlat_turnorder")
+theme = ExtResource("2_theme")
 script = ExtResource("1_turnorder")
 
 [node name="VBox" type="VBoxContainer" parent="."]
+mouse_filter = 2
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = 12.0
-offset_top = 6.0
-offset_right = -12.0
-offset_bottom = -6.0
+offset_left = 17.0
+offset_top = 8.0
+offset_right = -17.0
+offset_bottom = -8.0
 grow_horizontal = 2
 grow_vertical = 2
 theme_override_constants/separation = 4
@@ -41,32 +36,37 @@ mouse_filter = 2
 theme_override_constants/separation = 2
 alignment = 1
 
+[node name="OrderLabel" type="Label" parent="VBox/RoundBar"]
+theme_type_variation = &"PaperHeading"
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+theme_override_font_sizes/font_size = 20
+text = "出手顺序"
+
 [node name="RoundPrefix" type="Label" parent="VBox/RoundBar"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.96, 0.82, 0.42, 1)
-theme_override_colors/font_outline_color = Color(0.96, 0.82, 0.42, 1)
-theme_override_constants/outline_size = 2
-theme_override_font_sizes/font_size = 26
+theme_override_font_sizes/font_size = 18
 text = "第"
 
 [node name="RoundNumber" type="Label" parent="VBox/RoundBar"]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_colors/font_color = Color(1, 0.35, 0.32, 1)
-theme_override_colors/font_outline_color = Color(1, 0.35, 0.32, 1)
-theme_override_constants/outline_size = 2
-theme_override_font_sizes/font_size = 26
+theme_override_font_sizes/font_size = 18
+theme_override_colors/font_color = Color(0.54, 0.27, 0.20, 1)
 text = "1"
 
 [node name="RoundSuffix" type="Label" parent="VBox/RoundBar"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.96, 0.82, 0.42, 1)
-theme_override_colors/font_outline_color = Color(0.96, 0.82, 0.42, 1)
-theme_override_constants/outline_size = 2
-theme_override_font_sizes/font_size = 26
+theme_override_font_sizes/font_size = 18
 text = "回合"
 
+[node name="Rule" type="HSeparator" parent="VBox"]
+layout_mode = 2
+mouse_filter = 2
+
 [node name="Icons" type="HBoxContainer" parent="VBox"]
+mouse_filter = 2
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_vertical = 3

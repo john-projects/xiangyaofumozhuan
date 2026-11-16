@@ -1,4 +1,6 @@
 extends RefCounted
+
+const Paper := preload("res://styles/paper_ui.gd")
 ## 全局统一的「弹窗消息」外观与时长。
 ##
 ## 为什么不用 class_name：全局类名要编辑器扫描后才进缓存，命令行/CI 里可能还没注册。
@@ -25,18 +27,9 @@ const OUTLINE_SIZE := 4
 const FONT_SIZE := 20
 
 
-## 提示条底板：近黑半透明 + 1px 暗金描边 + 10px 圆角。
-static func make_style() -> StyleBoxFlat:
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.04, 0.035, 0.03, 0.72)
-	style.border_color = Color(0.78, 0.64, 0.34, 0.85)
-	style.set_border_width_all(1)
-	style.set_corner_radius_all(10)
-	style.content_margin_left = 16
-	style.content_margin_right = 16
-	style.content_margin_top = 6
-	style.content_margin_bottom = 6
-	return style
+## 短提示复用地图题牌的暗底和四角边饰。
+static func make_style() -> StyleBox:
+	return Paper.THEME.get_stylebox(&"normal", &"PaperPatrol")
 
 
 ## 按统一规格配好的文字（靠左、自动换行、支持 [绿色]xxx[/绿色] 多段染色）。
@@ -48,7 +41,7 @@ static func make_label(text: String) -> RichTextLabel:
 	label.scroll_active = false
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	label.custom_minimum_size = Vector2(WIDTH - 24.0, 0)
+	label.custom_minimum_size = Vector2(WIDTH - 32.0, 0)
 	label.add_theme_font_size_override("normal_font_size", FONT_SIZE)
 	label.add_theme_color_override("default_color", TEXT_COLOR)
 	label.add_theme_color_override("font_outline_color", OUTLINE_COLOR)
@@ -62,6 +55,7 @@ static func make_label(text: String) -> RichTextLabel:
 static func make_box(text: String) -> PanelContainer:
 	var box := PanelContainer.new()
 	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.theme = Paper.THEME
 	box.add_theme_stylebox_override("panel", make_style())
 	box.add_child(make_label(text))
 	return box

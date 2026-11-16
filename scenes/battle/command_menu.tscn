@@ -1,32 +1,19 @@
-[gd_scene load_steps=5 format=3]
+[gd_scene format=3]
 
 [ext_resource type="Script" path="res://scenes/battle/command_menu.gd" id="1_command"]
-[ext_resource type="Theme" path="res://scenes/battle/battle_ui_theme.tres" id="2_theme"]
+[ext_resource type="Theme" path="res://styles/paper_theme.tres" id="2_theme"]
 
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_menu"]
-bg_color = Color(0.07, 0.07, 0.09, 0.85)
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_edge"]
+draw_center = false
 border_width_left = 2
 border_width_top = 2
 border_width_right = 2
 border_width_bottom = 2
-border_color = Color(0.45, 0.38, 0.24, 1)
-corner_radius_top_left = 16
-corner_radius_top_right = 16
-corner_radius_bottom_right = 16
-corner_radius_bottom_left = 16
-
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_nameplate"]
-content_margin_left = 10.0
-content_margin_top = 6.0
-content_margin_right = 10.0
-content_margin_bottom = 6.0
-bg_color = Color(1, 0.85, 0.5, 0.1)
-border_width_left = 3
-border_color = Color(1, 0.82, 0.42, 0.85)
-corner_radius_top_left = 4
-corner_radius_top_right = 4
-corner_radius_bottom_right = 4
-corner_radius_bottom_left = 4
+border_color = Color(0.47, 0.30, 0.17, 0.94)
+corner_radius_top_left = 3
+corner_radius_top_right = 3
+corner_radius_bottom_left = 3
+corner_radius_bottom_right = 3
 
 [node name="CommandMenu" type="Panel"]
 anchors_preset = 3
@@ -34,15 +21,28 @@ anchor_left = 1.0
 anchor_top = 1.0
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = -236.0
-offset_top = -392.0
+offset_left = -192.0
+offset_top = -534.0
 offset_right = -24.0
-offset_bottom = -24.0
+offset_bottom = -166.0
 grow_horizontal = 0
 grow_vertical = 0
 theme = ExtResource("2_theme")
-theme_override_styles/panel = SubResource("StyleBoxFlat_menu")
 script = ExtResource("1_command")
+
+[node name="Border" type="Panel" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 5.0
+offset_top = 5.0
+offset_right = -5.0
+offset_bottom = -5.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_edge")
 
 [node name="VBox" type="VBoxContainer" parent="."]
 layout_mode = 1
@@ -57,22 +57,13 @@ grow_horizontal = 2
 grow_vertical = 2
 theme_override_constants/separation = 10
 
-[node name="NamePlate" type="PanelContainer" parent="VBox"]
-layout_mode = 2
-theme_override_styles/panel = SubResource("StyleBoxFlat_nameplate")
-
-[node name="TitleLabel" type="Label" parent="VBox/NamePlate"]
+[node name="TitleLabel" type="Label" parent="VBox"]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_colors/font_color = Color(0.5, 0.94, 0.58, 1)
-theme_override_font_sizes/font_size = 22
+theme_override_font_sizes/font_size = 26
+text_overrun_behavior = 3
 text = "指令"
 horizontal_alignment = 0
-
-[node name="Sep" type="ColorRect" parent="VBox"]
-custom_minimum_size = Vector2(0, 1)
-layout_mode = 2
-color = Color(1, 0.85, 0.5, 0.18)
 
 [node name="MainButtons" type="VBoxContainer" parent="VBox"]
 unique_name_in_owner = true
@@ -80,36 +71,41 @@ layout_mode = 2
 theme_override_constants/separation = 10
 
 [node name="AttackButton" type="Button" parent="VBox/MainButtons"]
+alignment = 0
 unique_name_in_owner = true
-custom_minimum_size = Vector2(180, 46)
+custom_minimum_size = Vector2(0, 46)
 layout_mode = 2
 theme_override_font_sizes/font_size = 22
 text = "攻击"
 
 [node name="SkillButton" type="Button" parent="VBox/MainButtons"]
+alignment = 0
 unique_name_in_owner = true
-custom_minimum_size = Vector2(180, 46)
+custom_minimum_size = Vector2(0, 46)
 layout_mode = 2
 theme_override_font_sizes/font_size = 22
 text = "法术"
 
 [node name="ItemButton" type="Button" parent="VBox/MainButtons"]
+alignment = 0
 unique_name_in_owner = true
-custom_minimum_size = Vector2(180, 46)
+custom_minimum_size = Vector2(0, 46)
 layout_mode = 2
 theme_override_font_sizes/font_size = 22
 text = "道具"
 
 [node name="DefendButton" type="Button" parent="VBox/MainButtons"]
+alignment = 0
 unique_name_in_owner = true
-custom_minimum_size = Vector2(180, 46)
+custom_minimum_size = Vector2(0, 46)
 layout_mode = 2
 theme_override_font_sizes/font_size = 22
 text = "防御"
 
 [node name="FleeButton" type="Button" parent="VBox/MainButtons"]
+alignment = 0
 unique_name_in_owner = true
-custom_minimum_size = Vector2(180, 46)
+custom_minimum_size = Vector2(0, 46)
 layout_mode = 2
 theme_override_font_sizes/font_size = 22
 text = "逃跑"
@@ -121,9 +117,10 @@ layout_mode = 2
 theme_override_constants/separation = 10
 
 [node name="BackButton" type="Button" parent="VBox"]
+alignment = 0
 unique_name_in_owner = true
 visible = false
-custom_minimum_size = Vector2(180, 42)
+custom_minimum_size = Vector2(0, 42)
 layout_mode = 2
 theme_override_font_sizes/font_size = 20
 text = "返回指令"

@@ -1,6 +1,8 @@
 extends Control
 class_name PartyPanel
 
+const Paper := preload("res://styles/paper_ui.gd")
+
 ## 团队管理面板（操作菜单 →「团队管理」）。
 ##
 ## ── 版式 ──
@@ -45,18 +47,18 @@ const UiToast := preload("res://scenes/shared/ui_toast.gd")
 ## 提示栈相对屏幕中心上移多少（和 WorldMap 的 TOAST_RISE 保持一致）。
 const TOAST_RISE := 150.0
 
-const SLOT_SIZE := Vector2(118, 180)
-const SLOT_ICON := 108.0
+const SLOT_SIZE := Vector2(188, 192)
+const SLOT_ICON := 120.0
 
 # ── 选中态配色 ──
 # 用样式盒明确定义，而不是吃主题默认的 pressed 样式：
 #   默认主题的按下态只比 normal 亮一点点，重建坑位后焦点一丢就完全看不出来了。
-const SLOT_BG := Color(1, 1, 1, 0.05)
-const SLOT_BORDER := Color(1, 1, 1, 0.14)
-const SLOT_BG_HOVER := Color(1, 1, 1, 0.12)
-const SLOT_BORDER_HOVER := Color(1, 0.95, 0.8, 0.45)
-const SLOT_BG_SELECTED := Color(1.0, 0.82, 0.35, 0.20)
-const SLOT_BORDER_SELECTED := Color(1.0, 0.84, 0.42, 1.0)
+const SLOT_BG := Paper.INSET
+const SLOT_BORDER := Paper.EDGE
+const SLOT_BG_HOVER := Paper.PAPER
+const SLOT_BORDER_HOVER := Paper.VERMILION
+const SLOT_BG_SELECTED := Color("#efd5b2")
+const SLOT_BORDER_SELECTED := Paper.VERMILION
 
 @onready var team_title: Label = %TeamTitle
 @onready var team_row: HBoxContainer = %TeamRow
@@ -78,7 +80,13 @@ var _deployed: Array[UnitStats] = []
 var _team: Array[UnitStats] = []
 
 
+var _shortcut: Label
+
+
 func _ready() -> void:
+	Paper.add_panel_pattern($Panel)
+	Paper.add_heading($Panel/Margin/VBox, "团队", "队")
+	_shortcut = Paper.add_shortcut($Panel/Margin/VBox, "Esc", "关闭团队")
 	hide()
 	deploy_button.pressed.connect(_on_deploy_pressed)
 	undeploy_button.pressed.connect(_on_undeploy_pressed)
@@ -96,18 +104,18 @@ func show_party(team: Array[UnitStats], deployed: Array[UnitStats]) -> void:
 	_team = team
 	_deployed = deployed
 	show()
-	# 标题固定不带人数（上阵/团队人数由下面的两排直接看出来，别在标题里再报一遍）。
-	team_title.text = "队伍中"
-	reserve_title.text = "未上阵"
+	var reserved := _reserved_members()
+	team_title.text = "队伍中  %d / %d" % [_deployed.size(), TEAM_SLOTS]
+	reserve_title.text = "未上阵  %d / %d" % [reserved.size(), RESERVE_SLOTS]
 
 	# 选中的人还在就保留，否则默认选第一个上阵成员
 	if _selected == null or not _contains(team, _selected):
 		_selected = deployed[0] if not deployed.is_empty() else (team[0] if not team.is_empty() else null)
 
-	var reserved := _reserved_members()
 	_rebuild_row(team_row, deployed, TEAM_SLOTS, SLOT_SIZE, SLOT_ICON)
 	_rebuild_row(reserve_row, reserved, RESERVE_SLOTS, SLOT_SIZE, SLOT_ICON)
 	action_popup.hide()
+	_shortcut.text = "关闭团队"
 	_refresh_buttons()
 	# 重建后把焦点还给选中的坑位：否则坑位全被换掉，焦点落空，键盘方向键会失效。
 	_focus_selected.call_deferred()
@@ -254,7 +262,7 @@ func _make_slot(stats: UnitStats, slot_size: Vector2, icon_size: float) -> Butto
 
 	var name_label := Label.new()
 	name_label.text = stats.name
-	name_label.add_theme_color_override("font_color", Color(0.95, 0.92, 0.85, 1))
+	name_label.add_theme_color_override("font_color", Paper.INK)
 	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	name_label.add_theme_font_size_override("font_size", 17)
 	name_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -263,13 +271,21 @@ func _make_slot(stats: UnitStats, slot_size: Vector2, icon_size: float) -> Butto
 	# 门派：挂在名字下面一行，淡金色，和名字拉开层次。
 	var sect_label := Label.new()
 	sect_label.text = _sect_name(stats)
-	sect_label.add_theme_color_override("font_color", Color(0.96, 0.84, 0.55, 0.85))
+	sect_label.add_theme_color_override("font_color", Paper.SOFT_INK)
 	sect_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	sect_label.add_theme_font_size_override("font_size", 13)
 	sect_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	box.add_child(sect_label)
 
 	slot.add_child(box)
+	if not _deployed.is_empty() and _index_in(_deployed, stats) == 0:
+		var badge := Label.new()
+		badge.theme_type_variation = &"PaperSeal"
+		badge.add_theme_font_size_override("font_size", 14)
+		badge.position = Vector2(6, 6)
+		badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		badge.text = "队长"
+		slot.add_child(badge)
 	return slot
 
 
@@ -288,7 +304,7 @@ func _slot_style(bg: Color, border: Color, width: int) -> StyleBoxFlat:
 func _focus_style() -> StyleBoxFlat:
 	var style := StyleBoxFlat.new()
 	style.bg_color = Color(0, 0, 0, 0)
-	style.border_color = Color(1, 1, 1, 0.9)
+	style.border_color = Paper.VERMILION
 	style.set_border_width_all(1)
 	style.set_corner_radius_all(10)
 	style.set_expand_margin_all(3)
@@ -309,8 +325,8 @@ func _make_empty_slot(slot_size: Vector2) -> Panel:
 	panel.custom_minimum_size = slot_size
 	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var style := StyleBoxFlat.new()
-	style.bg_color = Color(1, 1, 1, 0.04)
-	style.border_color = Color(1, 1, 1, 0.18)
+	style.bg_color = Paper.INSET
+	style.border_color = Paper.PALE_EDGE
 	style.set_border_width_all(1)
 	style.set_corner_radius_all(8)
 	panel.add_theme_stylebox_override("panel", style)
@@ -320,7 +336,7 @@ func _make_empty_slot(slot_size: Vector2) -> Panel:
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	label.add_theme_font_size_override("font_size", 14)
-	label.modulate = Color(1, 1, 1, 0.35)
+	label.add_theme_color_override("font_color", Paper.SOFT_INK)
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	panel.add_child(label)
 	return panel
@@ -377,6 +393,7 @@ func _on_slot_pressed(stats: UnitStats, slot: Button = null) -> void:
 func _open_action_popup(slot: Button) -> void:
 	if slot == null or not is_instance_valid(slot):
 		return
+	_shortcut.text = "收起选项"
 	action_popup.show()
 	action_popup.reset_size()
 	var rect := slot.get_global_rect()
@@ -443,6 +460,7 @@ func _link_popup_focus() -> void:
 
 ## 收起操作框，焦点回到当前选中的格子（坑位恢复可聚焦）。
 func _close_action_popup() -> void:
+	_shortcut.text = "关闭团队"
 	action_popup.hide()
 	_set_slots_focusable(true)
 	_focus_selected()

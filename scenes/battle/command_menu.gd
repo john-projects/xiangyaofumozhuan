@@ -5,6 +5,8 @@
 extends Panel
 class_name CommandMenu
 
+const Paper := preload("res://styles/paper_ui.gd")
+
 ## 指令菜单：主菜单 + 技能二级菜单；只负责显示与发信号，具体行为由 Battle 决定。
 
 # ── 对外信号（唯一的下游出口，发出去就不管返回值）──
@@ -47,6 +49,11 @@ var _last_skill: SkillData = null
 ## 一次性接线：连六个按钮、“道具”永久禁用，先 _show_main() 再 close()（顺序不能换）。
 ## bind() 把指令标识追加在信号参数之后，四个按钮共用一个回调；子类覆盖 _ready() 必须调 super._ready()。
 func _ready() -> void:
+	Paper.style_heading(title_label, "令")
+	for button in main_buttons.get_children():
+		_style_command_button(button)
+	_style_command_button(back_button)
+	$VBox.minimum_size_changed.connect(_fit_height)
 	attack_button.pressed.connect(_on_main_pressed.bind(&"attack"))
 	# "法术"按钮单独接线：它要打开二级菜单，而不是直接发指令信号。
 	skill_button.pressed.connect(_open_skills)
@@ -100,6 +107,18 @@ func open_for(unit: BattleUnit) -> void:
 	else:
 		_show_main()
 		_focus_command(_last_command)
+
+
+## 面板贴右下角，主菜单与法术页各按自己的内容高度展开。
+func _fit_height() -> void:
+	var column := $VBox as VBoxContainer
+	var height := column.get_combined_minimum_size().y + 32.0
+	offset_top = offset_bottom - height
+
+
+func _style_command_button(button: Button) -> void:
+	button.focus_entered.connect(func() -> void: button.theme_type_variation = &"PaperPrimary")
+	button.focus_exited.connect(func() -> void: button.theme_type_variation = &"")
 
 
 ## 关闭菜单：hide() + _unit = null。不重置可见性、不发信号，下次 open_for() 会重新归位。
@@ -261,7 +280,12 @@ func _make_skill_button(skill: SkillData) -> Button:
 	elif _unit.mp < skill.mana_cost:
 		suffix = "  蓝不够"
 	button.text = "%s%s" % [skill.display_name, suffix]
-	button.custom_minimum_size = Vector2(180, 46)
+	button.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	button.clip_text = true
+	button.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	button.tooltip_text = button.text
+	_style_command_button(button)
+	button.custom_minimum_size = Vector2(0, 46)
 	button.add_theme_font_size_override("font_size", 20)
 	button.disabled = not _unit.can_use_skill(skill)
 	button.set_meta("skill", skill)

@@ -1,21 +1,11 @@
 [gd_scene format=3 uid="uid://dcvi6hsq4pxxl"]
 
+[ext_resource type="Theme" path="res://styles/paper_theme.tres" id="99_paper"]
 [ext_resource type="Script" uid="uid://sgssxuhnctj3" path="res://scenes/ui/stats_panel/stats_panel.gd" id="1_stats"]
 [ext_resource type="PackedScene" path="res://scenes/ui/character_area/character_area.tscn" id="2_area"]
 
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_panel"]
-bg_color = Color(0.07058824, 0.07058824, 0.09019608, 0.94)
-border_width_left = 2
-border_width_top = 2
-border_width_right = 2
-border_width_bottom = 2
-border_color = Color(0.45490196, 0.38039216, 0.23921569, 1)
-corner_radius_top_left = 16
-corner_radius_top_right = 16
-corner_radius_bottom_right = 16
-corner_radius_bottom_left = 16
-
 [node name="StatsPanel" type="Control" unique_id=1018204599]
+theme = ExtResource("99_paper")
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
@@ -36,7 +26,6 @@ offset_top = -796.0
 offset_right = 678.0
 offset_bottom = -16.0
 grow_vertical = 0
-theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
 
 [node name="Margin" type="MarginContainer" parent="Panel" unique_id=1242715726]
 layout_mode = 1
@@ -57,8 +46,8 @@ theme_override_constants/separation = 8
 
 [node name="TitleLabel" type="Label" parent="Panel/Margin/Content" unique_id=1878949310]
 unique_name_in_owner = true
+unique_name_in_owner = true
 layout_mode = 2
-theme_override_font_sizes/font_size = 26
 text = "角色属性"
 horizontal_alignment = 1
 
