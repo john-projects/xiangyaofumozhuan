@@ -40,6 +40,7 @@ const GHOST_FLAME_SCENE := preload("res://scenes/effects/ghost_flame/ghost_flame
 const DEFAULT_BURST_EFFECT_SCENE := preload("res://scenes/effects/burst_effect.tscn")
 const CRITICAL_IMPACT_SCRIPT := preload("res://scenes/battle/critical_impact.gd")
 const DEFAULT_IMPACT_DURATION := 0.35
+const WEAPON_ATTACK_END_DELAY := 0.10
 ## 群体技能里每人补的小爆炸相对 skill.burst_scale 的比例。
 const AOE_TARGET_BURST_RATIO := 0.55
 ## 敌方每回合放门派技能的概率（其余回合普攻）。
@@ -764,7 +765,7 @@ func _on_unit_clicked(unit: BattleUnit) -> void:
 		info_label.text = ""
 
 
-## 普攻：冲过去 → 格挡 → 伤害/暴击 → 飘字/受击 → 停顿 → 判胜负或收尾回合（协程）。
+## 普攻：接近目标 → 挥击并在命中时结算伤害 → 归位 → 收尾回合。
 ## 数值口径：roll_damage() → 暴击 ×1.5 → **BattleUnit.take_damage() 内部**做攻防差 + 上下限保底 + 格挡值固定减去，
 ##   返回实际扣血量，飘字用这个值（不显示未减伤的原始伤害）。坑：校验失败也必须 _finish_turn()，否则卡死。
 func _perform_attack(attacker: BattleUnit, target: BattleUnit) -> void:
@@ -775,13 +776,12 @@ func _perform_attack(attacker: BattleUnit, target: BattleUnit) -> void:
 
 	state = State.EXECUTE
 	info_label.text = ""
-	# 演出分三段：① 走到目标面前 → ② 结算（飘字 + 受击闪红）→ ③ 出招并退回原位。
-	# home 必须在 approach 之前记下来 —— 那之后 attacker.position 已经不是站位了。
 	var home := attacker.position
-	await attacker.attack_approach(target)
+	var delay_limit := WEAPON_ATTACK_END_DELAY if attacker.has_weapon_attack() else INF
+	await attacker.attack_approach(target, true)
 	await attacker.attack_swing(_apply_basic_attack_hit.bind(attacker, target))
 	await attacker.attack_return(home)
-	await _wait_action_end()
+	await _wait_action_end(0.0, delay_limit)
 	if not _check_battle_end():
 		_finish_turn()
 
@@ -1422,8 +1422,8 @@ func _wait_action_fx(first_fx := 0) -> void:
 		await get_tree().process_frame
 
 
-func _wait_action_end(elapsed := 0.0) -> void:
-	var delay := action_delay - elapsed
+func _wait_action_end(elapsed := 0.0, delay_limit := INF) -> void:
+	var delay := minf(action_delay, delay_limit) - elapsed
 	if delay > 0.0:
 		await get_tree().create_timer(delay).timeout
 	await _wait_action_fx()
@@ -1575,7 +1575,11 @@ func _finish_battle(player_won: bool, reason: String, wait_for_feedback := true)
 		if is_instance_valid(unit):
 			unit.set_selected(false)
 	turn_order.clear_current()
-	info_label.text = reason
+	if player_won:
+		info_label.text = ""
+		Global.push_log(reason)
+	else:
+		info_label.text = reason
 	if wait_for_feedback:
 		for fx in fx_root.get_children():
 			if is_instance_valid(fx) and not fx.is_queued_for_deletion() and _is_damage_feedback(fx):

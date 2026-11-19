@@ -671,8 +671,8 @@ func _apply_debug_loadout() -> void:
 		print("[开局阵容] 上阵：%s" % ", ".join(names))
 		Global.push_log("【开局】上阵：%s" % ", ".join(names))
 
-	# 0, 10, ... 150: choose one shared set for all six characters.
-	var weapon_set := randi_range(1, 16)
+	# 全队共用一个装备等级档位（0 至 100 级，每 10 级一档）。
+	var weapon_set := randi_range(1, 11)
 	print("[开局装备] 本次随机等级：%d" % ((weapon_set - 1) * 10))
 	Global.push_log("【开局】装备等级 %d" % ((weapon_set - 1) * 10))
 	# 开局配武器：买下 + 装上（钱不够就先加钱，反正是调试档）

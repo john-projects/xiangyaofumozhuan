@@ -50,6 +50,12 @@ var _last_skill: SkillData = null
 ## bind() 把指令标识追加在信号参数之后，四个按钮共用一个回调；子类覆盖 _ready() 必须调 super._ready()。
 func _ready() -> void:
 	Paper.style_heading(title_label, "令")
+	var border := $Border as Panel
+	var edge := border.get_theme_stylebox("panel").duplicate() as StyleBoxFlat
+	var paper_edge := edge.border_color
+	border.add_theme_stylebox_override("panel", edge)
+	Paper.bind(border, func():
+		edge.border_color = Color("#7795a7") if Paper.UiSkin.is_ink() else paper_edge)
 	for button in main_buttons.get_children():
 		_style_command_button(button)
 	_style_command_button(back_button)

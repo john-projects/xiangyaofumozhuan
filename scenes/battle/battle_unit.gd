@@ -949,21 +949,18 @@ var _idle_tween: Tween
 var _hit_tween: Tween
 
 
-## 普攻第一段：斜着走到目标**同一横线**的侧面站位（await 到到位）。
-## 落点 = 目标的 y（完全对齐）+ x 方向让出 ATTACK_STAND_OFF 的距离，且仍在**自己这一侧**
-## （我方 x 恒大于敌方，所以永远是"站到目标右手边"）—— 斜向切入，不是横着平移。
-## 以前是"朝目标冲 80px 就退"，看不出谁打谁；走到面前才有交手感。
-## 坐标换算用 global_position → 局部偏移：仅在本单位与父节点无旋转/缩放时等价
-## （本项目舞台是纯平移，安全）。目标在演出中被释放则直接返回，调用方当成演出已结束。
-func attack_approach(target: BattleUnit) -> void:
+## 斜着走到目标同一横线的侧面。持武器普攻额外留出一个立绘宽度。
+func attack_approach(target: BattleUnit, is_basic_attack: bool = false) -> void:
 	if not is_instance_valid(target):
 		return
 	# 自己在目标的左边还是右边（我方在右、敌方在左，不会歧义）
 	var dx := global_position.x - target.global_position.x
 	var side_x := 1.0 if dx >= 0.0 else -1.0
 	_weapon_action_facing = side_x
-	var to_global := Vector2(target.global_position.x + side_x * ATTACK_STAND_OFF,
-			target.global_position.y)
+	var stand_off := ATTACK_STAND_OFF
+	if is_basic_attack and has_weapon_attack():
+		stand_off += sprite.get_rect().size.x * absf(_base_scale.x)
+	var to_global := Vector2(target.global_position.x + side_x * stand_off, target.global_position.y)
 	var to := position + (to_global - global_position)
 	# 抬到最上层，避免被敌方立绘盖住
 	_z_before = z_index
@@ -980,14 +977,24 @@ static func impact_tail_duration(animation_duration: float) -> float:
 	return minf(0.20, animation_duration * 0.30)
 
 
+func has_weapon_attack() -> bool:
+	return _weapon_action_length(&"attack", 0.0) > 0.0
+
+
+## 武器普攻的关键帧在剪辑的 80% 处命中。
+static func _attack_tail_duration(duration: float, with_weapon: bool) -> float:
+	return duration * 0.20 if with_weapon else impact_tail_duration(duration)
+
+
 ## 普攻第二段：出招，在挥击的最后几帧触发命中。
 func attack_swing(on_impact: Callable = Callable()) -> void:
+	var weapon_duration := _weapon_action_length(&"attack", 0.0)
 	if _anim != null:
-		_anim.play_once("attack")
+		_anim.play_once("attack", "", weapon_duration)
 		var duration := _anim.once_duration()
 		if duration > 0.0:
 			_start_weapon_action(&"attack", duration)
-			var impact_time := duration - impact_tail_duration(duration)
+			var impact_time := duration - _attack_tail_duration(duration, weapon_duration > 0.0)
 			var waited := 0.0
 			while _anim.is_playing_once() and waited < duration + 0.1:
 				await get_tree().process_frame
@@ -999,9 +1006,9 @@ func attack_swing(on_impact: Callable = Callable()) -> void:
 			return
 		_anim.play("idle")
 	# 没有帧动画（怪物 = 静态立绘）：用缩放 + 倾斜演一套"蓄力→突刺→回正"。
-	var duration := _weapon_action_length(&"attack", 0.32)
+	var duration := weapon_duration if weapon_duration > 0.0 else 0.32
 	_start_weapon_action(&"attack", duration)
-	await _procedural_swing(on_impact, duration)
+	await _procedural_swing(on_impact, duration, weapon_duration > 0.0)
 	_restore_weapon_pose()
 
 
@@ -1011,31 +1018,37 @@ func _visual_body() -> Node2D:
 
 
 ## 缺少攻击剪辑时，蓄力后仰 → 突刺前倾 → 回正。
-func _procedural_swing(on_impact: Callable, duration: float) -> void:
+func _procedural_swing(on_impact: Callable, duration: float, with_weapon: bool) -> void:
+	var tail_duration := _attack_tail_duration(duration, with_weapon)
 	var windup_time := duration * 0.25
 	var strike_time := duration * 0.3125
+	if with_weapon:
+		# 武器在命中点结束出手，立绘同时前倾到位，然后随武器一起收招。
+		var impact_time := duration - tail_duration
+		windup_time = impact_time * 0.74
+		strike_time = impact_time - windup_time
 	var recover_time := duration - windup_time - strike_time
-	var tail_duration := impact_tail_duration(duration)
 	var body := _visual_body()
 	if body == null:
 		if on_impact.is_valid():
 			on_impact.call(tail_duration)
 		return
 	var rest_scale := _base_scale
-	var sx := rest_scale.x
-	var sy := rest_scale.y
+	# 武器挂在立绘上。持武器时让身体微动，保留枪尖绕圈和直刺的轨迹。
+	var body_motion := 0.1 if with_weapon else 1.0
+	var windup_scale := rest_scale.lerp(rest_scale * Vector2(SWING_ANTIC_X, SWING_ANTIC_Y), body_motion)
+	var strike_scale := rest_scale.lerp(rest_scale * Vector2(SWING_STRIKE_X, SWING_STRIKE_Y), body_motion)
+	var tilt := deg_to_rad(SWING_TILT * body_motion)
 	var tween := create_tween()
-	# 蓄力：横向收、纵向拉，身体微后仰
-	tween.tween_property(body, "scale", Vector2(sx * SWING_ANTIC_X, sy * SWING_ANTIC_Y), windup_time)
-	tween.parallel().tween_property(body, "rotation", deg_to_rad(-SWING_TILT), windup_time)
-	# 突刺：横向拉、纵向压，向前倾
-	tween.tween_property(body, "scale", Vector2(sx * SWING_STRIKE_X, sy * SWING_STRIKE_Y), strike_time)
-	tween.parallel().tween_property(body, "rotation", deg_to_rad(SWING_TILT), strike_time)
+	tween.tween_property(body, "scale", windup_scale, windup_time)
+	tween.parallel().tween_property(body, "rotation", -tilt, windup_time)
+	tween.tween_property(body, "scale", strike_scale, strike_time)
+	tween.parallel().tween_property(body, "rotation", tilt, strike_time)
 	# 回正
 	tween.tween_property(body, "scale", rest_scale, recover_time)
 	tween.parallel().tween_property(body, "rotation", 0.0, recover_time)
 	if on_impact.is_valid():
-		tween.parallel().tween_callback(on_impact.bind(tail_duration)).set_delay(recover_time - tail_duration)
+		tween.parallel().tween_callback(on_impact.bind(tail_duration)).set_delay(maxf(0.0, recover_time - tail_duration))
 	await tween.finished
 
 
@@ -1279,8 +1292,18 @@ func _weapon_action_length(action: StringName, fallback: float) -> float:
 func _start_weapon_action(action: StringName, duration: float) -> void:
 	if _weapon_action == null or _weapon_pivot == null or not _weapon_pivot.visible:
 		return
-	var portrait_scale := sprite.get_rect().size.y / 600.0 if sprite.texture != null else 1.0
-	_weapon_action.play_on(_weapon_pivot, action, duration, _weapon_action_facing, portrait_scale)
+	var travel_scale := Vector2.ONE
+	var front_shift := Vector2.ZERO
+	if sprite.texture != null:
+		var portrait := sprite.get_rect()
+		travel_scale = Vector2.ONE * (portrait.size.y / 600.0)
+		if action == &"attack":
+			# 普攻横向轨迹以 360 像素宽的立绘编排，180 像素等于半个身位。
+			travel_scale.x = portrait.size.x / 360.0
+			var front := portrait.get_center()
+			front.x -= _weapon_action_facing * portrait.size.x * 0.56
+			front_shift = front - _weapon_pivot.position
+	_weapon_action.play_on(_weapon_pivot, action, duration, _weapon_action_facing, travel_scale, front_shift)
 
 
 func _restore_weapon_pose() -> void:

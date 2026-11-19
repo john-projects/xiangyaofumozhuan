@@ -120,13 +120,8 @@ const EDGE_MARGIN := 60.0
 ## 地图上角色（玩家 + 跟随队友）的**显示高度**（像素），与贴图分辨率无关。
 ## 立绘可能是 150px 的老头像，也可能是 320px 的新立绘；都按 tex_h 反推缩放，
 ## 保证屏幕上一样大 —— 提高素材分辨率只提升清晰度，不改地图布局。
-const MAP_UNIT_HEIGHT := 195.0        # 兜底：地图没配 unit_height 时的角色显示高度
-const PARTY_DISPLAY_SCALE := 0.8
-
-## 当前地图的角色显示高度（世界像素）。大尺寸底图要按比例调大，否则人物会显小。
 func _unit_height() -> float:
-	var base := _map.unit_height if _map != null and _map.unit_height > 0.0 else MAP_UNIT_HEIGHT
-	return base * PARTY_DISPLAY_SCALE
+	return _map.unit_height if _map != null and _map.unit_height > 0.0 else MapData.DEFAULT_UNIT_HEIGHT
 
 ## 立绘内容在贴图里距**底边**的留白比例（实测：动画帧 20/480=4.2%，静态头像 13/320=4.1%）。
 ## 脚底锚定要用它算 offset —— 直接把半高当偏移会让角色"陷进"地面前 8px。
@@ -269,6 +264,8 @@ var _bag_with_shop := false
 
 ## 这次属性面板是从操作菜单进来的吗（关掉时退回菜单，语义同 _bag_from_menu）。
 var _stats_from_menu := false
+## 团队和自动施法共用同一返回路径，来源可能是操作菜单或地图入口。
+var _subpanel_from_menu := false
 
 ## 当前商人的配置（开面板时记下，买完重建货架要用）。null = 商人面板没开。
 ## 商人**不走** NPC 对话面板，所以 _panel_npc 对商人一直是 null，得单独记。
@@ -309,6 +306,7 @@ var _leader_key := ""
 @onready var panel: Panel = %TravelPanel
 ## UI 层（CanvasLayer）。操作菜单等浮层运行时挂到这里（见 _setup_overlays），不随相机移动、不参与 y_sort。
 @onready var ui_layer: CanvasLayer = $UI
+@onready var map_shortcuts = %MapShortcuts
 ## 右上角的伤害统计面板（和战斗里那块是同一个场景，数据都读 Global）。
 ## 它不在 _setup_overlays() 里创建，而是 world_map.tscn 直接摆好的常驻 HUD。
 @onready var battle_stats: BattleStatsPanel = $UI/BattleStats
@@ -395,7 +393,7 @@ func _ready() -> void:
 	var icon := _player_icon()
 	if _player_anim == null:
 		player_sprite.texture = icon
-	# 分辨率归一：显示高度恒等于 MAP_UNIT_HEIGHT，与贴图分辨率无关。
+	# 按地图配置的高度缩放，与贴图分辨率无关。
 	# 动画模式下取的是条带图高度（480），region 高度一致，所以同一套公式照样成立。
 	var tex := player_sprite.texture
 	if tex != null:
@@ -433,6 +431,7 @@ func _ready() -> void:
 	panel.hide()
 	# 浮层放在 _map 已拿到之后：操作菜单要按 _map.battle_enabled 决定「进入战斗」灰不灰。
 	_setup_overlays()
+	map_shortcuts.shortcut_pressed.connect(_on_map_shortcut)
 	_show_result()
 
 
@@ -818,8 +817,10 @@ func _process(delta: float) -> void:
 
 ## 高窗展开时收起地图题牌和巡逻入口，避免与面板标题抢占空间。
 func _sync_map_hud_visibility() -> void:
+	var show_hud := not _ui_open()
 	if battle_stats != null:
-		battle_stats.visible = not _ui_open()
+		battle_stats.visible = show_hud
+	map_shortcuts.visible = show_hud
 	var show_badges := not (_stats_open or _bag_open or _shop_open)
 	map_name_label.visible = show_badges
 	if _patrol_toggle != null:
@@ -1059,7 +1060,7 @@ func _make_companion(stats: UnitStats) -> Node2D:
 	var sprite := Sprite2D.new()
 	sprite.name = "Sprite"
 	sprite.texture = stats.icon
-	# 和玩家一样按贴图高度归一到 MAP_UNIT_HEIGHT（队友的 sprite 没有父级缩放，直接算）。
+	# 队友沿用地图配置的显示高度，精灵没有父级缩放。
 	sprite.scale = Vector2(1.3, 1.3)      # 贴图为空时的兜底
 	if stats.icon != null and stats.icon.get_height() > 0:
 		sprite.scale = Vector2.ONE * (_unit_height() / float(stats.icon.get_height()))
@@ -1503,7 +1504,27 @@ func _close_pause_menu() -> void:
 	_focus_ring.clear()
 
 
+func _on_map_shortcut(action: StringName) -> void:
+	if _ui_open():
+		return
+	SoundManager.play_sound(SoundManager.Sound.UI)
+	match action:
+		&"bag":
+			_open_bag()
+		&"stats":
+			_open_stats()
+		&"party":
+			_open_party_panel()
+		&"auto_cast":
+			_open_auto_cast_panel()
+		&"skin":
+			Paper.UiSkin.cycle()
+		&"system":
+			_open_pause_menu()
+
+
 func _open_auto_cast_panel() -> void:
+	_subpanel_from_menu = _menu_open
 	_close_pause_menu()
 	_auto_cast_panel.open(deployed, auto_cast_plan)
 	_set_focus_ring(_auto_cast_panel.focus_ring())
@@ -1511,12 +1532,13 @@ func _open_auto_cast_panel() -> void:
 
 func _back_from_auto_cast_panel() -> void:
 	_auto_cast_panel.hide()
-	_open_pause_menu()
+	_return_from_menu_panel()
 
 
 
 ## 打开队伍管理二级页：把操作菜单藏起来（避免两层都亮着），按 _party 与 deployed 重建列表。
 func _open_party_panel() -> void:
+	_subpanel_from_menu = _menu_open
 	_party_open = true
 	_pause_menu.hide()
 	_menu_open = false            # 菜单确实不显示了，状态位要跟着诚实（退回时由 _back_from_party_panel 再弹回来）
@@ -1525,12 +1547,18 @@ func _open_party_panel() -> void:
 	_set_focus_ring(_party_panel.focus_ring())
 
 
-## Esc /「返回」：从队伍管理退回操作菜单（二级页逐级退，而不是直接回游戏）。
+## Esc /「返回」：回到进入团队页前的界面。
 func _back_from_party_panel() -> void:
 	_party_open = false
 	_party_panel.hide()
+	_return_from_menu_panel()
+
+
+func _return_from_menu_panel() -> void:
 	_focus_ring.clear()
-	_open_pause_menu()
+	if _subpanel_from_menu:
+		_subpanel_from_menu = false
+		_open_pause_menu()
 
 
 ## 点了「上阵」：只把请求转给 GameRoot。

@@ -367,6 +367,8 @@ func _build_stats_grid(character: UnitStats, derived: Dictionary) -> void:
 	gained_bar.custom_minimum_size = Vector2(0, VALUE_HEIGHT)
 	gained_bar.add_theme_stylebox_override("panel", _value_style())
 	var gained_label := Label.new()
+	if Paper.UiSkin.is_ink():
+		gained_label.add_theme_color_override("font_color", Color("#172832"))
 	gained_label.text = gained_exp_text
 	gained_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	gained_label.add_theme_font_size_override("font_size", 17)
@@ -390,6 +392,8 @@ func _build_stats_grid(character: UnitStats, derived: Dictionary) -> void:
 	exp_bar.custom_minimum_size = Vector2(0, VALUE_HEIGHT)
 	exp_bar.add_theme_stylebox_override("panel", _value_style())
 	var exp_label := Label.new()
+	if Paper.UiSkin.is_ink():
+		exp_label.add_theme_color_override("font_color", Color("#172832"))
 	exp_label.text = need_exp_text
 	exp_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	exp_label.add_theme_font_size_override("font_size", 17)
@@ -478,7 +482,7 @@ func _make_section_title(text: String) -> Label:
 	var label := Label.new()
 	label.text = text
 	label.add_theme_font_size_override("font_size", 14)
-	label.add_theme_color_override("font_color", Paper.SOFT_INK)
+	label.add_theme_color_override("font_color", Paper.tone(Paper.SOFT_INK))
 	return label
 
 
@@ -492,7 +496,7 @@ func _make_grid_label(text: String) -> Control:
 	label.custom_minimum_size = Vector2(LABEL_WIDTH, 0)
 	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	label.add_theme_font_size_override("font_size", 16)
-	label.add_theme_color_override("font_color", Paper.SOFT_INK)
+	label.add_theme_color_override("font_color", Paper.tone(Paper.SOFT_INK))
 	return label
 
 
@@ -507,6 +511,8 @@ func _make_grid_value(text: String, key := "", attr_index := -1) -> PanelContain
 	box.add_theme_stylebox_override("panel", _value_style())
 	var label := Label.new()
 	label.name = "ValueLabel"
+	if Paper.UiSkin.is_ink():
+		label.add_theme_color_override("font_color", Color("#172832"))
 	label.text = text
 	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	label.add_theme_font_size_override("font_size", 17)
@@ -553,8 +559,8 @@ func _make_confirm_button() -> Button:
 ## 值框的底板样式：深色底 + 细描边 + 小圆角。
 func _value_style() -> StyleBoxFlat:
 	var style := StyleBoxFlat.new()
-	style.bg_color = Paper.PAPER
-	style.border_color = Paper.PALE_EDGE
+	style.bg_color = Color("#bccbd5") if Paper.UiSkin.is_ink() else Paper.PAPER
+	style.border_color = Paper.tone(Paper.PALE_EDGE)
 	style.set_border_width_all(1)
 	style.set_corner_radius_all(4)
 	style.content_margin_left = 8
@@ -663,8 +669,8 @@ func _make_skill_table_header() -> Control:
 ## 表头底板：深色 + 只有下边框的一条金线。
 func _skill_header_style() -> StyleBoxFlat:
 	var style := StyleBoxFlat.new()
-	style.bg_color = Paper.INSET
-	style.border_color = Paper.EDGE
+	style.bg_color = Paper.tone(Paper.INSET)
+	style.border_color = Paper.tone(Paper.EDGE)
 	style.border_width_bottom = 1
 	style.corner_radius_top_left = 5
 	style.corner_radius_top_right = 5
@@ -720,14 +726,13 @@ func _make_table_cell(text: String, width: float, font_size: int, color := Paper
 func _skill_row_style(selected: bool, index := 0) -> StyleBoxFlat:
 	var style := StyleBoxFlat.new()
 	if selected:
-		style.bg_color = Paper.INSET
-		style.border_color = Paper.VERMILION
+		style.bg_color = Paper.tone(Paper.INSET)
+		style.border_color = Paper.tone(Paper.VERMILION)
 		style.set_border_width_all(2)
 	else:
 		# 斑马纹：奇偶行底色略有差别，密集列表更好读
-		style.bg_color = Paper.PAPER if index % 2 == 0 \
-				else Color("#f2e2c0")
-		style.border_color = Paper.PALE_EDGE
+		style.bg_color = Paper.tone(Paper.PAPER if index % 2 == 0 else Color("#f2e2c0"))
+		style.border_color = Paper.tone(Paper.PALE_EDGE)
 		style.set_border_width_all(1)
 	style.set_corner_radius_all(6)
 	style.content_margin_left = 10
@@ -773,8 +778,8 @@ func _skill_cost_text(level: int) -> String:
 ## 技能详情卡：深底 + 2px 暗金描边 + 大内边距，和上面的列表区分开。
 func _skill_detail_style() -> StyleBoxFlat:
 	var style := StyleBoxFlat.new()
-	style.bg_color = Paper.PAPER
-	style.border_color = Paper.EDGE
+	style.bg_color = Paper.tone(Paper.PAPER)
+	style.border_color = Paper.tone(Paper.EDGE)
 	style.set_border_width_all(2)
 	style.set_corner_radius_all(8)
 	style.content_margin_left = 14
@@ -798,7 +803,7 @@ func _add_skill_detail(skill: Dictionary, character: UnitStats) -> void:
 	title.text = "%s　Lv.%d/%d　%s" % [skill["name"], level, Global.SECT_SKILL_MAX_LEVEL,
 			"主动" if skill.has("targets") or bool(skill.get("targets_all", false)) else "被动"]
 	title.add_theme_font_size_override("font_size", 16)
-	title.add_theme_color_override("font_color", Paper.VERMILION)
+	title.add_theme_color_override("font_color", Paper.tone(Paper.VERMILION))
 	box_content.add_child(title)
 
 	# 【描述】放风味文案，【效果】放机制说明
@@ -807,14 +812,14 @@ func _add_skill_detail(skill: Dictionary, character: UnitStats) -> void:
 		var lore_label := Label.new()
 		lore_label.text = "【描述】" + lore
 		lore_label.add_theme_font_size_override("font_size", 14)
-		lore_label.add_theme_color_override("font_color", Paper.SOFT_INK)
+		lore_label.add_theme_color_override("font_color", Paper.tone(Paper.SOFT_INK))
 		lore_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		box_content.add_child(lore_label)
 
 	var desc := Label.new()
 	desc.text = "【效果】" + String(skill["desc"])
 	desc.add_theme_font_size_override("font_size", 14)
-	desc.add_theme_color_override("font_color", Paper.INK)
+	desc.add_theme_color_override("font_color", Paper.tone(Paper.INK))
 	desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	box_content.add_child(desc)
 
@@ -822,12 +827,12 @@ func _add_skill_detail(skill: Dictionary, character: UnitStats) -> void:
 	var cond := Label.new()
 	if level >= Global.SECT_SKILL_MAX_LEVEL:
 		cond.text = "【条件】已满级"
-		cond.add_theme_color_override("font_color", Paper.VERMILION)
+		cond.add_theme_color_override("font_color", Paper.tone(Paper.VERMILION))
 	else:
 		var cost := GameRoot.sect_skill_upgrade_cost(level)
 		cond.text = "【条件】经验 %d · 金币 %d%s" % [int(cost["exp"]), int(cost["coins"]),
 				"" if why.is_empty() else "　（%s）" % why]
-		cond.add_theme_color_override("font_color", Paper.SOFT_INK if why.is_empty() else Paper.VERMILION)
+		cond.add_theme_color_override("font_color", Paper.tone(Paper.SOFT_INK if why.is_empty() else Paper.VERMILION))
 	cond.add_theme_font_size_override("font_size", 13)
 	box_content.add_child(cond)
 
@@ -835,7 +840,7 @@ func _add_skill_detail(skill: Dictionary, character: UnitStats) -> void:
 	owned.text = "【拥有】经验 %s · 金币 %s" % [
 			Global.format_stat(GameRoot.exp_of(character)), Global.format_stat(Global.coins)]
 	owned.add_theme_font_size_override("font_size", 13)
-	owned.add_theme_color_override("font_color", Paper.SOFT_INK)
+	owned.add_theme_color_override("font_color", Paper.tone(Paper.SOFT_INK))
 	box_content.add_child(owned)
 
 	var buttons := HBoxContainer.new()
@@ -886,7 +891,7 @@ func _add_plain_skill_row(tag: String, skill_name: String, desc: String) -> void
 	var desc_label := Label.new()
 	desc_label.text = desc
 	desc_label.add_theme_font_size_override("font_size", 12)
-	desc_label.add_theme_color_override("font_color", Paper.SOFT_INK)
+	desc_label.add_theme_color_override("font_color", Paper.tone(Paper.SOFT_INK))
 	desc_label.clip_text = true
 	desc_label.tooltip_text = desc
 	desc_label.mouse_filter = Control.MOUSE_FILTER_STOP
@@ -899,7 +904,7 @@ func _make_tag_label(tag: String) -> Label:
 	var label := Label.new()
 	label.text = "【%s】" % tag
 	label.add_theme_font_size_override("font_size", 13)
-	label.add_theme_color_override("font_color", Paper.VERMILION)
+	label.add_theme_color_override("font_color", Paper.tone(Paper.VERMILION))
 	return label
 
 
@@ -937,7 +942,7 @@ func _add_skills_header(text: String) -> void:
 	var label := Label.new()
 	label.text = text
 	label.add_theme_font_size_override("font_size", 17)
-	label.add_theme_color_override("font_color", Paper.VERMILION)
+	label.add_theme_color_override("font_color", Paper.tone(Paper.VERMILION))
 	stats_box.add_child(label)
 
 
@@ -946,7 +951,7 @@ func _add_skills_note(text: String) -> void:
 	var label := Label.new()
 	label.text = text
 	label.add_theme_font_size_override("font_size", 13)
-	label.add_theme_color_override("font_color", Paper.SOFT_INK)
+	label.add_theme_color_override("font_color", Paper.tone(Paper.SOFT_INK))
 	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	stats_box.add_child(label)
 
@@ -959,7 +964,7 @@ func _make_section_column(title: String) -> VBoxContainer:
 	var header := Label.new()
 	header.text = title
 	header.add_theme_font_size_override("font_size", 16)
-	header.add_theme_color_override("font_color", Paper.VERMILION)
+	header.add_theme_color_override("font_color", Paper.tone(Paper.VERMILION))
 	column.add_child(header)
 	return column
 

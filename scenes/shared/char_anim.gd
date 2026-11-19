@@ -66,6 +66,7 @@ var _frame := 0
 var _time := 0.0
 ## 当前是不是"一次性动作播放中"。是的话播完会回到 _rest_*。
 var _once := false
+var _once_target_duration := 0.0
 ## 一次性动作结束后要回到的状态（战斗里就是 idle + 朝向右侧）。
 var _rest_action := "idle"
 var _rest_dir := "down"
@@ -111,7 +112,8 @@ func play(action: String, dir: String = "") -> void:
 
 ## 播放一次性动作（attack / cast），播完自动回到 idle（保持当前朝向）。
 ## 参数 action：动作名；dir：可选指定朝向，留空沿用当前朝向。
-func play_once(action: String, dir: String = "") -> void:
+## target_duration 为正时，把角色的帧动画对齐到武器动作时长。
+func play_once(action: String, dir: String = "", target_duration: float = 0.0) -> void:
 	if sprite == null:
 		return
 	var d := dir if not dir.is_empty() else _dir
@@ -120,6 +122,7 @@ func play_once(action: String, dir: String = "") -> void:
 	_frame = 0
 	_time = 0.0
 	_once = true
+	_once_target_duration = target_duration
 	_rest_action = "idle"
 	_rest_dir = d
 	_apply_frame()
@@ -159,17 +162,23 @@ func once_duration() -> float:
 	if not _once or String(_resolve(_action, _dir)[0]) != _action:
 		return 0.0
 	var count := _frame_count()
-	return float(count) / float(FPS.get(_action, 8.0)) if count > 1 else 0.0
+	return float(count) / _frame_rate(count) if count > 1 else 0.0
+
+
+func _frame_rate(count: int) -> float:
+	if _once and _once_target_duration > 0.0:
+		return float(count) / _once_target_duration
+	return float(FPS.get(_action, 8.0))
 
 
 func _process(delta: float) -> void:
 	if sprite == null or not sprite.is_visible_in_tree():
 		return
 	_time += delta
-	var fps: float = FPS.get(_action, 8.0)
 	var count := _frame_count()
 	if count <= 1:
 		return
+	var fps := _frame_rate(count)
 	var step := int(_time * fps)
 	if step <= 0:
 		return

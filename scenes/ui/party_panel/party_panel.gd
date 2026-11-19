@@ -262,7 +262,7 @@ func _make_slot(stats: UnitStats, slot_size: Vector2, icon_size: float) -> Butto
 
 	var name_label := Label.new()
 	name_label.text = stats.name
-	name_label.add_theme_color_override("font_color", Paper.INK)
+	name_label.add_theme_color_override("font_color", Paper.tone(Paper.INK))
 	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	name_label.add_theme_font_size_override("font_size", 17)
 	name_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -271,7 +271,7 @@ func _make_slot(stats: UnitStats, slot_size: Vector2, icon_size: float) -> Butto
 	# 门派：挂在名字下面一行，淡金色，和名字拉开层次。
 	var sect_label := Label.new()
 	sect_label.text = _sect_name(stats)
-	sect_label.add_theme_color_override("font_color", Paper.SOFT_INK)
+	sect_label.add_theme_color_override("font_color", Paper.tone(Paper.SOFT_INK))
 	sect_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	sect_label.add_theme_font_size_override("font_size", 13)
 	sect_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -292,8 +292,8 @@ func _make_slot(stats: UnitStats, slot_size: Vector2, icon_size: float) -> Butto
 ## 坑位样式盒（每次 new：共享 Resource 就地改色会污染其它坑位）。
 func _slot_style(bg: Color, border: Color, width: int) -> StyleBoxFlat:
 	var style := StyleBoxFlat.new()
-	style.bg_color = bg
-	style.border_color = border
+	style.bg_color = Paper.tone(bg)
+	style.border_color = Paper.tone(border)
 	style.set_border_width_all(width)
 	style.set_corner_radius_all(8)
 	return style
@@ -303,8 +303,8 @@ func _slot_style(bg: Color, border: Color, width: int) -> StyleBoxFlat:
 ## 向外扩是为了和"选中"的金框错开 —— 同一个坑位既可能被选中、又可能正好有键盘焦点。
 func _focus_style() -> StyleBoxFlat:
 	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0, 0, 0, 0)
-	style.border_color = Paper.VERMILION
+	style.bg_color = Paper.tone(Color(0, 0, 0, 0))
+	style.border_color = Paper.tone(Paper.VERMILION)
 	style.set_border_width_all(1)
 	style.set_corner_radius_all(10)
 	style.set_expand_margin_all(3)
@@ -325,8 +325,8 @@ func _make_empty_slot(slot_size: Vector2) -> Panel:
 	panel.custom_minimum_size = slot_size
 	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var style := StyleBoxFlat.new()
-	style.bg_color = Paper.INSET
-	style.border_color = Paper.PALE_EDGE
+	style.bg_color = Paper.tone(Paper.INSET)
+	style.border_color = Paper.tone(Paper.PALE_EDGE)
 	style.set_border_width_all(1)
 	style.set_corner_radius_all(8)
 	panel.add_theme_stylebox_override("panel", style)
@@ -336,7 +336,7 @@ func _make_empty_slot(slot_size: Vector2) -> Panel:
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	label.add_theme_font_size_override("font_size", 14)
-	label.add_theme_color_override("font_color", Paper.SOFT_INK)
+	label.add_theme_color_override("font_color", Paper.tone(Paper.SOFT_INK))
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	panel.add_child(label)
 	return panel

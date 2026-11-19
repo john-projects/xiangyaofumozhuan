@@ -43,6 +43,13 @@ var _current: BattleUnit
 var _next_round_first: BattleUnit
 
 
+func _ready() -> void:
+	Paper.UiSkin.changed().connect(_rebuild)
+	Paper.bind(round_number, func():
+		var ink := Paper.tone(Paper.VERMILION) if Paper.UiSkin.is_ink() else Color(0.54, 0.27, 0.20)
+		round_number.add_theme_color_override("font_color", ink))
+
+
 ## 更新整条顺序（每回合和有人阵亡时由 Battle 调）。units 已按速度排好，本组件不排序。
 ## 副作用：_queue 换成传入数组的引用，并全量重建 %Icons；分隔一并清掉（整条都是本轮）。
 func update_order(units: Array) -> void:
@@ -131,7 +138,7 @@ func _make_arrow() -> Control:
 	var arrow := Label.new()
 	arrow.text = "▶"
 	arrow.add_theme_font_size_override("font_size", 16)
-	arrow.add_theme_color_override("font_color", NEXT_ARROW)
+	arrow.add_theme_color_override("font_color", Paper.tone(NEXT_ARROW))
 	arrow.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	arrow.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	arrow.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -149,7 +156,7 @@ func _make_round_divider() -> Control:
 
 	var line := ColorRect.new()
 	line.custom_minimum_size = Vector2(3, 38)
-	line.color = DIVIDER_COLOR
+	line.color = Paper.tone(DIVIDER_COLOR)
 	line.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	line.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	box.add_child(line)
@@ -158,7 +165,7 @@ func _make_round_divider() -> Control:
 	label.text = "下轮"
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	label.add_theme_font_size_override("font_size", 13)
-	label.add_theme_color_override("font_color", DIVIDER_COLOR)
+	label.add_theme_color_override("font_color", Paper.tone(DIVIDER_COLOR))
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	box.add_child(label)
 	return box
@@ -177,13 +184,13 @@ func _make_icon(unit: BattleUnit, is_current: bool) -> Control:
 	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 	var style := StyleBoxFlat.new()
-	style.bg_color = Paper.PAPER if is_current else Paper.INSET
+	style.bg_color = Paper.tone(Paper.PAPER if is_current else Paper.INSET)
 	style.set_corner_radius_all(5)
 	style.set_border_width_all(3 if is_current else 2)
 	# 边框颜色只表达阵营，**当前出手者不改色**：高亮只靠"放大一点 + 边框略粗"。
 	# 阵营看的是 unit.is_player（BattleUnit 的运行时属性），不是 stats 里的东西 ——
 	# 同一个 .tres 可以被配成敌方，阵营只看实例上的标记。
-	style.border_color = PLAYER_BORDER if unit.is_player else ENEMY_BORDER
+	style.border_color = Paper.tone(PLAYER_BORDER if unit.is_player else ENEMY_BORDER)
 	panel.add_theme_stylebox_override("panel", style)
 
 	var tex := TextureRect.new()
@@ -209,7 +216,7 @@ func _make_icon(unit: BattleUnit, is_current: bool) -> Control:
 		mark.position = Vector2(4, 1)
 		mark.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		mark.add_theme_font_size_override("font_size", 12)
-		mark.add_theme_color_override("font_color", Paper.VERMILION)
+		mark.add_theme_color_override("font_color", Paper.tone(Paper.VERMILION))
 		panel.add_child(mark)
 
 	# 阵亡置灰：只调 alpha，保留边框颜色信息（还能看出他是哪一方的）。

@@ -96,7 +96,7 @@ var _hovered := ""
 
 ## 生命周期：两组页签各建一个 ButtonGroup（互斥），挂到 Global 的统计变化信号上，再画一次。
 func _ready() -> void:
-	detail.add_theme_stylebox_override("panel", get_theme_stylebox("panel", &"PanelContainer"))
+	Paper.bind(self, _refresh_skin)
 	var top_group := ButtonGroup.new()
 	total_tab.button_group = top_group
 	battle_tab.button_group = top_group
@@ -113,6 +113,13 @@ func _ready() -> void:
 	# 数据变了（开新战斗 / 每一笔伤害治疗）就刷新；面板换了场景会自己断开，不用手动解绑。
 	Global.battle_stats_changed.connect(_on_stats_changed)
 	_sync_roster()
+	_refresh()
+
+
+func _refresh_skin() -> void:
+	detail.add_theme_stylebox_override("panel", Paper.THEME.get_stylebox(&"panel", &"PanelContainer"))
+	$VBox/Divider.color = Paper.tone(Paper.EDGE) if Paper.UiSkin.is_ink() else Color(0.70, 0.57, 0.38, 1)
+	_rebuild_rows()
 	_refresh()
 
 
@@ -230,7 +237,7 @@ func _rebuild_rows() -> void:
 		empty.text = "暂无统计"
 		empty.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		empty.add_theme_font_size_override("font_size", 17)
-		empty.add_theme_color_override("font_color", DIM_COLOR)
+		empty.add_theme_color_override("font_color", Paper.tone(DIM_COLOR))
 		list.add_child(empty)
 		_fit_height.call_deferred()
 		return
@@ -243,13 +250,13 @@ func _rebuild_rows() -> void:
 	caption.text = "合计"
 	caption.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	caption.add_theme_font_size_override("font_size", 16)
-	caption.add_theme_color_override("font_color", DIM_COLOR)
+	caption.add_theme_color_override("font_color", Paper.tone(DIM_COLOR))
 	header.add_child(caption)
 	_summary = Label.new()
 	_summary.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	_summary.custom_minimum_size = Vector2(NUMBERS_W, 0)
 	_summary.add_theme_font_size_override("font_size", 16)
-	_summary.add_theme_color_override("font_color", DIM_COLOR)
+	_summary.add_theme_color_override("font_color", Paper.tone(DIM_COLOR))
 	header.add_child(_summary)
 	list.add_child(header)
 
@@ -275,7 +282,7 @@ func _make_row(who: String) -> HBoxContainer:
 	name_label.clip_text = true                       # 名字过长时裁掉，别把行撑变形
 	name_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	name_label.add_theme_font_size_override("font_size", 18)
-	name_label.add_theme_color_override("font_color", NAME_COLOR)
+	name_label.add_theme_color_override("font_color", Paper.tone(NAME_COLOR))
 	row.add_child(name_label)
 
 	# 条形区：底槽 + 若干来源色块（色块由 _sync_segments() 按需补/隐藏）。
@@ -288,7 +295,7 @@ func _make_row(who: String) -> HBoxContainer:
 	row.add_child(bar)
 
 	var track := ColorRect.new()
-	track.color = TRACK_COLOR
+	track.color = Paper.tone(TRACK_COLOR)
 	track.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	bar.add_child(track)
 	# 入树之后再设锚点：父节点 rect 没定之前 PRESET_FULL_RECT 可能算出意外结果。
@@ -306,13 +313,13 @@ func _make_row(who: String) -> HBoxContainer:
 	var value_label := Label.new()
 	value_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	value_label.add_theme_font_size_override("font_size", 18)
-	value_label.add_theme_color_override("font_color", VALUE_COLOR)
+	value_label.add_theme_color_override("font_color", Paper.tone(VALUE_COLOR))
 	numbers.add_child(value_label)
 
 	var percent_label := Label.new()
 	percent_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	percent_label.add_theme_font_size_override("font_size", 15)
-	percent_label.add_theme_color_override("font_color", DIM_COLOR)
+	percent_label.add_theme_color_override("font_color", Paper.tone(DIM_COLOR))
 	numbers.add_child(percent_label)
 
 	_rows[who] = {"root": row, "value": value_label, "percent": percent_label,
@@ -352,7 +359,7 @@ func _refresh() -> void:
 
 	var color := _side_color()
 	_summary.text = _format_amount(sum)
-	_summary.add_theme_color_override("font_color", color)
+	_summary.add_theme_color_override("font_color", Paper.tone(color))
 
 	for i in entries.size():
 		var who: String = String(entries[i]["name"])
@@ -365,7 +372,7 @@ func _refresh() -> void:
 		var value_label: Label = row["value"]
 		value_label.text = _format_amount(value)
 		var is_top := best > 0.0 and is_equal_approx(value, best)
-		value_label.add_theme_color_override("font_color", TOP_COLOR if is_top else VALUE_COLOR)
+		value_label.add_theme_color_override("font_color", Paper.tone(TOP_COLOR if is_top else VALUE_COLOR))
 		# 占比：分母是全队合计（就是表头那个数），四舍五入到整数，跟在数值后面。
 		var percent_label: Label = row["percent"]
 		percent_label.text = "（%d%%）" % int(roundf(value / sum * 100.0)) if sum > 0.0 else "（0%）"
@@ -443,7 +450,7 @@ func _sync_segments(row: Dictionary, parts: Array[Dictionary], best: float) -> v
 			continue
 		var width := float(parts[i]["value"]) / best
 		seg.visible = true
-		seg.color = parts[i]["color"]
+		seg.color = Paper.tone(parts[i]["color"])
 		seg.anchor_left = cursor
 		seg.anchor_right = cursor + width
 		seg.offset_left = 0.0
@@ -587,7 +594,7 @@ func _make_detail_row(label: String, value: float, total: float, color: Color,
 	name_label.clip_text = true
 	name_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	name_label.add_theme_font_size_override("font_size", 16)
-	name_label.add_theme_color_override("font_color", NAME_COLOR)
+	name_label.add_theme_color_override("font_color", Paper.tone(NAME_COLOR))
 	row.add_child(name_label)
 
 	var value_label := Label.new()
@@ -596,7 +603,7 @@ func _make_detail_row(label: String, value: float, total: float, color: Color,
 	value_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	value_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	value_label.add_theme_font_size_override("font_size", 16)
-	value_label.add_theme_color_override("font_color", color)
+	value_label.add_theme_color_override("font_color", Paper.tone(color))
 	row.add_child(value_label)
 
 	if show_percent:
@@ -606,7 +613,7 @@ func _make_detail_row(label: String, value: float, total: float, color: Color,
 		percent.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 		percent.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		percent.add_theme_font_size_override("font_size", 14)
-		percent.add_theme_color_override("font_color", DIM_COLOR)
+		percent.add_theme_color_override("font_color", Paper.tone(DIM_COLOR))
 		row.add_child(percent)
 	return row
 
@@ -617,7 +624,7 @@ func _make_detail_label(text: String, font_size: int, color: Color) -> Label:
 	label.text = text
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	label.add_theme_font_size_override("font_size", font_size)
-	label.add_theme_color_override("font_color", color)
+	label.add_theme_color_override("font_color", Paper.tone(color))
 	return label
 
 
@@ -625,7 +632,7 @@ func _make_detail_label(text: String, font_size: int, color: Color) -> Label:
 func _make_detail_separator() -> ColorRect:
 	var line := ColorRect.new()
 	line.custom_minimum_size = Vector2(0, 1)
-	line.color = Paper.EDGE
+	line.color = Paper.tone(Paper.EDGE)
 	line.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	return line
 

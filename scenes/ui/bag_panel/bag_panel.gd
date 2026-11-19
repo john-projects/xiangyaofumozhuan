@@ -2,6 +2,7 @@ extends Control
 class_name BagPanel
 
 const Paper := preload("res://styles/paper_ui.gd")
+const EquipmentSlot := preload("res://scenes/ui/equipment_slot.gd")
 
 ## 背包面板：方格背包（8 列 × 15 行 = 120 格）+ 角色区（形象 + 左右各 3 个装备栏）。
 ## 只读展示：不改游戏数据，点击只发信号，卖 / 穿 / 脱的规则由 WorldMap 与 GameRoot 决定。
@@ -30,8 +31,6 @@ const VISIBLE_ROWS := 8
 const GRID_SEPARATION := 10
 ## 背包格子边长。68 是按 1920×1080 反推的上限；别和 EQUIP_SLOT_SIZE 合并。
 const SLOT_SIZE := 68.0
-## 图标内边距（expand_icon 时留边，避免贴描边）。
-const SLOT_ICON_MARGIN := 8
 
 ## 形象左右各几个装备栏。
 const EQUIP_SLOTS_PER_SIDE := 4
@@ -47,8 +46,6 @@ const EQUIP_LAYOUT: Array[int] = [
 	ItemBase.EquipType.RING,
 	ItemBase.EquipType.EARRING,
 ]
-## 栏位名行高；装备栏 StyleBox 的 content_margin_bottom 要留出这么多。
-const EQUIP_LABEL_HEIGHT := 20.0
 ## 装备栏边长。比背包格子大：形象框要保持竖长，装备栏也更醒目。
 const EQUIP_SLOT_SIZE := 84.0
 ## 形象框尺寸；高度 = 一列装备栏叠起来（4 个 × 84 + 3 × 间距）。
@@ -124,7 +121,6 @@ var _picker_grid: GridContainer = null
 ## 打开选择器时焦点该落到哪一格（当前角色那一格）。
 var _picker_focus_target: Button = null
 ## 形象框的原始样式（聚焦时临时换金边，失去焦点要还原）。
-var _frame_base_style: StyleBox = null
 
 
 func _ready() -> void:
@@ -145,7 +141,6 @@ func _ready() -> void:
 		# 键盘也要能选中它：Panel 默认 focus_mode = NONE，Tab / 方向键根本到不了
 		player_frame.focus_mode = Control.FOCUS_ALL
 		Paper.add_portrait_wash(player_frame)
-		_frame_base_style = player_frame.get_theme_stylebox("panel")
 		player_frame.focus_entered.connect(_on_player_frame_focus.bind(true))
 		player_frame.focus_exited.connect(_on_player_frame_focus.bind(false))
 		player_frame.gui_input.connect(_on_player_frame_input)
@@ -222,9 +217,7 @@ func set_slot_focus_enabled(enabled: bool) -> void:
 ## 在信息行显示一句提示（留给卖出 / 合成）。
 
 
-
 ## 清空提示文字（WorldMap 每次打开时调）。
-
 
 
 ## 当前焦点环：有东西的背包格子 → 已穿装备栏 → 可用的切换箭头。W/S 走格只看 _slots。
@@ -270,15 +263,7 @@ func _make_equip_slot(slot_type: int) -> Button:
 	slot.expand_icon = true
 	slot.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	# 栏位名（永远显示，玩家一眼知道这格收什么）
-	var tag := Label.new()
-	tag.name = "SlotTypeLabel"
-	tag.text = ItemBase.equip_type_name(slot_type)
-	tag.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	tag.add_theme_font_size_override("font_size", 13)
-	tag.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	tag.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_set_tag_bottom(tag)
-	slot.add_child(tag)
+	EquipmentSlot.add_type_label(slot, slot_type)
 	# 点一下 = 请求脱下（能不能脱、脱到哪由 GameRoot.unequip_slot() 判定）
 	slot.pressed.connect(func() -> void: unequip_requested.emit(slot_type))
 	# 悬停 / 键盘焦点弹属性卡。⚠ 这里**不能**把 item 绑定进去：换角色/换装备后 item 会变，
@@ -306,7 +291,6 @@ func _refresh_equip_slots() -> void:
 ## 刷新单个装备栏：空栏位清图标并 disabled、用原生 tooltip；有装备则画图标 + 稀有度描边 + 属性卡。
 func _refresh_equip_slot(slot: Button, slot_type: int) -> void:
 	var tag := slot.get_node_or_null("SlotTypeLabel") as Label
-	var bottom_margin := int(EQUIP_LABEL_HEIGHT) + 4
 	var character := current_character()
 	var item: ItemBase = GameRoot.equipment_in(character, slot_type)
 
@@ -315,30 +299,26 @@ func _refresh_equip_slot(slot: Button, slot_type: int) -> void:
 		slot.disabled = true
 		slot.focus_mode = Control.FOCUS_NONE
 		slot.add_theme_stylebox_override("disabled",
-				_slot_style(Paper.PALE_EDGE, Paper.INSET, bottom_margin))
-		if tag != null:
-			_set_tag_center(tag)
-			tag.add_theme_color_override("font_color", Paper.SOFT_INK)
+				EquipmentSlot.style(Paper.PALE_EDGE, Paper.INSET))
+		EquipmentSlot.update_type_label(tag, false)
 		# 空栏位没有属性卡，用原生 tooltip 说明这个坑位怎么用（提到当前是谁的栏位）
 		var who: String = character.name if character != null else "角色"
 		slot.tooltip_text = "%s栏：把%s从背包里点一下就能给「%s」穿上" % [
 			ItemBase.equip_type_name(slot_type), ItemBase.equip_type_name(slot_type), who]
 		return
 
-	# 有装备：图标 + 稀有度描边（和背包格子、提示卡一套配色）
-	slot.icon = item.item_icon
+	# 有装备：图标 + 稀有度描边（与背包格子的配色一致）
+	slot.icon = EquipmentSlot.icon_for(item.item_icon)
 	slot.disabled = false
 	slot.focus_mode = Control.FOCUS_ALL if _slot_focus_enabled else Control.FOCUS_NONE
 	slot.tooltip_text = ""      # 有属性卡就不再设原生 tooltip，免得两个框叠一起
 	var tier_color: Color = Global.TIER_COLORS.get(item.item_tier, Paper.PALE_EDGE)
 	# 底色也跟品质走（和背包方格、商人货架同一套）
-	slot.add_theme_stylebox_override("normal", _slot_style(Paper.quality_edge(tier_color), Paper.quality_fill(tier_color, 0.24), bottom_margin))
-	slot.add_theme_stylebox_override("hover", _slot_style(Paper.quality_edge(tier_color), Paper.quality_fill(tier_color, 0.39), bottom_margin))
-	slot.add_theme_stylebox_override("focus", _slot_style(Paper.VERMILION, Paper.quality_fill(tier_color, 0.35), bottom_margin))
-	slot.add_theme_stylebox_override("pressed", _slot_style(Paper.VERMILION, Paper.quality_fill(tier_color, 0.48), bottom_margin))
-	if tag != null:
-		_set_tag_bottom(tag)
-		tag.add_theme_color_override("font_color", Paper.INK)
+	slot.add_theme_stylebox_override("normal", EquipmentSlot.style(Paper.quality_edge(tier_color), Paper.quality_fill(tier_color, 0.24)))
+	slot.add_theme_stylebox_override("hover", EquipmentSlot.style(Paper.quality_edge(tier_color), Paper.quality_fill(tier_color, 0.39)))
+	slot.add_theme_stylebox_override("focus", EquipmentSlot.style(Paper.VERMILION, Paper.quality_fill(tier_color, 0.35)))
+	slot.add_theme_stylebox_override("pressed", EquipmentSlot.style(Paper.VERMILION, Paper.quality_fill(tier_color, 0.48)))
+	EquipmentSlot.update_type_label(tag, true)
 	_equip_slots.append(slot)
 
 
@@ -347,30 +327,6 @@ func _show_equip_tip(slot: Control, slot_type: int) -> void:
 	var item: ItemBase = GameRoot.equipment_in(current_character(), slot_type)
 	if item != null:
 		TooltipManager.show_for_control(slot, item)
-
-
-## 栏位名缩到格子底部（有装备时用）。
-func _set_tag_bottom(tag: Label) -> void:
-	tag.anchor_left = 0.0
-	tag.anchor_right = 1.0
-	tag.anchor_top = 1.0
-	tag.anchor_bottom = 1.0
-	tag.offset_left = 2.0
-	tag.offset_right = -2.0
-	tag.offset_top = -(EQUIP_LABEL_HEIGHT + 2.0)
-	tag.offset_bottom = -2.0
-
-
-## 栏位名居中铺满格子（空栏位用）。
-func _set_tag_center(tag: Label) -> void:
-	tag.anchor_left = 0.0
-	tag.anchor_right = 1.0
-	tag.anchor_top = 0.0
-	tag.anchor_bottom = 1.0
-	tag.offset_left = 2.0
-	tag.offset_right = -2.0
-	tag.offset_top = 0.0
-	tag.offset_bottom = 0.0
 
 
 ## 当前展示的角色（团队为空时退回主角）。决定装备栏显示谁、点背包穿给谁；纯读。
@@ -441,16 +397,12 @@ func _on_player_frame_focus(focused: bool) -> void:
 	if player_frame == null:
 		return
 	if focused:
-		var style: StyleBoxFlat = null
-		if _frame_base_style is StyleBoxFlat:
-			style = (_frame_base_style as StyleBoxFlat).duplicate() as StyleBoxFlat
-		else:
-			style = StyleBoxFlat.new()
-		style.border_color = Paper.VERMILION
+		var style := Paper.THEME.get_stylebox(&"panel", &"PaperPortrait").duplicate() as StyleBoxFlat
+		style.border_color = Paper.tone(Paper.VERMILION)
 		style.set_border_width_all(3)
 		player_frame.add_theme_stylebox_override("panel", style)
-	elif _frame_base_style != null:
-		player_frame.add_theme_stylebox_override("panel", _frame_base_style)
+	else:
+		player_frame.remove_theme_stylebox_override("panel")
 
 
 ## 造（只造一次）选择器：一个居中的面板 + 一排人像格。
@@ -461,12 +413,7 @@ func _ensure_picker() -> void:
 	_picker = PanelContainer.new()
 	_picker.name = "CharacterPicker"
 	_picker.visible = false
-	var style := get_theme_stylebox("panel", &"PanelContainer").duplicate() as StyleBox
-	style.content_margin_left = 14
-	style.content_margin_right = 14
-	style.content_margin_top = 12
-	style.content_margin_bottom = 12
-	_picker.add_theme_stylebox_override("panel", style)
+	Paper.bind_panel(_picker, &"PanelContainer", Vector4(14, 12, 14, 12))
 	_picker_grid = GridContainer.new()
 	_picker_grid.name = "PickerGrid"
 	_picker_grid.columns = 5
@@ -722,10 +669,10 @@ func _make_slot(item: ItemBase) -> Button:
 	# 空格子：不可点、不可聚焦，只留一个暗描边当"格位"
 	if item == null:
 		slot.disabled = true
-		slot.add_theme_stylebox_override("disabled", _slot_style(Paper.PALE_EDGE, Paper.INSET))
+		slot.add_theme_stylebox_override("disabled", EquipmentSlot.style(Paper.PALE_EDGE, Paper.INSET))
 		return slot
 
-	slot.icon = item.item_icon
+	slot.icon = EquipmentSlot.icon_for(item.item_icon)
 	slot.expand_icon = true
 	slot.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	# 描边颜色跟稀有度走（TIER_COLORS 是 Global 上的共享常量，只读不改）
@@ -733,10 +680,10 @@ func _make_slot(item: ItemBase) -> Button:
 	# 底色也跟品质走：同一色相、极低透明度，既不抢图标又能分辨档次
 	var tier_bg := Paper.quality_fill(tier_color, 0.24)
 	var tier_bg_hover := Paper.quality_fill(tier_color, 0.39)
-	slot.add_theme_stylebox_override("normal", _slot_style(Paper.quality_edge(tier_color), tier_bg))
-	slot.add_theme_stylebox_override("hover", _slot_style(Paper.quality_edge(tier_color), tier_bg_hover))
-	slot.add_theme_stylebox_override("focus", _slot_style(Paper.VERMILION, Paper.quality_fill(tier_color, 0.35)))
-	slot.add_theme_stylebox_override("pressed", _slot_style(Paper.VERMILION, Paper.quality_fill(tier_color, 0.48)))
+	slot.add_theme_stylebox_override("normal", EquipmentSlot.style(Paper.quality_edge(tier_color), tier_bg))
+	slot.add_theme_stylebox_override("hover", EquipmentSlot.style(Paper.quality_edge(tier_color), tier_bg_hover))
+	slot.add_theme_stylebox_override("focus", EquipmentSlot.style(Paper.VERMILION, Paper.quality_fill(tier_color, 0.35)))
+	slot.add_theme_stylebox_override("pressed", EquipmentSlot.style(Paper.VERMILION, Paper.quality_fill(tier_color, 0.48)))
 
 	# 悬停 / 键盘焦点都弹同一张属性卡（TooltipManager 会把卡片锚到这个格子的右上角）
 	slot.mouse_entered.connect(TooltipManager.show_for_control.bind(slot, item))
@@ -755,26 +702,11 @@ func _on_slot_pressed(item: ItemBase) -> void:
 	item_activated.emit(item)
 
 
-## 方格描边样式。bottom_margin：装备栏要传 EQUIP_LABEL_HEIGHT+4，给底部栏位名留位。
-## expand_icon 会撑满按钮，内边距只能靠 StyleBox 的 content_margin。
-func _slot_style(border: Color, bg: Color, bottom_margin := SLOT_ICON_MARGIN) -> StyleBoxFlat:
-	var style := StyleBoxFlat.new()
-	style.bg_color = bg
-	style.border_color = border
-	style.set_border_width_all(2)
-	style.set_corner_radius_all(6)
-	style.content_margin_left = SLOT_ICON_MARGIN
-	style.content_margin_right = SLOT_ICON_MARGIN
-	style.content_margin_top = SLOT_ICON_MARGIN
-	style.content_margin_bottom = bottom_margin
-	return style
-
-
 ## 头像选择器方格样式（可选描边宽度，用来把"当前角色"框加粗）。
 func _equip_slot_style(bg: Color, border: Color, width := 1) -> StyleBoxFlat:
 	var style := StyleBoxFlat.new()
-	style.bg_color = bg
-	style.border_color = border
+	style.bg_color = Paper.tone(bg)
+	style.border_color = Paper.tone(border)
 	style.set_border_width_all(width)
 	style.set_corner_radius_all(10)
 	return style

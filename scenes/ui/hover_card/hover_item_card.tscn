@@ -1,16 +1,24 @@
 [gd_scene format=3 uid="uid://sojan35we4eq"]
 
-[ext_resource type="StyleBox" uid="uid://c383vl8xrt17p" path="res://styles/common_style.tres" id="1_t8nmi"]
 [ext_resource type="Script" uid="uid://b72b4luw5i8ib" path="res://scenes/ui/hover_card/hover_item_card.gd" id="2_lqlaq"]
 
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_pi0uk"]
-bg_color = Color(0.29411766, 0.29411766, 0.29411766, 0.78431374)
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_tooltip"]
+bg_color = Color(0.048, 0.061, 0.073, 0.88)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.52, 0.57, 0.62, 0.76)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_left = 6
+corner_radius_bottom_right = 6
 
 [node name="HoverItemCard" type="Panel" unique_id=1756811679]
-custom_minimum_size = Vector2(370, 600)
-offset_right = 40.0
-offset_bottom = 40.0
-theme_override_styles/panel = ExtResource("1_t8nmi")
+custom_minimum_size = Vector2(370, 0)
+offset_right = 370.0
+offset_bottom = 160.0
+theme_override_styles/panel = SubResource("StyleBoxFlat_tooltip")
 script = ExtResource("2_lqlaq")
 
 [node name="MarginContainer" type="MarginContainer" parent="." unique_id=431591441]
@@ -63,18 +71,20 @@ offset_bottom = 122.0
 mouse_filter = 2
 bbcode_enabled = true
 scroll_active = false
+theme_override_colors/default_color = Color(1, 1, 1, 1)
 theme_override_font_sizes/normal_font_size = 16
 text = "【部位】"
 
 
 [node name="ItemDesc" type="RichTextLabel" parent="MarginContainer/Control" unique_id=1506487696]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(338, 420)
 layout_mode = 0
 offset_left = 0.0
 offset_top = 128.0
 offset_right = 338.0
-offset_bottom = 548.0
+offset_bottom = 128.0
 bbcode_enabled = true
+scroll_active = false
+theme_override_colors/default_color = Color(1, 1, 1, 1)
 text = "desc"
 

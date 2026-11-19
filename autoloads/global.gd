@@ -4,6 +4,8 @@
 ## ⚠ preload 在编译期绑定，路径改名或删除会直接报错。
 extends Node
 
+const UiSkin := preload("res://styles/ui_skin.gd")
+
 ## 公共 preload 资源：脚本加载时绑定，运行期零查找；换美术只改 uid。
 const FLOATING_TEXT_SCENE = preload("uid://btdihrlsugqm0")      # 飘字（FloatingText）。Battle.create_floating_text() 实例化它
 
@@ -735,6 +737,7 @@ const MSG_LOG_LAYER := 5
 
 
 func _ready() -> void:
+	UiSkin.load_preference()
 	_ensure_msg_log()
 	_add_screen_frame()
 
@@ -748,7 +751,8 @@ func _add_screen_frame() -> void:
 
 	var frame := NinePatchRect.new()
 	frame.name = "ScreenFrame"
-	frame.texture = load("res://assets/ui/paper_screen_frame.png") as Texture2D
+	UiSkin.refresh_screen_frame(frame)
+	UiSkin.changed().connect(UiSkin.refresh_screen_frame.bind(frame))
 	frame.draw_center = false
 	frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	frame.patch_margin_left = 54

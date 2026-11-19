@@ -70,7 +70,7 @@ tracks/4/keys = {
 
 [sub_resource type="Animation" id="Animation_attack"]
 resource_name = "attack"
-length = 0.34
+length = 0.75
 step = 0.0166667
 tracks/0/type = "value"
 tracks/0/imported = false
@@ -79,10 +79,10 @@ tracks/0/path = NodePath("Pose:position")
 tracks/0/interp = 1
 tracks/0/loop_wrap = true
 tracks/0/keys = {
-"times": PackedFloat32Array(0, 0.07, 0.123, 0.183, 0.243, 0.288, 0.34),
-"transitions": PackedFloat32Array(1, 1, 1, 1, 1, 1, 1),
+"times": PackedFloat32Array(0, 0.12, 0.24, 0.32, 0.4, 0.48, 0.55, 0.6, 0.643, 0.69, 0.725, 0.75),
+"transitions": PackedFloat32Array(1, 0.85, 0.83, 1.15, 1.15, 1, 1, 0.67, 1, 0.87, 0.72, 1),
 "update": 0,
-"values": [Vector2(0, 0), Vector2(25, -11), Vector2(31, -24), Vector2(-12, -11), Vector2(-68, -7), Vector2(-35, 17), Vector2(0, 0)]
+"values": [Vector2(0, 0), Vector2(-9, 28), Vector2(-20, 72), Vector2(-42, 94), Vector2(-80, 85), Vector2(-130, 54), Vector2(-183, 8), Vector2(-224, -35), Vector2(-192, -76), Vector2(-106, -55), Vector2(-35, -19), Vector2(0, 0)]
 }
 tracks/1/type = "value"
 tracks/1/imported = false
@@ -91,10 +91,10 @@ tracks/1/path = NodePath("Pose:rotation_degrees")
 tracks/1/interp = 1
 tracks/1/loop_wrap = true
 tracks/1/keys = {
-"times": PackedFloat32Array(0, 0.07, 0.123, 0.183, 0.243, 0.288, 0.34),
-"transitions": PackedFloat32Array(1, 1, 1, 1, 1, 1, 1),
+"times": PackedFloat32Array(0, 0.12, 0.24, 0.32, 0.4, 0.48, 0.55, 0.6, 0.643, 0.69, 0.725, 0.75),
+"transitions": PackedFloat32Array(1, 0.85, 0.83, 1.15, 1.15, 1, 1, 0.67, 1, 0.87, 0.72, 1),
 "update": 0,
-"values": [0, 38, 47, 7, -66, -85, 0]
+"values": [0, -23, -72, -108, -111, -103, -89, -72, -41, -17, -4, 0]
 }
 tracks/2/type = "value"
 tracks/2/imported = false
@@ -103,10 +103,10 @@ tracks/2/path = NodePath("Pose:scale")
 tracks/2/interp = 1
 tracks/2/loop_wrap = true
 tracks/2/keys = {
-"times": PackedFloat32Array(0, 0.07, 0.123, 0.183, 0.243, 0.288, 0.34),
-"transitions": PackedFloat32Array(1, 1, 1, 1, 1, 1, 1),
+"times": PackedFloat32Array(0, 0.12, 0.24, 0.32, 0.4, 0.48, 0.55, 0.6, 0.643, 0.69, 0.725, 0.75),
+"transitions": PackedFloat32Array(1, 0.85, 0.83, 1.15, 1.15, 1, 1, 0.67, 1, 0.87, 0.72, 1),
 "update": 0,
-"values": [Vector2(1, 1), Vector2(0.76, 1), Vector2(0.7, 0.96), Vector2(0.96, 1.04), Vector2(1.17, 1.08), Vector2(1.04, 1.02), Vector2(1, 1)]
+"values": [Vector2(1, 1), Vector2(0.94, 1), Vector2(0.83, 1), Vector2(0.76, 0.98), Vector2(0.82, 1), Vector2(0.9, 1), Vector2(0.98, 1), Vector2(1, 1), Vector2(1, 1), Vector2(0.97, 1), Vector2(0.99, 1), Vector2(1, 1)]
 }
 tracks/3/type = "value"
 tracks/3/imported = false
@@ -115,10 +115,10 @@ tracks/3/path = NodePath("Pose:modulate")
 tracks/3/interp = 1
 tracks/3/loop_wrap = true
 tracks/3/keys = {
-"times": PackedFloat32Array(0, 0.07, 0.123, 0.183, 0.243, 0.288, 0.34),
-"transitions": PackedFloat32Array(1, 1, 1, 1, 1, 1, 1),
+"times": PackedFloat32Array(0),
+"transitions": PackedFloat32Array(1),
 "update": 0,
-"values": [Color(1, 1, 1, 1), Color(1, 1, 1, 1), Color(1, 1, 1, 1), Color(1, 1, 1, 1), Color(1, 1, 1, 1), Color(1, 1, 1, 1), Color(1, 1, 1, 1)]
+"values": [Color(1, 1, 1, 1)]
 }
 tracks/4/type = "value"
 tracks/4/imported = false
@@ -127,7 +127,7 @@ tracks/4/path = NodePath("Pose/Weapon:frame")
 tracks/4/interp = 1
 tracks/4/loop_wrap = true
 tracks/4/keys = {
-"times": PackedFloat32Array(0, 0.0425, 0.085, 0.1275, 0.17, 0.2125, 0.255, 0.2975),
+"times": PackedFloat32Array(0, 0.09375, 0.1875, 0.28125, 0.375, 0.46875, 0.5625, 0.65625),
 "transitions": PackedFloat32Array(1, 1, 1, 1, 1, 1, 1, 1),
 "update": 1,
 "values": [0, 1, 2, 3, 4, 5, 6, 7]
@@ -208,6 +208,7 @@ _data = {
 [node name="FanActions" type="Node2D"]
 position = Vector2(360, 360)
 script = ExtResource("1_action")
+attack_front_recovery_start = 0.82
 
 [node name="Pose" type="Node2D" parent="."]
 

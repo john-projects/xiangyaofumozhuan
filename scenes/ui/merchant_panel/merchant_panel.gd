@@ -525,8 +525,8 @@ func _make_tag(text: String, is_owned: bool, affordable: bool) -> Label:
 ## 底部特意留出 TAG_HEIGHT 的 content_margin，免得 expand_icon 撑满后图标被价格角标压住。
 func _slot_style(border: Color, bg: Color) -> StyleBoxFlat:
 	var style := StyleBoxFlat.new()
-	style.bg_color = bg
-	style.border_color = border
+	style.bg_color = Paper.tone(bg)
+	style.border_color = Paper.tone(border)
 	style.set_border_width_all(2)
 	style.set_corner_radius_all(6)
 	style.content_margin_left = 8
@@ -539,7 +539,7 @@ func _slot_style(border: Color, bg: Color) -> StyleBoxFlat:
 ## 角标的底色样式（深色半透明 + 圆角，保证压在任何图标上都看得清）。
 func _tag_style() -> StyleBoxFlat:
 	var style := StyleBoxFlat.new()
-	style.bg_color = Color("#49352b")
+	style.bg_color = Paper.tone(Color("#49352b"))
 	style.set_corner_radius_all(5)
 	return style
 

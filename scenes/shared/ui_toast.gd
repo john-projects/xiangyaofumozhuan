@@ -56,7 +56,7 @@ static func make_box(text: String) -> PanelContainer:
 	var box := PanelContainer.new()
 	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	box.theme = Paper.THEME
-	box.add_theme_stylebox_override("panel", make_style())
+	Paper.bind(box, func(): box.add_theme_stylebox_override("panel", make_style()))
 	box.add_child(make_label(text))
 	return box
 

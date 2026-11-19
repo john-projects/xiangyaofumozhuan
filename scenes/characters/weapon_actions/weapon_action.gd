@@ -1,6 +1,8 @@
 extends Node2D
 ## 同一场景既可在编辑器预览，也可把关键帧应用到当前装备的握点。
 
+@export_range(0.0, 1.0, 0.01) var attack_front_recovery_start := 0.89
+
 @onready var _pose: Node2D = $Pose
 @onready var _preview: Sprite2D = $Pose/Weapon
 @onready var _player: AnimationPlayer = $AnimationPlayer
@@ -22,7 +24,7 @@ func clip_length(action: StringName, fallback: float) -> float:
 
 
 func play_on(pivot: Node2D, action: StringName, duration: float, facing: float,
-		portrait_scale: float) -> void:
+		travel_scale: Vector2, front_shift: Vector2 = Vector2.ZERO) -> void:
 	restore()
 	if not is_instance_valid(pivot) or not _player.has_animation(action) or duration <= 0.0:
 		return
@@ -41,17 +43,23 @@ func play_on(pivot: Node2D, action: StringName, duration: float, facing: float,
 
 	_player.callback_mode_process = AnimationMixer.ANIMATION_CALLBACK_MODE_PROCESS_MANUAL
 	_player.play(action)
-	_sample(0.0, facing, portrait_scale)
+	var length := clip_length(action, duration)
+	var sample := _sample.bind(facing, travel_scale, front_shift, length)
+	sample.call(0.0)
 	_tween = create_tween()
-	_tween.tween_method(_sample.bind(facing, portrait_scale), 0.0, clip_length(action, duration), duration)
+	_tween.tween_method(sample, 0.0, length, duration)
 	_tween.finished.connect(restore)
 
 
-func _sample(time: float, facing: float, portrait_scale: float) -> void:
+func _sample(time: float, facing: float, travel_scale: Vector2, front_shift: Vector2, length: float) -> void:
 	if not is_instance_valid(_pivot):
 		return
 	_player.seek(time, true)
-	var travel := Vector2(_pose.position.x * facing, _pose.position.y) * portrait_scale
+	var travel := Vector2(_pose.position.x * facing, _pose.position.y) * travel_scale
+	# 攻击开头把握点带到人物身前，收招时移回原来的握点。
+	var phase := time / length
+	var front_weight := smoothstep(0.0, 0.20, phase) * (1.0 - smoothstep(attack_front_recovery_start, 1.0, phase))
+	travel += front_shift * front_weight
 	var pose_transform := Transform2D(
 		_rest_transform.get_rotation() + _pose.rotation * facing,
 		_rest_transform.get_scale() * _pose.scale,

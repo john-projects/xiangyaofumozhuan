@@ -7,8 +7,9 @@ signal back_requested
 signal focusables_changed
 
 const PARTY_COLUMNS := 5
-const ROUND_WIDTH := 116.0
-const CHARACTER_WIDTH := 175.0
+const ROUND_WIDTH := 174.0
+const CHARACTER_WIDTH := 262.5
+const CHOICE_FONT_SIZE := 29
 
 @onready var _grid: GridContainer = %PlanGrid
 @onready var _back: Button = %BackButton
@@ -18,13 +19,8 @@ var _plan: Dictionary
 
 func _ready() -> void:
 	Paper.add_panel_pattern($Center/Panel)
-	var frame := get_theme_stylebox("panel", &"Panel").duplicate() as StyleBox
-	frame.content_margin_left = 32
-	frame.content_margin_right = 32
-	frame.content_margin_top = 25
-	frame.content_margin_bottom = 25
-	$Center/Panel.add_theme_stylebox_override("panel", frame)
-	Paper.style_heading($Center/Panel/Content/Title, "策")
+	Paper.bind_panel($Center/Panel, &"Panel", Vector4(48, 37.5, 48, 37.5))
+	Paper.style_heading($Center/Panel/Content/Title, "策", 1.5)
 	hide()
 	_back.pressed.connect(func(): back_requested.emit())
 
@@ -48,7 +44,7 @@ func open(deployed: Array[UnitStats], plan: Dictionary) -> void:
 
 	for plan_key in range(Battle.AUTO_CAST_ROUNDS + 1):
 		var is_loop := plan_key == Battle.AUTO_CAST_LOOP_ROW
-		var round_label := _label("循环" if is_loop else "第 %d 回合" % plan_key, 21)
+		var round_label := _label("循环" if is_loop else "第 %d 回合" % plan_key, 32)
 		round_label.custom_minimum_size.x = ROUND_WIDTH
 		if is_loop:
 			round_label.tooltip_text = "选「回合循环」可分别安排 5 回合，其他选项从第 1 回合起重复执行。"
@@ -66,25 +62,26 @@ func focus_ring() -> Array[Control]:
 func _portrait_header(member: UnitStats) -> Control:
 	var column := VBoxContainer.new()
 	column.custom_minimum_size.x = CHARACTER_WIDTH
-	column.add_theme_constant_override("separation", 6)
+	column.add_theme_constant_override("separation", 9)
 	var avatar := TextureRect.new()
-	avatar.custom_minimum_size = Vector2(66, 66)
+	avatar.custom_minimum_size = Vector2(99, 99)
 	avatar.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	avatar.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	avatar.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	if member != null:
 		avatar.texture = member.avatar if member.avatar != null else member.icon
 	column.add_child(avatar)
-	column.add_child(_label(member.name if member != null else "空位", 19))
+	column.add_child(_label(member.name if member != null else "空位", 29))
 	return column
 
 
 func _skill_choice(member: UnitStats, skills: Array[SkillData], plan_key: int) -> OptionButton:
 	var option := OptionButton.new()
-	option.custom_minimum_size = Vector2(CHARACTER_WIDTH, 48)
+	option.custom_minimum_size = Vector2(CHARACTER_WIDTH, 72)
 	option.fit_to_longest_item = false
 	option.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	option.add_theme_font_size_override("font_size", 19)
+	option.add_theme_font_size_override("font_size", CHOICE_FONT_SIZE)
+	option.get_popup().add_theme_font_size_override("font_size", CHOICE_FONT_SIZE)
 	if member == null:
 		option.add_item("—")
 		option.disabled = true
@@ -161,5 +158,5 @@ func _label(value: String, font_size: int) -> Label:
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	label.add_theme_font_size_override("font_size", font_size)
-	label.add_theme_color_override("font_color", Paper.INK)
+	label.add_theme_color_override("font_color", Paper.tone(Paper.INK))
 	return label

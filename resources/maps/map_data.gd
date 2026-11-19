@@ -9,6 +9,8 @@
 extends Resource
 class_name MapData
 
+const DEFAULT_UNIT_HEIGHT := 160.0
+
 ## 地图唯一 id，被 MapData.next_id、MapNPC.destinations、GameRoot.current_map_id 和存档字段共同引用；
 ## 一改就必须把所有引用它的 .tres 同步改掉，否则传送会找不到图。
 @export var id: String = ""
@@ -28,9 +30,8 @@ class_name MapData
 ##   要 1:1 不糊就让它 ≈ 1.0（现在 0.8×1.25 = 1.0）；填 2.0 就是 1.6 倍放大、明显发虚。
 ##   另外世界宽必须 ≥ 逻辑画布宽（1680/0.8 = 2100），否则地图盖不满屏幕。
 @export var map_scale := 1.25
-## 角色在这张图上的显示高度（世界像素）。底图画得越大，这里要按比例调大，否则人物会显得很小。
-## 195 = 老底图（1448×1086、map_scale 1.5）的基准；4350×3263 这类大图按 1.5~1.7 倍给（290~330）。
-@export var unit_height := 195.0
+## 地图上玩家和跟随队友的显示高度（世界像素）。
+@export var unit_height := DEFAULT_UNIT_HEIGHT
 ## 进入本图时的默认出生点（归一化 0~1，相对地图图片左上角）。默认 (0.5, 0.62)：水平居中、略偏下。
 ## ⚠ 从 A 图走到 B 图时，优先放在 B 图里"指向 A 的那个 NPC"旁边，只有找不到这种 NPC 才用本字段。
 @export var spawn_point := Vector2(0.5, 0.62)

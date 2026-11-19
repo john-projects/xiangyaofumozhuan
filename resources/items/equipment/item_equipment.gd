@@ -141,37 +141,44 @@ static func weapon_type_name(value: int) -> String:
 func _flavor_lines() -> Array[String]:
 	var lines: Array[String] = []
 	if not item_flavor.is_empty():
-		lines.append("[color=#c8b48a]%s[/color]" % item_flavor)
+		lines.append("[color=white]%s[/color]" % item_flavor)
 		lines.append("")
 	lines.append("[color=#6b6152]────────────────[/color]")
 	return lines
 
 
 func get_description() -> String:
+	return get_equipment_description()
+
+
+func get_equipment_description(stat_font_size: int = 0) -> String:
 	# 商店里的模板没掷过骰，显示区间；已入包的实物显示真实数值
-	if not rolled:
-		return _preview_description()
-	# 布局：条件 → 装备说明 → 分隔线 → 属性（部位在卡片头部的 Label 上，这里不重复）
 	var lines: Array[String] = _flavor_lines()
+	var stats := _rolled_stat_lines() if rolled else _preview_stat_lines()
+	if stats.is_empty():
+		lines.append("[color=gray]（这件装备没有属性加成）[/color]")
+	else:
+		var stat_text := "\n".join(stats)
+		if stat_font_size > 0:
+			stat_text = "[font_size=%d]%s[/font_size]" % [stat_font_size, stat_text]
+		lines.append(stat_text)
+	return "\n".join(lines)
+
+
+func _rolled_stat_lines() -> Array[String]:
+	var lines: Array[String] = []
 
 	# ① 白品质固定主属性
-	var main_parts: Array[String] = []
 	for entry in [[attack, "物伤", ""], [spell_damage, "法伤", ""], [defense, "防御", ""],
 			[spell_defense, "法防", ""], [health, "气血", ""], [mana, "魔法", ""], [speed, "速度", ""]]:
 		if int(entry[0]) != 0:
-			main_parts.append("[color=orange]%s +%d[/color]" % [entry[1], int(entry[0])])
-	# 每行一条，不再横向拼在一起
-	for part in main_parts:
-		lines.append(part)
+			lines.append("[color=white]%s +%d[/color]" % [entry[1], int(entry[0])])
 
 	# ② 蓝品质双加基础属性
-	var basic_parts: Array[String] = []
 	for pair in [[attr_con, "体质"], [attr_mag, "魔力"], [attr_str, "力量"],
 			[attr_end, "耐力"], [attr_agi, "敏捷"]]:
 		if int(pair[0]) != 0:
-			basic_parts.append("[color=white]%s +%d[/color]" % [pair[1], int(pair[0])])
-	for part in basic_parts:
-		lines.append(part)
+			lines.append("[color=#88e19c]%s +%d[/color]" % [pair[1], int(pair[0])])
 
 	# ③ 紫/粉/橙 稀有词条
 	for entry in [
@@ -191,18 +198,14 @@ func get_description() -> String:
 		[spell_pct, "法伤", "%"],
 	]:
 		if float(entry[0]) != 0.0:
-			lines.append("[color=mediumpurple]%s +%s%s[/color]" % [
+			lines.append("[color=#f1cd77]%s +%s%s[/color]" % [
 				entry[1], _num(float(entry[0])), entry[2]])
 
-	if main_parts.is_empty() and basic_parts.is_empty():
-		lines.append("[color=gray]（这件装备没有属性加成）[/color]")
-	return "\n".join(lines)
+	return lines
 
-## 未掷骰时的预览：把每个非 0 的属性显示成「随机xxx（0~上限）」。
+
 ## 未掷骰时的预览：主属性固定照常显示，基础属性和稀有词条显示随机区间。
-func _preview_description() -> String:
-	# 装备说明（文案 + 分隔线）两种状态都显示
-	var lines: Array[String] = _flavor_lines()
+func _preview_stat_lines() -> Array[String]:
 	var stat_lines: Array[String] = []
 
 	# ① 主属性：只显示该部位的固定项，且按品质算好、不随机
@@ -210,7 +213,7 @@ func _preview_description() -> String:
 	for key in main_fields:
 		var v := int(get(key))
 		if v != 0:
-			stat_lines.append("[color=orange]%s +%d[/color]" % [_stat_name(key), v])
+			stat_lines.append("[color=white]%s +%d[/color]" % [_stat_name(key), v])
 
 	# ② 基础属性：随机，±50%（条数固定）
 	var attr_count := 0
@@ -223,17 +226,14 @@ func _preview_description() -> String:
 		var lo := maxi(1, int(round(attr_max * 0.5)))
 		var hi := maxi(lo, int(round(attr_max * 1.5)))
 		for i in attr_count:
-			stat_lines.append("[color=white]随机基础属性（%d~%d）[/color]" % [lo, hi])
+			stat_lines.append("[color=#88e19c]随机基础属性（%d~%d）[/color]" % [lo, hi])
 
 	# ③ 稀有词条：条数由品质决定（紫 1 / 粉 2 / 橙 3），种类与数值都随机
 	var rare_count := maxi(0, int(item_tier) - 1)
 	for i in rare_count:
-		stat_lines.append("[color=mediumpurple]随机词条[/color]")
+		stat_lines.append("[color=#f1cd77]随机词条[/color]")
 
-	if stat_lines.is_empty():
-		stat_lines.append("[color=gray]（这件装备没有属性加成）[/color]")
-	lines.append_array(stat_lines)
-	return "\n".join(lines)
+	return stat_lines
 
 
 ## 属性字段 → 中文名（预览用）。

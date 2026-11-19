@@ -10,7 +10,7 @@
 ## 数据流：
 ##   TooltipManager._get_card() 懒加载出卡片并 add_child 到自己的 CanvasLayer
 ##     → _bind() 执行 `card.set("item", data)`（就是下面这个 setter）
-##     → setter 写四个 % 节点 + 按 item_tier 换 Panel 样式
+##     → setter 更新四个展示节点，标题按品质上色
 ##   之后 TooltipManager 负责延迟、淡入、定位；本文件不碰位置，也不管鼠标事件
 ##   （TooltipManager 会把整棵子树的 mouse_filter 设成 IGNORE，否则提示卡一出现就会
 ##    触发下面卡片的 mouse_exited，导致疯狂闪烁）。
@@ -23,8 +23,7 @@
 ##   换脚本就必须同步改 TooltipManager 里的登记参数，否则 _bind 会灌到不存在的属性上。
 ##
 ## 坑：
-##   · 本卡片的尺寸必须由 .tscn 的 custom_minimum_size 固定住，且**不能放进任何 Container** ——
-##     否则第一帧 size 还是 0，TooltipManager._place() 会按 0 尺寸算位置而错位。
+##   · 场景固定卡片宽度，绑定数据时立即按正文高度调整卡片，供 TooltipManager 定位。
 ##   · setter 里用了 %ItemIcon 等 @onready 变量，所以必须"先进树、后赋值"。
 ##     TooltipManager 的顺序恰好是对的（_get_card 里 add_child 之后才 _bind）；
 ##     如果谁自己在 add_child 之前赋值，会拿到 null 报错。
@@ -48,14 +47,14 @@ class_name HoverItemCard
 @onready var item_name: Label = %ItemName
 @onready var item_type: RichTextLabel = %ItemType
 @onready var item_desc: RichTextLabel = %ItemDesc
+@onready var content_margin: MarginContainer = $MarginContainer
 
 ## item 的 setter：把道具数据灌进卡片。
 ## 参数 value：要展示的 ItemBase；传 null 时**提前返回**（卡片保持上一次的内容，
 ##   也就是说"清空提示"不是传 null 给它，而是调 TooltipManager.hide_tip()）。
 ## 返回值：无。
 ## 副作用：
-##   · 写四个子控件；add_theme_stylebox_override("panel", ...) 换本 Panel 的样式；
-##   · Global.get_tier_style() 返回的是共享 const StyleBoxFlat，只挂不改（改它会污染全局同档次卡片）；
+##   · 写四个子控件，底板使用场景里的统一样式；
 ##   · 不 emit 信号、不改 Global 的任何字段。
 ## 时序：被 TooltipManager._bind() 在"卡片已 add_child、但可能还没显示"时调用，
 ##   所以这里只准备内容，可见性与位置由 TooltipManager 决定。
@@ -73,9 +72,6 @@ func _set_item(value: ItemBase) -> void:
 	item_name.text = value.item_name
 	# 装备名按品质上色（原来是单独一行「品质：橙色品质」，太占地方）
 	item_name.add_theme_color_override("font_color", ItemBase.tier_color(int(value.item_tier)))
-	# 枚举转名字：ItemType 是 WEAPON=0 / UPGRADE=1 / PASSIVE=2，keys() 拿到成员名数组再按下标取，
-	# 所以卡上显示的是 "WEAPON" 这样的英文枚举名，而不是数字。
-	# ⚠ 下标存在 .tres 里，枚举成员顺序一改，所有旧资源都会静默错位显示。
 	var slot_type: int = value.get_equip_type()
 	if slot_type != ItemBase.EquipType.NONE:
 		var shown := ItemBase.equip_type_name(slot_type)
@@ -86,22 +82,19 @@ func _set_item(value: ItemBase) -> void:
 				var detail := ItemEquipment.weapon_type_name(eq.weapon_type)
 				if not detail.is_empty():
 					shown = detail
-		# 三行一起塞进 ItemType：部位 / 装备条件 / 装备角色
-		var tl: Array[String] = []
-		tl.append("[color=#a89678]【部位】[/color]%s" % shown)
+		var lines: Array[String] = ["【部位】%s" % shown]
 		if value is ItemEquipment:
 			var e := value as ItemEquipment
-			tl.append("[color=#a89678]【装备条件】[/color]等级 %d" % e.req_level)
+			lines.append("【装备条件】等级 %d" % e.req_level)
 			if not e.req_characters.is_empty():
-				tl.append("[color=#a89678]【装备角色】[/color][color=#7fd6a0]%s[/color]" % e.req_characters)
-		item_type.text = "\n".join(tl)
+				lines.append("【装备角色】%s" % e.req_characters)
+		item_type.text = "\n".join(lines)
 	else:
-		item_type.text = "[color=#a89678]【%s】[/color]" % ItemBase.item_type_name(value.item_type)
-	# 能装备的话把栏位也带上（"WEAPON · 武器栏"），玩家才知道这件东西点一下能穿、穿到哪个格子
-	# （见 ItemBase.EquipType）。用短名而不是"可装备到「武器」栏"：这行标签只有 90px 宽，
-	# 长文案会溢出卡片右边缘（.tscn 里也把它的 offset_right 放宽了）。
-	item_desc.text = value.get_description()
-	
-	# 按稀有度换面板描边（"panel" 是 Panel 控件的主题项名；Button 类要覆盖 "normal"）
-	var style := Global.get_tier_style(value.item_tier)
-	add_theme_stylebox_override("panel", style)
+		item_type.text = "【%s】" % ItemBase.item_type_name(value.item_type)
+	if value is ItemEquipment:
+		var stat_font_size := item_desc.get_theme_font_size("normal_font_size") + 2
+		item_desc.text = value.get_equipment_description(stat_font_size)
+	else:
+		item_desc.text = value.get_description()
+	item_desc.size.y = item_desc.get_content_height()
+	size.y = item_desc.position.y + item_desc.size.y + content_margin.get_minimum_size().y

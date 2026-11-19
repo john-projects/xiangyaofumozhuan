@@ -13,6 +13,7 @@ const Paper := preload("res://styles/paper_ui.gd")
 const VISIBLE_ROWS := 10
 const LINE_HEIGHT := 26
 const WIDTH := 540.0
+const BOTTOM_INSET := 16.0
 
 var max_lines := 300
 
@@ -24,6 +25,11 @@ const BOTTOM_TOLERANCE := 24.0
 
 var _scroll: ScrollContainer = null
 var _lines: VBoxContainer = null
+
+
+static func visible_bottom_inset() -> float:
+	# 两种面板贴图的下沿分别留了透明像素。
+	return BOTTOM_INSET + (1.0 if Paper.UiSkin.is_ink() else 5.0)
 
 
 func setup(p_max_lines := 300) -> void:
@@ -40,14 +46,9 @@ func setup(p_max_lines := 300) -> void:
 	offset_left = 16.0
 	offset_right = 16.0 + WIDTH
 	var content_h := float(VISIBLE_ROWS * LINE_HEIGHT)
-	offset_bottom = -16.0
+	offset_bottom = -BOTTOM_INSET
 	theme = preload("res://styles/paper_theme.tres")
-	var frame := get_theme_stylebox("panel", &"Panel").duplicate() as StyleBox
-	frame.content_margin_left = 17
-	frame.content_margin_right = 17
-	frame.content_margin_top = 12
-	frame.content_margin_bottom = 12
-	add_theme_stylebox_override("panel", frame)
+	Paper.bind_panel(self, &"Panel", Vector4(17, 12, 17, 12))
 
 	_scroll = ScrollContainer.new()
 	_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
@@ -69,6 +70,7 @@ func setup(p_max_lines := 300) -> void:
 	_follow = true
 
 	visible = false
+	Paper.UiSkin.changed().connect(_refresh_ink)
 
 
 func push(text: String) -> void:
@@ -90,7 +92,7 @@ func push(text: String) -> void:
 	stamp.vertical_alignment = VERTICAL_ALIGNMENT_TOP
 	stamp.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	stamp.add_theme_font_size_override("font_size", 17)
-	stamp.add_theme_color_override("font_color", Paper.SOFT_INK)
+	stamp.add_theme_color_override("font_color", Paper.tone(Paper.SOFT_INK))
 	stamp.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.add_child(stamp)
 
@@ -102,8 +104,9 @@ func push(text: String) -> void:
 	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	label.add_theme_font_size_override("normal_font_size", 18)
-	label.add_theme_color_override("default_color", Paper.INK)
+	label.add_theme_color_override("default_color", Paper.tone(Paper.INK))
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	label.set_meta(&"source_message", t)
 	label.text = _bbcode_for(t)
 	row.add_child(label)
 
@@ -211,11 +214,12 @@ const CN_COLORS := {
 const TIER_INK := {"白": "白色", "蓝": "蓝色", "紫": "紫色", "粉": "粉色", "橙": "橙色"}
 
 
-## 把 "[绿色]xxx[/绿色]" 换成 "[color=#256247]xxx[/color]"。
+## 把中文颜色标签转成当前皮肤对应的 BBCode 色值。
 func _to_bbcode(text: String) -> String:
 	var out := text
 	for cn in CN_COLORS.keys():
-		out = out.replace("[%s]" % cn, "[color=%s]" % CN_COLORS[cn])
+		var ink := Paper.tone(Color(CN_COLORS[cn])).to_html(false)
+		out = out.replace("[%s]" % cn, "[color=#%s]" % ink)
 		out = out.replace("[/%s]" % cn, "[/color]")
 	return out
 
@@ -232,5 +236,14 @@ func _has_cn_tag(text: String) -> bool:
 func _bbcode_for(text: String) -> String:
 	if _has_cn_tag(text):
 		return _to_bbcode(text)
-	var c := _color_for(text)
+	var c := Paper.tone(_color_for(text))
 	return "[color=#%s]%s[/color]" % [c.to_html(false), text]
+
+
+func _refresh_ink() -> void:
+	for row in _lines.get_children():
+		var stamp := row.get_child(0) as Label
+		var label := row.get_child(1) as RichTextLabel
+		stamp.add_theme_color_override("font_color", Paper.tone(Paper.SOFT_INK))
+		label.add_theme_color_override("default_color", Paper.tone(Paper.INK))
+		label.text = _bbcode_for(label.get_meta(&"source_message"))

@@ -3,6 +3,7 @@
 [ext_resource type="Theme" path="res://styles/paper_theme.tres" id="99_paper"]
 [ext_resource type="Script" uid="uid://dey12t2eudxfx" path="res://scenes/world/world_map.gd" id="1_worldmap"]
 [ext_resource type="PackedScene" path="res://scenes/battle/battle_stats_panel.tscn" id="2_stats"]
+[ext_resource type="Script" path="res://scenes/world/map_shortcuts.gd" id="3_shortcuts"]
 
 [node name="WorldMap" type="Node2D" unique_id=2107996951]
 y_sort_enabled = true
@@ -156,3 +157,21 @@ mouse_filter = 2
 theme_override_constants/separation = 6
 
 [node name="BattleStats" parent="UI" instance=ExtResource("2_stats")]
+
+[node name="MapShortcuts" type="HBoxContainer" parent="UI"]
+unique_name_in_owner = true
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -409.0
+offset_top = -85.0
+offset_right = -22.0
+offset_bottom = -23.0
+grow_horizontal = 0
+grow_vertical = 0
+mouse_filter = 2
+theme = ExtResource("99_paper")
+theme_override_constants/separation = 3
+script = ExtResource("3_shortcuts")
